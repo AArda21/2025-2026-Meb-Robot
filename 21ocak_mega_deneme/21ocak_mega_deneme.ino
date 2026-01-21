@@ -3,13 +3,13 @@
 
 Servo bizim;
 Servo rakip;
-Servo ceza;
+Servo yesil;
 
 // HABERLEŞME
 #define sayac_bildirim A0
-#define ceza_bildirim A1
+#define yesil_bildirim A1
 #define kilit_sinyal A2
-#define ceza_tokatla_sinyal A3
+#define yesil_tokatla_sinyal A3
 #define otur_bildirim A4
 
 // Sağ motor pinleri
@@ -36,7 +36,7 @@ Servo ceza;
 #define KIRMIZI 1
 #define MAVI 0
 #define BIZIM_TOPU_BIRAK 1
-#define CEZA_BIRAK 0
+#define YESIL_BIRAK 0
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -47,16 +47,16 @@ int yesil_veriler[4] = { 0, 0, 0, 0 };
 int mavi_ust_limit = 60, kirmizi_alt_limit = 300, yesil_alt_limit=70, yesil_ust_limit=80;
 byte bolge = 0, duvarla_isim_var = 0;
 
-byte bizim_kapak_default = 0, ceza_kapak_default = 0;
+byte bizim_kapak_default = 0, yesil_kapak_default = 0;
 
 void setup() {
   // SERVO TANIMLARI
   rakip.attach(A7);
   bizim.attach(A8);
-  ceza.attach(A9);
+  yesil.attach(A9);
   bizim.write(bizim_kapak_default);
   rakip.write(180);
-  ceza.write(ceza_kapak_default);
+  yesil.write(yesil_kapak_default);
 
   // MZ80 TANIMLARI
   pinMode(sol_goz, INPUT);
@@ -81,10 +81,10 @@ void setup() {
 
   //HABERLEŞME PİNLERİ
   pinMode(sayac_bildirim, INPUT);
-  pinMode(ceza_bildirim, INPUT);
+  pinMode(yesil_bildirim, INPUT);
   pinMode(otur_bildirim, INPUT);
   pinMode(kilit_sinyal, OUTPUT);
-  pinMode(ceza_tokatla_sinyal, OUTPUT);
+  pinMode(yesil_tokatla_sinyal, OUTPUT);
 
   // Motor sürücülerini aktif et
   digitalWrite(EN_R, HIGH);
@@ -130,13 +130,13 @@ olcum();
     digitalWrite(kilit_sinyal, LOW);
     delay(2000);
   }
-  else if (digitalRead(ceza_bildirim) == 1)
+  else if (digitalRead(yesil_bildirim) == 1)
   {
     digitalWrite(kilit_sinyal, HIGH);
     duvarla_isim_var = 1;
     while(duvarla_isim_var == 1)
     {
-      duvar_takip(CEZA_BIRAK);
+      duvar_takip(yesil_BIRAK);
     }
     digitalWrite(kilit_sinyal, LOW);
     delay(2000);
@@ -312,11 +312,11 @@ void park (byte nereye)
     sol(100);
     delay(300);
     dur(200);
-    ceza.write(ceza_kapak_default + 120);
+    yesil.write(yesil_kapak_default + 120);
     delay(100);
-    digitalWrite(ceza_tokatla_sinyal, HIGH);
+    digitalWrite(yesil_tokatla_sinyal, HIGH);
     delay(500);
-    digitalWrite(ceza_tokatla_sinyal, LOW);
+    digitalWrite(yesil_tokatla_sinyal, LOW);
   }
   ileri(100);
   delay(1600);
@@ -327,7 +327,7 @@ void park (byte nereye)
   }
   else
   {
-    ceza.write(ceza_kapak_default);
+    yesil.write(yesil_kapak_default);
   }
   duvarla_isim_var = 0;
 }
