@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MEB Robot Yumurta Toplama Simülatörü</title>
+<style>
+:root{
+  --bg:#0e1014; --panel:#161920; --panel2:#1c2029; --line:#2a303c; --text:#e6e8ec; --mute:#8b93a3;
+  --accent:#f5a524; --red:#e5484d; --blue:#4c7dff; --ok:#3ecf8e; --warn:#f5a524; --bad:#e5484d;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input{font:inherit;color:inherit}
+header{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+header h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1 small{color:var(--mute);font-weight:500}
+.hud{margin-left:auto;display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums}
+.chip{padding:3px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-weight:600;font-size:13px;white-space:nowrap}
+.chip.r{border-color:#6b2226;color:#ff8d90}.chip.b{border-color:#26386b;color:#9db6ff}
+.chip.me{outline:2px solid var(--accent);outline-offset:1px}
+#app{display:grid;grid-template-columns:minmax(0,1fr);height:calc(100% - 50px - 58px)}
+.pane{display:none;overflow:auto;padding:12px}
+body[data-tab="saha"] #saha, body[data-tab="kod"] #kod, body[data-tab="robot"] #robot, body[data-tab="monitor"] #monitor, body[data-tab="kurallar"] #kurallar{display:block}
+@media (min-width:1000px){
+  #app{grid-template-columns:minmax(0,1.25fr) minmax(380px,1fr);height:calc(100% - 50px)}
+  #saha{display:block!important;border-right:1px solid var(--line)}
+  body[data-tab="saha"] #kod{display:block}
+  #side{display:flex;flex-direction:column;min-height:0}
+  #sideTabs{display:flex!important}
+  nav#bottom{display:none}
+}
+#side{min-height:0;display:contents}
+@media (min-width:1000px){#side{display:flex}}
+#sideTabs{display:none;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+#sideTabs button{border:0;background:none;padding:8px 12px;color:var(--mute);border-bottom:2px solid transparent;cursor:pointer}
+#sideTabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+@media (min-width:1000px){ #side .pane{flex:1} }
+nav#bottom{position:fixed;bottom:0;left:0;right:0;height:58px;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav#bottom button{flex:1;border:0;background:none;color:var(--mute);font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+nav#bottom button .ic{font-size:18px;line-height:1}
+nav#bottom button.on{color:var(--accent)}
+.cvwrap{position:relative;width:100%;max-width:820px;margin:0 auto;aspect-ratio:1/1;background:#0a0c10;border:1px solid var(--line);border-radius:10px;overflow:hidden;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.overlay{position:absolute;left:10px;top:10px;font:600 12px var(--mono);background:rgba(10,12,16,.75);padding:5px 8px;border-radius:6px;pointer-events:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px auto 0;max-width:820px;align-items:center}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:#3a4252}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#1a1205;font-weight:650}
+.btn.sm{padding:5px 9px;min-height:32px;font-size:13px}
+select.btn{padding-right:8px}
+label.tog{display:inline-flex;gap:5px;align-items:center;color:var(--mute);font-size:13px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin:12px auto 0;max-width:820px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.card .k{color:var(--mute);font-size:12px}.card .v{font:600 13px var(--mono);margin-top:2px;word-break:break-word}
+.slip{color:var(--bad)}
+h2{font-size:14px;margin:4px 0 10px;font-weight:650}
+textarea{width:100%;min-height:60vh;background:#0b0d11;color:#dfe3ea;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 var(--mono);tab-size:2;resize:vertical;white-space:pre;overflow:auto}
+@media (min-width:1000px){ textarea{min-height:calc(100vh - 230px)} }
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+.msg{margin:8px 0;padding:8px 10px;border-radius:8px;font:12.5px/1.45 var(--mono);white-space:pre-wrap;display:none}
+.msg.err{display:block;background:#2a1215;border:1px solid #5a1d22;color:#ffb3b6}
+.msg.ok{display:block;background:#0f2a1e;border:1px solid #1d5a3d;color:#a6f0cb}
+#serial{background:#07090c;border:1px solid var(--line);border-radius:8px;padding:10px;font:12.5px/1.45 var(--mono);height:45vh;overflow:auto;white-space:pre-wrap}
+#serial .t{color:#5d6574}
+table{border-collapse:collapse;width:100%;font:12.5px var(--mono)}
+td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
+th{color:var(--mute);font-weight:500}
+.hi{color:#ff9a6b}.lo{color:#6b7385}.pwm{color:var(--accent)}
+ul.checks{list-style:none;padding:0;margin:0}
+ul.checks li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px}
+.okc{color:var(--ok)}.badc{color:var(--bad)}
+.rules p,.rules li{color:#c9ced8}
+.rules h3{font-size:13px;margin:16px 0 6px;color:var(--text)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:10px}
+details summary{cursor:pointer;color:var(--mute)}
+details pre{font:12px/1.45 var(--mono);white-space:pre-wrap;max-height:50vh;overflow:auto}
+@media (min-width:1000px){ nav#bottom{display:none!important} .cvwrap{max-width:min(820px, calc(100vh - 250px))} .bar,.grid{max-width:none} }
+.toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);background:#222833;border:1px solid var(--line);padding:8px 14px;border-radius:8px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.result{position:absolute;inset:auto 10px 10px 10px;background:rgba(14,16,20,.92);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;display:none}
+.result.on{display:block}
+</style>
+</head>
+<body data-tab="saha">
+<header>
+  <h1>MEB Robot · Yumurta Toplama <small>simülatör</small></h1>
+  <div class="hud">
+    <span class="chip" id="hTime">0:00.0</span>
+    <span class="chip r" id="hRed">K 0</span>
+    <span class="chip b" id="hBlue">M 0</span>
+  </div>
+</header>
+
+<div id="app">
+  <section class="pane" id="saha">
+    <div class="cvwrap" id="cvwrap">
+      <canvas id="cv"></canvas>
+      <div id="v3" style="position:absolute;inset:0;display:none"></div>
+      <div class="overlay" id="ovl">Hazır</div>
+      <div class="result" id="result"></div>
+    </div>
+    <div class="bar">
+      <button class="btn pri" id="bStart">▶ Yükle ve başlat</button>
+      <button class="btn" id="bPause">⏸ Duraklat</button>
+      <button class="btn" id="bReset">↺ Sıfırla</button>
+      <select class="btn" id="sSpeed" aria-label="Hız">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option>
+      </select>
+      <select class="btn" id="sEngine" aria-label="Fizik motoru"><option value="3d">3B · Rapier</option><option value="2d" selected>2B · basit</option></select>
+      <select class="btn" id="sCam" aria-label="Kamera"><option value="serbest">Kamera: serbest</option><option value="ustten">Kamera: üstten</option><option value="takip">Kamera: takip</option></select>
+      <select class="btn" id="sTeam" aria-label="Takım köşesi">
+        <option value="red">Kırmızı köşe</option><option value="blue">Mavi köşe</option>
+      </select>
+    </div>
+    <div class="bar">
+      <button class="btn sm" id="bRotL" title="Başlangıç açısı -15°">⟲ 15°</button>
+      <button class="btn sm" id="bRotR" title="Başlangıç açısı +15°">⟳ 15°</button>
+      <button class="btn sm" id="bShuffle">Yumurtaları karıştır</button>
+      <label class="tog"><input type="checkbox" id="cZoom"> Robota yakınlaş</label>
+      <label class="tog"><input type="checkbox" id="cRays" checked> Sensör ışınları</label>
+      <label class="tog"><input type="checkbox" id="cCirc" checked> Devre katmanı</label>
+      <label class="tog"><input type="checkbox" id="cTrail" checked> İz</label>
+      <label class="tog"><input type="checkbox" id="cNoLimit"> 3 dk sınırı yok</label>
+    </div>
+    <div class="grid" id="readouts"></div>
+  </section>
+
+  <div id="side">
+    <div id="sideTabs">
+      <button data-t="kod" class="on">Kod</button><button data-t="robot">Robot</button><button data-t="monitor">Seri monitör</button><button data-t="kurallar">Kurallar</button>
+    </div>
+    <section class="pane" id="kod">
+      <div class="row">
+        <button class="btn pri" id="bStart2">▶ Yükle ve başlat</button>
+        <label class="btn sm">.ino aç<input type="file" id="fCode" accept=".ino,.cpp,.c,.h,.txt" hidden></label>
+        <button class="btn sm" id="bDlCode">Kopyala</button>
+        <button class="btn sm" id="bExample">Örnek kod</button>
+      </div>
+      <div class="msg" id="codeMsg"></div>
+      <textarea id="taCode" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off"></textarea>
+      <details><summary>Çevrilmiş JavaScript (hata ayıklama)</summary><pre id="jsOut"></pre></details>
+      <details><summary>Desteklenen Arduino komutları</summary>
+        <pre>pinMode, digitalWrite, digitalRead, analogWrite, analogRead
+delay, delayMicroseconds, millis, micros, pulseIn
+Serial.begin / print / println
+Servo: attach, write, writeMicroseconds, read
+NewPing: ping, ping_cm, ping_in, ping_median
+map, constrain, abs, min, max, random, randomSeed, sqrt, pow, sin, cos…
+#define, const, diziler, for/while/do, switch, static, kendi fonksiyonların
+
+Bilinen farklar: float olarak tanımlanmış ifadede 7/2 = 3.5 olur
+(int tanımlı değişkene atamada ve int fonksiyon dönüşünde kırpılır).
+attachInterrupt ve I2C kütüphaneleri (Wire, TCS34725 vb.) henüz yok.</pre></details>
+    </section>
+    <section class="pane" id="robot">
+      <div class="row">
+        <button class="btn pri" id="bApply">Uygula</button>
+        <label class="btn sm">JSON aç<input type="file" id="fCfg" accept=".json,.txt" hidden></label>
+        <button class="btn sm" id="bDlCfg">Kopyala</button>
+        <button class="btn sm" id="bExCfg">Örnek robot</button>
+      </div>
+      <div class="msg" id="cfgMsg"></div>
+      <textarea id="taCfg" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off"></textarea>
+      <details><summary>Alanlar ne anlama geliyor?</summary><pre>Koordinatlar robot merkezine göre cm: x = ileri, y = sola. Açı derece (sola pozitif).
+parcalar[]: gövde dikdörtgenleri. z0/z1 yerden yükseklik. z0 ≥ 2 cm → yumurta altından geçer,
+  z0 ≥ 8 cm → duvarın üstünden geçer. "servo_pin" + "pivot" verilirse servo ile döner:
+  açı = aci_ofset + yon × servo açısı.
+Tekerlekler ve sarhoş teker çarpışma parçası olarak otomatik eklenir.
+motor: redüktör çıkışındaki boşta devir ve stall tork (kg·cm). Hız ve itiş bunlardan hesaplanır.
+  Kuvvet > mu_statik × teker yükü olursa teker patinaj yapar (kırmızı gösterilir).
+surucu.tip: L298N / TB6612 (en,in1,in2; "stby") — L9110 / DRV8833 (ia, ib PWM).
+  en yazılmazsa jumper takılı (tam hız) kabul edilir.
+sensorler[].tip:
+  HC-SR04  trig, echo, z  (z > 9 cm ise duvarı, z > 3 cm ise yumurtayı göremez)
+  IR_ENGEL pin, menzil_cm (engel varken LOW)
+  TCRT5000 pin (analog) / dijital_pin, esik  (beyaz≈90, kırmızı≈320, mavi≈650)
+  TCS3200  s0,s1 (yoksa "olcek": 20), s2, s3, out, bakis: "asagi" | "ileri", menzil_cm
+  SHARP_IR pin (analog mesafe)   BUTON pin, deger: "HIGH"/"LOW"
+led: kirmizi_pin, mavi_pin — kural gereği köşe renginde yanmalı.
+devre[]: Fritzing düzenindeki kartlar; sahada robotun üstünde çizilir.</pre></details>
+    </section>
+    <section class="pane" id="monitor">
+      <div class="row"><button class="btn sm" id="bClr">Temizle</button><label class="tog"><input type="checkbox" id="cAuto" checked> Otomatik kaydır</label><label class="tog"><input type="checkbox" id="cTs" checked> Zaman damgası</label></div>
+      <div id="serial"></div>
+      <h2 style="margin-top:14px">Pin durumları</h2>
+      <table id="pinTbl"><thead><tr><th>Pin</th><th>Görev</th><th>Mod</th><th>Değer</th></tr></thead><tbody></tbody></table>
+    </section>
+    <section class="pane" id="kurallar">
+      <h2>Robot kural kontrolü</h2>
+      <ul class="checks" id="checks"></ul>
+      <h2 style="margin-top:16px">Olaylar</h2>
+      <ul class="checks" id="events"></ul>
+      <div class="rules">
+        <h3>Kurallar özeti (MEB Robot 2025 · Yumurta Toplama)</h3>
+        <ul>
+          <li>Saha 250 × 250 cm beyaz sunta, 8 cm yüksekliğinde beyaz çerçeve.</li>
+          <li>Karşılıklı köşelerde 50 × 50 cm kırmızı (RAL3020) ve mavi (RAL5013) bırakma alanları.</li>
+          <li>10 kırmızı + 10 mavi + 1 ceza yumurtası; silindir, ~40 mm çap, ~20 mm yükseklik, en fazla 40 g. Hakem rastgele dizer.</li>
+          <li>Robot en fazla 30 × 30 × 30 cm ve 5 kg; maç sırasında genişleyebilir ama parçalara ayrılamaz.</li>
+          <li>Üstte köşe renginde yanan LED ve mantar başlı kalıcı acil stop butonu zorunlu. Tam otonom.</li>
+          <li>Süre 3 dakika. Kendi rengi kendi alanına +1, yanlış renk kendi alanına −2, ceza yumurtası hangi alana bırakılırsa o takıma −3.</li>
+          <li>Çizgiye değen yumurta alanın içinde sayılır; robotun altındaki/içindeki sayılmaz. Alanda duran yumurtayı hakem toplar.</li>
+          <li>Kendi alanına en az bir kendi renginde yumurta bırakamayan kaybeder. Eşitlikte ilk yumurtayı bırakan kazanır.</li>
+          <li>10 g üstü parça düşerse kaybeder.</li>
+        </ul>
+        <p style="color:var(--mute);font-size:12.5px">Kaynak: robot.meb.gov.tr, 17. Uluslararası MEB Robot Yarışması Yumurta Toplama Kategori Kılavuzu (2025). 2026 kılavuzu yayınlandığında ölçüler Robot sekmesindeki "saha" bölümünden güncellenebilir.</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<nav id="bottom">
+  <button data-t="saha" class="on"><span class="ic">▦</span>Saha</button>
+  <button data-t="kod"><span class="ic">{ }</span>Kod</button>
+  <button data-t="robot"><span class="ic">⚙</span>Robot</button>
+  <button data-t="monitor"><span class="ic">≡</span>Monitör</button>
+  <button data-t="kurallar"><span class="ic">✓</span>Kurallar</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===================== MEB ROBOT YUMURTA TOPLAMA SİMÜLATÖRÜ — ÇEKİRDEK =====================
+// Arduino C++ → JS çevirici, Arduino çalışma zamanı, 2B fizik motoru, sensörler, puanlama.
+const SIM = (() => {
+'use strict';
+
+// ---------- Sabitler (MEB Robot 2025 Yumurta Toplama kuralları) ----------
+const RULES = {
+  FIELD: 2.5, ZONE: 0.5, WALL_H: 0.08,
+  EGG_R: 0.02, EGG_H: 0.02, EGG_COUNT: 10,
+  MAX_DIM: 0.30, MAX_MASS: 5.0, MATCH_TIME: 180,
+  G: 9.81,
+};
+
+// ---------- Yardımcılar ----------
+function stripJsonComments(s) {
+  let out = '', i = 0, inStr = false;
+  while (i < s.length) {
+    const c = s[i];
+    if (inStr) { out += c; if (c === '\\') { out += s[i + 1] || ''; i += 2; continue; } if (c === '"') inStr = false; i++; continue; }
+    if (c === '"') { inStr = true; out += c; i++; continue; }
+    if (c === '/' && s[i + 1] === '/') { while (i < s.length && s[i] !== '\n') i++; continue; }
+    if (c === '/' && s[i + 1] === '*') { i += 2; while (i < s.length && !(s[i] === '*' && s[i + 1] === '/')) i++; i += 2; continue; }
+    out += c; i++;
+  }
+  return out.replace(/,(\s*[}\]])/g, '$1');
+}
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const PIN_ALIASES = { A0: 14, A1: 15, A2: 16, A3: 17, A4: 18, A5: 19, A6: 20, A7: 21 };
+function pinNum(p) {
+  if (p === null || p === undefined || p === '') return null;
+  if (typeof p === 'number') return p;
+  const s = String(p).trim().toUpperCase();
+  if (s in PIN_ALIASES) return PIN_ALIASES[s];
+  const n = parseInt(s, 10); return isNaN(n) ? null : n;
+}
+function pinName(n) { if (n >= 14 && n <= 21) return 'A' + (n - 14); return 'D' + n; }
+
+// =====================================================================================
+//                                  ÇEVİRİCİ (Transpiler)
+// =====================================================================================
+const BASE_T = 'void|int|long\\s+long|long|float|double|bool|boolean|byte|char|short|word|String|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|unsigned';
+const TYPES = `(?:(?:static|inline|volatile|const|unsigned|signed|register)\\s+)*(?:${BASE_T})(?:\\s*[*&])?`;
+const isIntType = (m) => /\b(int|long|short|byte|word|unsigned|size_t|u?int\d+_t)\b/.test(m) && !/\b(float|double)\b/.test(m);
+const GEN_BUILTINS = ['delay', 'delayMicroseconds', 'pulseIn', 'pulseInLong'];
+const GEN_METHODS = ['ping_cm', 'ping', 'ping_in', 'ping_median'];
+
+function mask(src) {
+  const lits = []; let out = '', i = 0;
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') { out += ' '; i++; } continue; }
+    if (c === '/' && n === '*') { out += '  '; i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) { out += src[i] === '\n' ? '\n' : ' '; i++; } out += '  '; i += 2; continue; }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c) { if (src[j] === '\\') j++; if (src[j] === '\n') break; j++; }
+      lits.push(src.slice(i, j + 1)); out += `__S${lits.length - 1}__`; i = j + 1; continue;
+    }
+    out += c; i++;
+  }
+  return { code: out, lits };
+}
+function matchBracket(t, open) {
+  const pairs = { '(': ')', '{': '}', '[': ']' }; const oc = t[open], cc = pairs[oc]; let d = 0;
+  for (let i = open; i < t.length; i++) { if (t[i] === oc) d++; else if (t[i] === cc) { d--; if (d === 0) return i; } }
+  return -1;
+}
+function splitTop(s, sep = ',') {
+  const parts = []; let d = 0, cur = '';
+  for (const ch of s) { if ('([{'.includes(ch)) d++; else if (')]}'.includes(ch)) d--; if (ch === sep && d === 0) { parts.push(cur); cur = ''; } else cur += ch; }
+  parts.push(cur); return parts;
+}
+function convParams(p) {
+  if (!p.trim() || p.trim() === 'void') return '';
+  return splitTop(p).map(x => {
+    const eq = x.indexOf('='); const left = eq >= 0 ? x.slice(0, eq) : x; const def = eq >= 0 ? x.slice(eq) : '';
+    const name = left.replace(/\[[^\]]*\]/g, '').trim().split(/[\s*&]+/).pop();
+    return name + def;
+  }).join(', ');
+}
+function findStmtEnd(t, k) { // depth-0 ';'
+  let d = 0;
+  for (let i = k; i < t.length; i++) { const c = t[i]; if ('([{'.includes(c)) d++; else if (')]}'.includes(c)) { d--; if (d < 0) return i - 1; } else if (c === ';' && d === 0) return i; }
+  return t.length - 1;
+}
+
+function transpile(src) {
+  let { code: t, lits } = mask(src.replace(/\r/g, ''));
+  const warnings = [];
+  // 1) Ön işlemci
+  t = t.split('\n').map(line => {
+    let m;
+    if (/^\s*#\s*include/.test(line)) return '';
+    if ((m = line.match(/^\s*#\s*define\s+(\w+)\(([^)]*)\)\s*(.*)$/))) return `const ${m[1]} = (${m[2]}) => (${m[3].replace(/;\s*$/, '')});`;
+    if ((m = line.match(/^\s*#\s*define\s+(\w+)\s*(.*)$/))) { const v = m[2].replace(/;\s*$/, '').trim(); return `const ${m[1]} = ${v === '' ? '1' : '(' + v + ')'};`; }
+    if (/^\s*#/.test(line)) { warnings.push('Yok sayılan satır: ' + line.trim()); return ''; }
+    return line;
+  }).join('\n');
+  // 2) Nesneler (Servo, NewPing)
+  t = t.replace(/(?<![\w.])(Servo|NewPing)\s+(?=[A-Za-z_])([^;]+);/g, (all, cls, decl) => {
+    const ds = splitTop(decl).map(d => { const m = d.trim().match(/^(\w+)\s*(?:\(([\s\S]*)\))?$/); return m ? `${m[1]} = new __CLS_${cls}(${m[2] || ''})` : d; });
+    return `let ${ds.join(', ')};`;
+  });
+  // 3) Başlatılmamış String
+  t = t.replace(/(?<![\w.])String\s+(\w+)\s*;/g, 'let $1 = "";');
+  // 4) Tür dönüşümleri
+  t = t.replace(/\(\s*(?:unsigned\s+)?(?:int|long|byte|short|word|u?int(?:8|16|32)_t)\s*\)/g, '~~');
+  t = t.replace(/\(\s*(?:float|double|char|unsigned)\s*\)/g, '');
+  t = t.replace(/\(\s*(?:bool|boolean)\s*\)/g, '!!');
+  t = t.replace(/(?<![\w.])(?:int|long|byte|word)\s*\(/g, 'Math.trunc(');
+  t = t.replace(/(?<![\w.])(?:float|double)\s*\(/g, 'Number(');
+  t = t.replace(/(?<![\w.])(?:volatile|PROGMEM|register)\s+/g, '');
+  // 5) Fonksiyon tanımları → generator
+  const funcs = [];
+  const reDef = new RegExp(`(?<![\\w.])(${TYPES})\\s+(\\w+)\\s*\\(([^()]*)\\)\\s*(?:const\\s*)?\\{`, 'g');
+  t = t.replace(reDef, (all, ty, name, params) => {
+    if (['if', 'while', 'for', 'switch', 'return'].includes(name)) return all;
+    funcs.push(name);
+    return `function* ${name}(${convParams(params)}) {${isIntType(ty) ? '\u0002' : ''}`;
+  });
+  // 6) Prototipler
+  const reProto = new RegExp(`(?<![\\w.])(${TYPES})\\s+(\\w+)\\s*\\(([^()]*)\\)\\s*;`, 'g');
+  t = t.replace(reProto, (all, ty, name, params) => {
+    const p = params.trim();
+    if (p === '' || p === 'void' || new RegExp(`^(?:${TYPES})`).test(p)) return '';
+    return `let ${name} = (${p});`;
+  });
+  // 7) static değişkenler → global
+  const statics = [];
+  const reStatic = new RegExp(`(?<![\\w.])static\\s+(${TYPES})\\s+(\\w+)\\s*(=\\s*[^;]+)?;`, 'g');
+  t = t.replace(reStatic, (all, ty, name, init) => { statics.push(`let ${name} ${init || (/String/.test(ty) ? '= ""' : '= 0')};`); return ''; });
+  // 8) Değişken bildirimleri
+  const reDecl = new RegExp(`(?<![\\w.])(${TYPES})\\s+(?=[A-Za-z_])`, 'g');
+  t = t.replace(reDecl, (m, ty) => (/\bconst\b/.test(ty) ? 'const' : 'let') + (isIntType(ty) ? '\u0001' : '') + ' ');
+  // 9) Diziler
+  t = t.replace(/\b(let|const)(\u0001?)\s+(\w+)\s*((?:\[[^\]]*\])+)\s*(=|;)/g, (all, kw, mk, name, dims, end) => {
+    if (end === '=') return `${kw} ${name} =`;
+    const ds = dims.match(/\[([^\]]*)\]/g).map(d => d.slice(1, -1).trim() || '0');
+    return `${kw} ${name} = __arr(${ds.join(',')});`;
+  });
+  { // { } başlatıcıları → [ ]
+    let re = /=\s*\{/g, m;
+    while ((m = re.exec(t))) {
+      const o = t.indexOf('{', m.index); const c = matchBracket(t, o); if (c < 0) break;
+      const inner = t.slice(o, c + 1).replace(/\{/g, '[').replace(/\}/g, ']');
+      t = t.slice(0, o) + inner + t.slice(c + 1); re.lastIndex = o + 1;
+    }
+  }
+  // 10) let varsayılanları ve tamsayı kırpma
+  {
+    let out = '', i = 0; const re = /\b(let|const)(\u0001?)\s+/g; let m;
+    while ((m = re.exec(t))) {
+      const start = m.index + m[0].length; const end = findStmtEnd(t, start);
+      const body = t.slice(start, end + (t[end] === ';' ? 0 : 1));
+      const decls = splitTop(body).map(d => {
+        const eq = (() => { let dd = 0; for (let k = 0; k < d.length; k++) { const c = d[k]; if ('([{'.includes(c)) dd++; else if (')]}'.includes(c)) dd--; else if (c === '=' && dd === 0 && d[k + 1] !== '=' && !'!<>='.includes(d[k - 1])) return k; } return -1; })();
+        if (eq < 0) return d.trim() ? d.replace(/\s*$/, '') + ' = 0' : d;
+        if (m[2]) return d.slice(0, eq + 1) + ' __i(' + d.slice(eq + 1).trim() + ')';
+        return d;
+      });
+      out += t.slice(i, m.index) + m[1] + ' ' + decls.join(', ');
+      i = start + body.length; re.lastIndex = i;
+    }
+    t = out + t.slice(i);
+  }
+  // 11) int fonksiyonlarda return kırpma
+  {
+    let k;
+    while ((k = t.indexOf('\u0002')) >= 0) {
+      const o = k - 1; const c = matchBracket(t, o);
+      let body = t.slice(k + 1, c).replace(/\breturn\s+([^;]+);/g, 'return __i($1);');
+      t = t.slice(0, k) + body + t.slice(c);
+    }
+  }
+  // 12) Zaman tüketen çağrıları yield* ile sar
+  const genNames = new Set([...funcs, ...GEN_BUILTINS]);
+  {
+    const starts = []; let m;
+    const reCall = /(?<![\w.$])(\w+)\s*\(/g;
+    while ((m = reCall.exec(t))) { if (genNames.has(m[1]) && !/function\*\s*$/.test(t.slice(Math.max(0, m.index - 12), m.index))) starts.push(m.index); }
+    const reM = new RegExp(`(?<![\\w.$])(\\w+)\\.(${GEN_METHODS.join('|')})\\s*\\(`, 'g');
+    while ((m = reM.exec(t))) starts.push(m.index);
+    starts.sort((a, b) => b - a);
+    for (const s of starts) {
+      const o = t.indexOf('(', s); const c = matchBracket(t, o); if (c < 0) continue;
+      t = t.slice(0, s) + '(yield* ' + t.slice(s, c + 1) + ')' + t.slice(c + 1);
+    }
+  }
+  // 13) Döngülere zaman bütçesi
+  {
+    const BUD = 'if(__b())yield 0;';
+    const pos = []; let m; const re = /(?<![\w.])(while|for|do)\b/g;
+    while ((m = re.exec(t))) pos.push([m.index, m[1]]);
+    pos.sort((a, b) => b[0] - a[0]);
+    for (const [s, kw] of pos) {
+      if (kw === 'do') { const k = t.slice(s + 2).search(/\S/) + s + 2; if (t[k] === '{') t = t.slice(0, k + 1) + BUD + t.slice(k + 1); continue; }
+      const o = t.indexOf('(', s); if (o < 0 || t.slice(s + kw.length, o).trim() !== '') continue;
+      const c = matchBracket(t, o); if (c < 0) continue;
+      const k = t.slice(c + 1).search(/\S/) + c + 1;
+      if (t[k] === '{') t = t.slice(0, k + 1) + BUD + t.slice(k + 1);
+      else if (t[k] === ';') {
+        const before = t.slice(0, s).replace(/\s+$/, '');
+        if (kw === 'while' && before.endsWith('}')) continue; // do-while
+        t = t.slice(0, k) + '{' + BUD + '}' + t.slice(k + 1);
+      } else { const e = findStmtEnd(t, k); t = t.slice(0, k) + '{' + BUD + ' ' + t.slice(k, e + 1) + '}' + t.slice(e + 1); }
+    }
+  }
+  t = t.replace(/\u0001/g, '');
+  // 14) Değişmezleri geri koy
+  t = t.replace(/__S(\d+)__/g, (a, n) => lits[+n]);
+  const prefix = statics.join(' ');
+  return { js: t, prefix, funcs, warnings };
+}
+
+function compile(src, api) {
+  const tr = transpile(src);
+  const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null};}`;
+  let fn;
+  try { fn = new Function('__api', body); }
+  catch (e) { const err = new Error('Derleme hatası: ' + e.message); err.js = tr.js; throw err; }
+  const prog = fn(api);
+  if (!prog.setup || !prog.loop) { const err = new Error('setup() ve loop() fonksiyonları bulunamadı.'); err.js = tr.js; throw err; }
+  return { prog, tr };
+}
+function errLine(e) {
+  const m = String(e && e.stack || '').match(/<anonymous>:(\d+):(\d+)/);
+  return m ? (+m[1] - 2) : null;
+}
+
+// =====================================================================================
+//                                  YÜZEY / RENK MODELİ
+// =====================================================================================
+// ir: TCRT5000 analog okuması (0-1023, koyu = yüksek). rgb: yansıma oranları.
+const SURF = {
+  white: { ir: 90, rgb: [0.92, 0.92, 0.90], name: 'beyaz' },
+  red: { ir: 320, rgb: [0.62, 0.07, 0.08], name: 'kırmızı' },
+  blue: { ir: 650, rgb: [0.07, 0.13, 0.38], name: 'mavi' },
+  none: { ir: 1010, rgb: [0, 0, 0], name: 'boş' },
+};
+
+// =====================================================================================
+//                                  SİMÜLASYON
+// =====================================================================================
+class Sim {
+  constructor(cfg) {
+    this.serialOut = [];
+    this.onSerial = null;
+    this.load(cfg);
+  }
+
+  // ---------- Yapılandırma ----------
+  load(cfg) {
+    this.cfg = cfg;
+    const S = cfg.saha || {};
+    this.field = {
+      eggMass: (S.yumurta_kutle_g || 25) / 1000,
+      muEggFloor: S.mu_yumurta_zemin ?? 0.35,
+      muRobotEgg: S.mu_robot_yumurta ?? 0.3,
+      muWall: S.mu_duvar ?? 0.4,
+      eRobotEgg: S.esneklik_robot_yumurta ?? 0.2,
+      eWall: S.esneklik_duvar ?? 0.15,
+      seed: S.tohum ?? 2026,
+      refereeCollect: S.hakem_toplar ?? true,
+      colors: Object.assign({ zemin: '#f3f2ee', kirmizi: '#c1121c', mavi: '#25356b', duvar: '#d9d9d4' }, S.renkler || {}),
+    };
+    const R = cfg.robot || cfg;
+    const cm = v => (v || 0) / 100;
+    const W = R.tekerlek || {}, M = R.motor || {}, D = R.surucu || {}, C = R.sarhos_teker || {};
+    const robot = {
+      name: R.isim || 'Robot',
+      mass: R.kutle_kg || 1.5,
+      wheelR: cm(W.cap_cm || 6.5) / 2,
+      track: cm(W.iz_cm || 15),
+      wheelX: cm(W.x_cm || 0),
+      wheelW: cm(W.genislik_cm || 2.5),
+      loadFrac: W.yuk_orani ?? 0.8,
+      muS: W.mu_statik ?? 0.9, muK: W.mu_kinetik ?? 0.75, muLat: W.mu_yanal ?? 0.9, crr: W.yuvarlanma_katsayisi ?? 0.015,
+      caster: { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), crr: C.yuvarlanma_katsayisi ?? 0.03, r: cm(C.cap_cm || 1.5) / 2 },
+      motor: {
+        vNom: M.nominal_volt || 6, w0: (M.bosta_rpm || 200) * 2 * Math.PI / 60,
+        tStall: (M.stall_tork_kgcm || 0.8) * 0.0980665, tFric: (M.ic_surtunme_kgcm ?? 0.04) * 0.0980665,
+      },
+      driver: {
+        type: (D.tip || 'L298N').toUpperCase(), vBat: D.pil_volt || 7.4, drop: D.dusum_volt ?? (/(L298)/i.test(D.tip || 'L298N') ? 1.8 : 0.2),
+        L: D.sol || {}, R: D.sag || {}, invL: !!D.sol_ters, invR: !!D.sag_ters, stby: pinNum(D.stby),
+      },
+      parts: (R.parcalar || []).map(p => ({
+        name: p.ad || 'parça', x: cm(p.x), y: cm(p.y), hx: cm(p.uzunluk) / 2, hy: cm(p.genislik) / 2,
+        z0: cm(p.z0 ?? 0), z1: cm(p.z1 ?? 5), ang: (p.aci || 0) * Math.PI / 180, color: p.renk || '#6b7280',
+        shape: p.sekil || 'kutu', servoPin: pinNum(p.servo_pin), pivot: p.pivot ? [cm(p.pivot[0]), cm(p.pivot[1])] : null,
+        angOff: p.aci_ofset || 0, dir: p.yon ?? 1, len: cm(p.uzunluk), solid: p.kati ?? true,
+      })),
+      sensors: (R.sensorler || []).map(s => Object.assign({}, s, {
+        type: String(s.tip || '').toUpperCase(), x: cm(s.x), y: cm(s.y), z: cm(s.z ?? 2), ang: (s.aci || 0) * Math.PI / 180,
+        range: cm(s.menzil_cm || (String(s.tip).toUpperCase() === 'TCS3200' ? 1.5 : 15)),
+        pin: pinNum(s.pin), trig: pinNum(s.trig), echo: pinNum(s.echo), dpin: pinNum(s.dijital_pin),
+        s0: pinNum(s.s0), s1: pinNum(s.s1), s2: pinNum(s.s2), s3: pinNum(s.s3), out: pinNum(s.out),
+      })),
+      servos: (R.servolar || []).map(s => ({ name: s.ad || 'servo', pin: pinNum(s.pin), speed: s.hiz_derece_s || 400, angle: s.baslangic_aci ?? 0 })),
+      led: R.led ? { r: pinNum(R.led.kirmizi_pin), b: pinNum(R.led.mavi_pin), x: cm(R.led.x || 0), y: cm(R.led.y || 0), z: cm(R.led.z ?? 9) } : null,
+      circuit: (R.devre || []).map(c => ({ name: c.ad, x: cm(c.x), y: cm(c.y), z: cm(c.z ?? 8), hx: cm(c.uzunluk) / 2, hy: cm(c.genislik) / 2, h: cm(c.kalinlik ?? 1.2), color: c.renk || '#0f766e', pins: c.pinler || [] })),
+      stop: R.acil_stop ? { x: cm(R.acil_stop.x), y: cm(R.acil_stop.y), z: cm(R.acil_stop.z ?? 8) } : null,
+      comZ: cm(R.agirlik_merkezi_z_cm ?? 4),
+    };
+    for (const k of ['L', 'R']) for (const pk of ['en', 'in1', 'in2', 'ia', 'ib', 'pwm']) if (pk in robot.driver[k]) robot.driver[k][pk] = pinNum(robot.driver[k][pk]);
+    // Tekerlek ve sarhoş teker çarpışma parçaları (otomatik)
+    const autoParts = [];
+    for (const sy of [1, -1]) autoParts.push({ name: sy > 0 ? 'Sol teker' : 'Sağ teker', x: robot.wheelX, y: sy * robot.track / 2, hx: robot.wheelR, hy: robot.wheelW / 2, z0: 0, z1: robot.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
+    if (R.sarhos_teker !== null) autoParts.push({ name: 'Sarhoş teker', x: robot.caster.x, y: robot.caster.y, hx: robot.caster.r, hy: robot.caster.r, z0: 0, z1: 0.02, ang: 0, color: '#374151', auto: 'caster', solid: true });
+    robot.parts = autoParts.concat(robot.parts);
+    // Atalet
+    let minX = 1, maxX = -1, minY = 1, maxY = -1;
+    for (const p of robot.parts) if (p.servoPin == null) { minX = Math.min(minX, p.x - p.hx); maxX = Math.max(maxX, p.x + p.hx); minY = Math.min(minY, p.y - p.hy); maxY = Math.max(maxY, p.y + p.hy); }
+    const Lb = Math.max(0.05, maxX - minX), Wb = Math.max(0.05, maxY - minY);
+    robot.inertia = R.atalet_kgm2 || robot.mass * (Lb * Lb + Wb * Wb) / 12;
+    this.robot = robot;
+    this.reset();
+  }
+
+  reset(team) {
+    if (team) this.team = team; if (!this.team) this.team = 'red';
+    const F = RULES.FIELD;
+    const st = this.team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 };
+    if (this.startPose && this.startPose.team === this.team) Object.assign(st, this.startPose);
+    this.state = { x: st.x, y: st.y, th: st.th, vx: 0, vy: 0, w: 0 };
+    this.time = 0; this.trail = [];
+    this.servoAng = {}; for (const s of this.robot.servos) this.servoAng[s.pin] = s.angle;
+    this.servoVel = {};
+    this.wheelInfo = { L: { V: 0, F: 0, slip: false, rpm: 0 }, R: { V: 0, F: 0, slip: false, rpm: 0 } };
+    this.placeEggs();
+    this.banked = { red: [], blue: [] };
+    this.firstDrop = null; this.events = []; this.ledOffTime = 0;
+    this.rt = null; this.ended = false;
+  }
+
+  placeEggs() {
+    const rnd = mulberry32(this.field.seed | 0); const F = RULES.FIELD, Z = RULES.ZONE, r = RULES.EGG_R;
+    const eggs = []; const kinds = [];
+    for (let i = 0; i < 10; i++) kinds.push('red'); for (let i = 0; i < 10; i++) kinds.push('blue'); kinds.push('penalty');
+    for (const k of kinds) {
+      for (let tries = 0; tries < 2000; tries++) {
+        const x = 0.06 + rnd() * (F - 0.12), y = 0.06 + rnd() * (F - 0.12);
+        if ((x < Z + 0.1 && y < Z + 0.1) || (x > F - Z - 0.1 && y > F - Z - 0.1)) continue;
+        if (eggs.some(e => Math.hypot(e.x - x, e.y - y) < 0.09)) continue;
+        eggs.push({ id: eggs.length, kind: k, x, y, vx: 0, vy: 0, phi: rnd() * Math.PI * 2, still: 0, gone: false }); break;
+      }
+    }
+    this.eggs = eggs;
+  }
+
+  get dt() { return 0.001; }
+  get engineName() { return '2B basit'; }
+  pose3() { const s = this.state; return { p: [s.x, s.y, this.robot.wheelR], yaw: s.th }; }
+
+  // ---------- Program ----------
+  loadProgram(src) {
+    const rt = new Runtime(this);
+    const { prog, tr } = compile(src, rt.api());
+    rt.prog = prog; rt.tr = tr;
+    this.rt = rt;
+    return tr;
+  }
+
+  // ---------- Robot geometrisi ----------
+  partPose(p) { // yerel merkez ve açı
+    if (p.servoPin != null && p.pivot) {
+      const a = ((p.angOff + p.dir * (this.servoAng[p.servoPin] ?? 0)) * Math.PI) / 180;
+      return { cx: p.pivot[0] + Math.cos(a) * p.len / 2, cy: p.pivot[1] + Math.sin(a) * p.len / 2, a, pivot: p.pivot, wS: p.dir * (this.servoVel[p.servoPin] || 0) * Math.PI / 180 };
+    }
+    return { cx: p.x, cy: p.y, a: p.ang, pivot: null, wS: 0 };
+  }
+  toWorld(lx, ly) { const s = this.state, c = Math.cos(s.th), n = Math.sin(s.th); return [s.x + c * lx - n * ly, s.y + n * lx + c * ly]; }
+  worldParts() {
+    const out = []; const th = this.state.th;
+    for (const p of this.robot.parts) {
+      const pp = this.partPose(p); const [wx, wy] = this.toWorld(pp.cx, pp.cy); const a = th + pp.a;
+      const c = Math.cos(a), s = Math.sin(a);
+      const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + c * u * p.hx - s * v * p.hy, wy + s * u * p.hx + c * v * p.hy]);
+      let piv = null; if (pp.pivot) piv = this.toWorld(pp.pivot[0], pp.pivot[1]);
+      out.push({ p, wx, wy, a, c, s, corners, piv, wS: pp.wS });
+    }
+    return out;
+  }
+  sensorWorld(sn) { const [x, y] = this.toWorld(sn.x, sn.y); return { x, y, a: this.state.th + sn.ang, z: sn.z }; }
+
+  // ---------- Fizik adımı ----------
+  pointVel(rx, ry) { const s = this.state; return [s.vx - s.w * ry, s.vy + s.w * rx]; }
+  applyImp(rx, ry, jx, jy) { const s = this.state, R = this.robot; s.vx += jx / R.mass; s.vy += jy / R.mass; s.w += (rx * jy - ry * jx) / R.inertia; }
+  invMass(rx, ry, nx, ny) { const R = this.robot; const cr = rx * ny - ry * nx; return 1 / R.mass + cr * cr / R.inertia; }
+
+  sideVoltage(side) {
+    const D = this.robot.driver, pins = side === 'L' ? D.L : D.R, rt = this.rt;
+    if (!rt) return { V: 0, mode: 'coast' };
+    const duty = (p) => { if (p == null) return 1; return rt.duty(p); };
+    const dig = (p) => p == null ? 0 : (rt.duty(p) > 0.5 ? 1 : 0);
+    const Vs = Math.max(0, D.vBat - D.drop);
+    let V = 0, mode = 'coast';
+    if (D.stby != null && !dig(D.stby)) return { V: 0, mode: 'coast' };
+    if (D.type === 'L9110' || D.type === 'DRV8833' || D.type === 'MX1508') {
+      const a = pins.ia != null ? rt.duty(pins.ia) : 0, b = pins.ib != null ? rt.duty(pins.ib) : 0;
+      if (a === 0 && b === 0) mode = 'coast'; else if (a > 0 && b > 0 && Math.abs(a - b) < 1e-6) { mode = 'brake'; V = 0; } else { mode = 'drive'; V = (a - b) * Vs; }
+      var d = Math.max(a, b);
+    } else { // L298N, TB6612, L293D
+      const en = duty(pins.en ?? pins.pwm), i1 = dig(pins.in1), i2 = dig(pins.in2);
+      var d = en;
+      if (en <= 0) mode = 'coast';
+      else if (i1 === i2) { mode = 'brake'; V = 0; }
+      else { mode = 'drive'; V = (i1 ? 1 : -1) * Vs * en; }
+    }
+    const inv = side === 'L' ? D.invL : D.invR; if (inv) V = -V;
+    return { V, mode, duty: d };
+  }
+
+  step(dt) {
+    const R = this.robot, s = this.state, g = RULES.G, M = R.motor;
+    // Program
+    if (this.rt && !this.rt.error) this.rt.runUntil(this.time);
+    // Servolar
+    for (const sv of R.servos) {
+      const tgt = this.rt ? this.rt.servoTarget(sv.pin) : null; const cur = this.servoAng[sv.pin] ?? sv.angle;
+      if (tgt == null) { this.servoVel[sv.pin] = 0; continue; }
+      const maxd = sv.speed * dt; const d = clamp(tgt - cur, -maxd, maxd);
+      this.servoAng[sv.pin] = cur + d; this.servoVel[sv.pin] = d / dt;
+    }
+    const c = Math.cos(s.th), n = Math.sin(s.th); const fx = c, fy = n, lx = -n, ly = c;
+    const Nw = R.mass * g * R.loadFrac / 2, Nc = R.mass * g * (1 - R.loadFrac);
+    // Tahrik kuvvetleri
+    const wheels = [['L', 1], ['R', -1]];
+    for (const [side, sy] of wheels) {
+      const wxL = R.wheelX, wyL = sy * R.track / 2; const rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
+      const [pvx, pvy] = this.pointVel(rx, ry); const vf = pvx * fx + pvy * fy;
+      const { V, mode, duty } = this.sideVoltage(side);
+      const wr = vf / R.wheelR; const k = M.tStall / M.w0;
+      let tau = 0;
+      if (mode === 'drive') tau = M.tStall * (V / M.vNom) * 1 - k * wr * (duty ?? 1);
+      else if (mode === 'brake') tau = -k * wr * (duty ?? 1);
+      // iç sürtünme
+      if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
+      let F = tau / R.wheelR, slip = false;
+      const meff = 1 / this.invMass(rx, ry, fx, fy);
+      if (Math.abs(F) > R.muS * Nw) { F = Math.sign(F) * R.muK * Nw; slip = true; }
+      if (mode !== 'drive' && F * vf < 0 && Math.abs(F * dt) > Math.abs(vf) * meff) F = -vf * meff / dt;
+      this.applyImp(rx, ry, F * fx * dt, F * fy * dt);
+      // yuvarlanma direnci
+      { const [qx, qy] = this.pointVel(rx, ry); const v2 = qx * fx + qy * fy; const jmax = R.crr * Nw * dt; const j = -Math.sign(v2) * Math.min(jmax, Math.abs(v2) * meff); this.applyImp(rx, ry, j * fx, j * fy); }
+      const rpmWheel = slip ? ((V / M.vNom) * M.w0 - Math.abs(F) * R.wheelR / k * Math.sign(F)) * 60 / (2 * Math.PI) : wr * 60 / (2 * Math.PI);
+      this.wheelInfo[side] = { V, F, slip, rpm: rpmWheel, mode };
+    }
+    // sarhoş teker yuvarlanma direnci
+    if (Nc > 0) {
+      const rx = c * R.caster.x - n * R.caster.y, ry = n * R.caster.x + c * R.caster.y;
+      const [qx, qy] = this.pointVel(rx, ry); const sp = Math.hypot(qx, qy);
+      if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const meff = 1 / this.invMass(rx, ry, ux, uy); const j = Math.min(R.caster.crr * Nc * dt, sp * meff); this.applyImp(rx, ry, -j * ux, -j * uy); }
+    }
+    // Yanal sürtünme (teker kaymasını engeller)
+    for (let it = 0; it < 4; it++) for (const [, sy] of wheels) {
+      const wxL = R.wheelX, wyL = sy * R.track / 2; const rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
+      const [pvx, pvy] = this.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
+      const meff = 1 / this.invMass(rx, ry, lx, ly); const j = clamp(-vl * meff, -R.muLat * Nw * dt, R.muLat * Nw * dt);
+      this.applyImp(rx, ry, j * lx, j * ly);
+    }
+    // Entegrasyon
+    s.x += s.vx * dt; s.y += s.vy * dt; s.th += s.w * dt;
+    // Yumurtalar: zemin sürtünmesi
+    const E = this.field;
+    for (const e of this.eggs) {
+      if (e.gone) continue;
+      const sp = Math.hypot(e.vx, e.vy);
+      if (sp > 0) { const dv = Math.min(sp, E.muEggFloor * g * dt); e.vx -= e.vx / sp * dv; e.vy -= e.vy / sp * dv; }
+      e.x += e.vx * dt; e.y += e.vy * dt;
+    }
+    // Çarpışmalar
+    for (let it = 0; it < 3; it++) { this.collideRobotWalls(); this.collideRobotEggs(); this.collideEggsWalls(); this.collideEggs(); }
+    this.time += dt;
+    if (this.trail.length === 0 || this.time - this.trail[this.trail.length - 1][2] > 0.05) { this.trail.push([s.x, s.y, this.time]); if (this.trail.length > 4000) this.trail.shift(); }
+    this.referee(dt);
+  }
+
+  collideRobotWalls() {
+    const F = RULES.FIELD, R = this.robot, s = this.state, E = this.field;
+    const parts = this.worldParts(); let push = [0, 0, 0, 0];
+    for (const wp of parts) {
+      if (!wp.p.solid || wp.p.z0 >= RULES.WALL_H) continue;
+      for (const [cx, cy] of wp.corners) {
+        const tests = [[cx < 0, 1, 0, -cx, 0], [cx > F, -1, 0, cx - F, 1], [cy < 0, 0, 1, -cy, 2], [cy > F, 0, -1, cy - F, 3]];
+        for (const [hit, nx, ny, depth, idx] of tests) {
+          if (!hit) continue;
+          const rx = cx - s.x, ry = cy - s.y; let [vx, vy] = this.pointVel(rx, ry);
+          if (wp.piv && wp.wS) { vx += -wp.wS * (cy - wp.piv[1]); vy += wp.wS * (cx - wp.piv[0]); }
+          const vn = vx * nx + vy * ny;
+          if (vn < 0) {
+            const j = -(1 + E.eWall) * vn / this.invMass(rx, ry, nx, ny);
+            this.applyImp(rx, ry, j * nx, j * ny);
+            const tx = -ny, ty = nx; const [vx2, vy2] = this.pointVel(rx, ry); const vt = vx2 * tx + vy2 * ty;
+            const jt = clamp(-vt / this.invMass(rx, ry, tx, ty), -E.muWall * j, E.muWall * j); this.applyImp(rx, ry, jt * tx, jt * ty);
+          }
+          push[idx] = Math.max(push[idx], depth);
+        }
+      }
+    }
+    s.x += push[0] - push[1]; s.y += push[2] - push[3];
+  }
+
+  collideRobotEggs() {
+    const R = this.robot, s = this.state, E = this.field, r = RULES.EGG_R, me = E.eggMass, F = RULES.FIELD;
+    const parts = this.worldParts();
+    for (const e of this.eggs) {
+      if (e.gone) continue;
+      for (const wp of parts) {
+        const p = wp.p; if (!p.solid || p.z0 >= RULES.EGG_H) continue;
+        const dx = e.x - wp.wx, dy = e.y - wp.wy;
+        if (dx * dx + dy * dy > (p.hx + p.hy + r) ** 2) continue;
+        const lxx = wp.c * dx + wp.s * dy, lyy = -wp.s * dx + wp.c * dy;
+        const qx = clamp(lxx, -p.hx, p.hx), qy = clamp(lyy, -p.hy, p.hy);
+        let ddx = lxx - qx, ddy = lyy - qy; let dist = Math.hypot(ddx, ddy);
+        let nlx, nly, pen, cqx = qx, cqy = qy;
+        if (dist >= r) continue;
+        if (dist > 1e-9) { nlx = ddx / dist; nly = ddy / dist; pen = r - dist; }
+        else { const px = p.hx - Math.abs(lxx), py = p.hy - Math.abs(lyy); if (px < py) { nlx = Math.sign(lxx) || 1; nly = 0; pen = px + r; cqx = nlx * p.hx; } else { nlx = 0; nly = Math.sign(lyy) || 1; pen = py + r; cqy = nly * p.hy; } }
+        const nx = wp.c * nlx - wp.s * nly, ny = wp.s * nlx + wp.c * nly;
+        const cpx = wp.wx + wp.c * cqx - wp.s * cqy, cpy = wp.wy + wp.s * cqx + wp.c * cqy;
+        const rx = cpx - s.x, ry = cpy - s.y; let [vrx, vry] = this.pointVel(rx, ry);
+        if (wp.piv && wp.wS) { vrx += -wp.wS * (cpy - wp.piv[1]); vry += wp.wS * (cpx - wp.piv[0]); }
+        // Yumurta duvara sıkışmış mı?
+        const pinned = (e.x - r < 0.001 && nx < -0.3) || (e.x + r > F - 0.001 && nx > 0.3) || (e.y - r < 0.001 && ny < -0.3) || (e.y + r > F - 0.001 && ny > 0.3);
+        const invE = pinned ? 0 : 1 / me;
+        const rvx = e.vx - vrx, rvy = e.vy - vry; const vn = rvx * nx + rvy * ny;
+        if (vn < 0) {
+          const j = -(1 + E.eRobotEgg) * vn / (invE + this.invMass(rx, ry, nx, ny));
+          e.vx += j * nx * invE; e.vy += j * ny * invE; this.applyImp(rx, ry, -j * nx, -j * ny);
+          const tx = -ny, ty = nx; const vt = rvx * tx + rvy * ty;
+          const jt = clamp(-vt / (invE + this.invMass(rx, ry, tx, ty)), -E.muRobotEgg * j, E.muRobotEgg * j);
+          e.vx += jt * tx * invE; e.vy += jt * ty * invE; this.applyImp(rx, ry, -jt * tx, -jt * ty);
+        }
+        if (pinned) { s.x -= nx * pen; s.y -= ny * pen; }
+        else { const wr = me / (me + R.mass); e.x += nx * pen * (1 - wr); e.y += ny * pen * (1 - wr); s.x -= nx * pen * wr; s.y -= ny * pen * wr; }
+      }
+    }
+  }
+  collideEggsWalls() {
+    const F = RULES.FIELD, r = RULES.EGG_R, ew = 0.3;
+    for (const e of this.eggs) {
+      if (e.gone) continue;
+      if (e.x < r) { e.x = r; if (e.vx < 0) e.vx = -e.vx * ew; } if (e.x > F - r) { e.x = F - r; if (e.vx > 0) e.vx = -e.vx * ew; }
+      if (e.y < r) { e.y = r; if (e.vy < 0) e.vy = -e.vy * ew; } if (e.y > F - r) { e.y = F - r; if (e.vy > 0) e.vy = -e.vy * ew; }
+    }
+  }
+  collideEggs() {
+    const r2 = RULES.EGG_R * 2, L = this.eggs;
+    for (let i = 0; i < L.length; i++) { const a = L[i]; if (a.gone) continue;
+      for (let j = i + 1; j < L.length; j++) { const b = L[j]; if (b.gone) continue;
+        const dx = b.x - a.x, dy = b.y - a.y; const d2 = dx * dx + dy * dy; if (d2 >= r2 * r2 || d2 < 1e-12) continue;
+        const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, pen = r2 - d;
+        a.x -= nx * pen / 2; a.y -= ny * pen / 2; b.x += nx * pen / 2; b.y += ny * pen / 2;
+        const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (vn < 0) { const jj = -(1 + 0.4) * vn / 2; a.vx -= jj * nx; a.vy -= jj * ny; b.vx += jj * nx; b.vy += jj * ny; }
+      } }
+  }
+
+  // ---------- Hakem / Puan ----------
+  zoneOf(x, y, rad = 0) {
+    const F = RULES.FIELD, Z = RULES.ZONE;
+    if (x - rad <= Z && y - rad <= Z) return 'red';
+    if (x + rad >= F - Z && y + rad >= F - Z) return 'blue';
+    return null;
+  }
+  eggUnderRobot(e) {
+    for (const wp of this.worldParts()) {
+      const p = wp.p; const dx = e.x - wp.wx, dy = e.y - wp.wy;
+      const lxx = wp.c * dx + wp.s * dy, lyy = -wp.s * dx + wp.c * dy;
+      if (Math.abs(lxx) < p.hx + RULES.EGG_R * 0.2 && Math.abs(lyy) < p.hy + RULES.EGG_R * 0.2) return true;
+    }
+    // robotun kapalı gövdesi içinde mi (kepçe)? -> yumurta merkezi robot dış zarfının içindeyse
+    const s = this.state, dx = e.x - s.x, dy = e.y - s.y, c = Math.cos(s.th), n = Math.sin(s.th);
+    const lx = c * dx + n * dy, ly = -n * dx + c * dy; const env = this.envelope();
+    return lx > env.minX && lx < env.maxX && ly > env.minY && ly < env.maxY;
+  }
+  envelope() {
+    let minX = 1, maxX = -1, minY = 1, maxY = -1;
+    for (const p of this.robot.parts) { const pp = this.partPose(p); const cc = Math.cos(pp.a), ss = Math.sin(pp.a);
+      for (const [u, v] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) { const x = pp.cx + cc * u * p.hx - ss * v * p.hy, y = pp.cy + ss * u * p.hx + cc * v * p.hy; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); } }
+    return { minX, maxX, minY, maxY };
+  }
+  referee(dt) {
+    if (!this.field.refereeCollect) return;
+    for (const e of this.eggs) {
+      if (e.gone) continue;
+      const z = this.zoneOf(e.x, e.y, RULES.EGG_R);
+      if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; this.banked[z].push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z, kind: e.kind }; this.events.push({ t: this.time, txt: `${SURF[e.kind === 'penalty' ? 'none' : e.kind].name.replace('boş', 'ceza')} yumurta ${z === 'red' ? 'kırmızı' : 'mavi'} alanda — hakem topladı` }); } }
+      else e.still = 0;
+    }
+  }
+  score() {
+    const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0 }, blue: { own: 0, wrong: 0, pen: 0 } } };
+    const add = (zone, kind) => {
+      const d = sc.detail[zone];
+      if (kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (kind === zone) { sc[zone] += 1; d.own++; } else { sc[zone] -= 2; d.wrong++; }
+    };
+    for (const z of ['red', 'blue']) for (const e of this.banked[z]) add(z, e.kind);
+    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && !this.eggUnderRobot(e)) add(z, e.kind); }
+    return sc;
+  }
+  ledColor() {
+    const L = this.robot.led; if (!L || !this.rt) return null;
+    const r = L.r != null && this.rt.duty(L.r) > 0.1, b = L.b != null && this.rt.duty(L.b) > 0.1;
+    return r && b ? 'mor' : r ? 'red' : b ? 'blue' : null;
+  }
+  ruleChecks() {
+    const R = this.robot; const out = [];
+    // başlangıç boyutu (servo başlangıç açısıyla)
+    const saved = Object.assign({}, this.servoAng); for (const s of R.servos) this.servoAng[s.pin] = s.angle;
+    const env = this.envelope(); this.servoAng = saved;
+    const L = (env.maxX - env.minX) * 100, W = (env.maxY - env.minY) * 100; const H = Math.max(...R.parts.map(p => p.z1), ...R.circuit.map(c => c.z + c.h), R.stop ? R.stop.z + 0.038 : 0, R.led ? R.led.z + 0.008 : 0) * 100;
+    out.push({ ok: L <= 30.0001, txt: `Uzunluk ${L.toFixed(1)} cm (≤ 30)` });
+    out.push({ ok: W <= 30.0001, txt: `Genişlik ${W.toFixed(1)} cm (≤ 30)` });
+    out.push({ ok: H <= 30.0001, txt: `Yükseklik ${H.toFixed(1)} cm (≤ 30)` });
+    out.push({ ok: R.mass <= 5, txt: `Kütle ${R.mass.toFixed(2)} kg (≤ 5)` });
+    out.push({ ok: !!R.led, txt: R.led ? 'Üstte köşe renginde LED tanımlı' : 'LED tanımlı değil (kural: üstte köşe renginde LED zorunlu)' });
+    const hasStop = (this.cfg.robot || this.cfg).acil_stop_butonu || (this.cfg.robot || this.cfg).acil_stop;
+    out.push({ ok: !!hasStop, txt: hasStop ? 'Mantar başlı acil stop butonu var' : 'Acil stop butonu belirtilmemiş ("acil_stop_butonu": true)' });
+    return out;
+  }
+}
+
+// =====================================================================================
+//                                  ARDUINO ÇALIŞMA ZAMANI
+// =====================================================================================
+class Runtime {
+  constructor(sim) {
+    this.sim = sim; this.t = 0; this.pins = {}; this.servoT = {}; this.gen = null; this.phase = 'setup';
+    this.error = null; this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(12345);
+  }
+  duty(p) { const st = this.pins[p]; if (!st) return 0; if (st.pwm != null) return st.pwm; return st.v ? 1 : 0; }
+  servoTarget(pin) { return pin in this.servoT ? this.servoT[pin] : null; }
+  out(txt) { this.sim.serialOut.push({ t: this.t, txt }); if (this.sim.serialOut.length > 3000) this.sim.serialOut.splice(0, 500); if (this.sim.onSerial) this.sim.onSerial(); }
+  print(s) {
+    this.serialBuf += s; let k;
+    while ((k = this.serialBuf.indexOf('\n')) >= 0) { this.out(this.serialBuf.slice(0, k)); this.serialBuf = this.serialBuf.slice(k + 1); }
+  }
+  runUntil(simTime) {
+    let guard = 0;
+    try {
+      while (this.t <= simTime && guard++ < 200000) {
+        if (!this.gen) { this.gen = this.phase === 'setup' ? this.prog.setup() : this.prog.loop(); this.phase = 'loop'; this.t += 3e-6; }
+        const r = this.gen.next();
+        if (r.done) { this.gen = null; continue; }
+        if (typeof r.value === 'number' && r.value > 0) this.t += r.value;
+      }
+    } catch (e) {
+      this.error = e; const ln = errLine(e);
+      this.out(`⚠ Çalışma hatası${ln ? ' (satır ~' + ln + ')' : ''}: ${e.message}`);
+    }
+  }
+  sensorFor(pin, kind) { return this.sim.robot.sensors.find(s => kind.includes(s.type) && (s.pin === pin || s.dpin === pin || s.echo === pin || s.out === pin)); }
+
+  api() {
+    const rt = this, sim = this.sim;
+    const P = (p) => { const n = pinNum(p); if (n == null) throw new Error('Geçersiz pin: ' + p); return n; };
+    const cost = (sec) => { rt.t += sec; };
+    const fmt = (v, a) => {
+      if (typeof v === 'boolean') return v ? '1' : '0';
+      if (typeof v === 'number') {
+        if (a === undefined) return Number.isInteger(v) ? String(v) : v.toFixed(2);
+        if (Number.isInteger(v) && [2, 8, 10, 16].includes(a)) return (v >>> 0).toString(a).toUpperCase();
+        return v.toFixed(a);
+      }
+      return String(v);
+    };
+    class Servo {
+      constructor() { this.pin = null; this.a = 90; }
+      attach(p) { this.pin = P(p); if (!sim.robot.servos.some(s => s.pin === this.pin)) rt.out(`ℹ Servo ${pinName(this.pin)} pinine bağlandı ama robot yapılandırmasında bu pinde servo yok.`); }
+      write(a) { a = clamp(+a, 0, 180); this.a = a; if (this.pin != null) rt.servoT[this.pin] = a; cost(5e-6); }
+      writeMicroseconds(us) { this.write((clamp(us, 544, 2400) - 544) / (2400 - 544) * 180); }
+      read() { return Math.round(this.a); } attached() { return this.pin != null; } detach() { if (this.pin != null) delete rt.servoT[this.pin]; this.pin = null; }
+    }
+    class NewPing {
+      constructor(trig, echo, max = 500) { this.trig = P(trig); this.echo = P(echo); this.max = max; }
+      *ping(max) { const s = sim.robot.sensors.find(x => x.type === 'HC-SR04' && x.trig === this.trig); const m = max || this.max;
+        if (!s) { yield 0.03; return 0; } const d = Sensors.ultrasonic(sim, s); const cm = d == null ? null : d * 100;
+        if (cm == null || cm > m) { yield 0.03; return 0; } const us = cm * 57; yield (us / 1e6 + 0.0005); return Math.round(us); }
+      *ping_cm(max) { const us = yield* this.ping(max); return Math.round(us / 57); }
+      *ping_in(max) { const us = yield* this.ping(max); return Math.round(us / 146); }
+      *ping_median(it = 5, max) { const a = []; for (let i = 0; i < it; i++) { a.push(yield* this.ping(max)); yield 0.029; } a.sort((x, y) => x - y); return a[a.length >> 1]; }
+      convert_cm(us) { return Math.round(us / 57); }
+    }
+    const api = {
+      HIGH: 1, LOW: 0, INPUT: 0, OUTPUT: 1, INPUT_PULLUP: 2, LED_BUILTIN: 13, true: true, false: false,
+      A0: 14, A1: 15, A2: 16, A3: 17, A4: 18, A5: 19, A6: 20, A7: 21,
+      PI: Math.PI, HALF_PI: Math.PI / 2, TWO_PI: Math.PI * 2, DEG_TO_RAD: Math.PI / 180, RAD_TO_DEG: 180 / Math.PI,
+      DEC: 10, HEX: 16, OCT: 8, BIN: 2, NULL: 0, nullptr: 0, MSBFIRST: 1, LSBFIRST: 0, CHANGE: 1, RISING: 3, FALLING: 2,
+      __CLS_Servo: Servo, __CLS_NewPing: NewPing,
+      __b() { rt.t += 1e-6; return rt.t > sim.time; },
+      __i(v) { return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : v; },
+      __arr(...d) { const mk = (k) => k >= d.length - 1 ? new Array(+d[k]).fill(0) : Array.from({ length: +d[k] }, () => mk(k + 1)); return mk(0); },
+      sizeof(x) { return Array.isArray(x) ? x.length : (typeof x === 'string' ? x.length : 1); },
+      F(s) { return s; },
+      pinMode(p, m) { p = P(p); const st = rt.pins[p] || (rt.pins[p] = { v: 0, pwm: null }); st.mode = m; if (m === 2) st.pull = true; cost(3e-6); },
+      digitalWrite(p, v) {
+        p = P(p); const st = rt.pins[p] || (rt.pins[p] = { v: 0, pwm: null, mode: 1 }); const nv = v ? 1 : 0;
+        const us = sim.robot.sensors.find(s => s.type === 'HC-SR04' && s.trig === p);
+        if (us) { const u = rt.ultraState[p] || (rt.ultraState[p] = {}); if (nv && !st.v) u.hi = rt.t; if (!nv && st.v) { u.armed = true; u.at = rt.t; } }
+        st.v = nv; st.pwm = null; cost(4e-6);
+      },
+      analogWrite(p, v) { p = P(p); const st = rt.pins[p] || (rt.pins[p] = { v: 0, mode: 1 }); v = clamp(Math.round(+v), 0, 255); st.pwm = v / 255; st.v = v > 127 ? 1 : 0; st.raw = v; cost(5e-6); },
+      digitalRead(p) {
+        p = P(p); cost(4e-6);
+        const r = Sensors.digital(sim, p, rt); if (r != null) return r;
+        const st = rt.pins[p]; if (st && st.mode === 1) return st.v; if (st && st.pull) return 1; return 0;
+      },
+      analogRead(p) { p = P(p); if (p < 14) p += 14; cost(112e-6); const r = Sensors.analog(sim, p, rt); return r != null ? r : Math.round(rt.rand() * 40 + 300); },
+      millis() { return Math.floor(rt.t * 1000); }, micros() { return Math.floor(rt.t * 1e6); },
+      *delay(ms) { yield Math.max(0, +ms) / 1000; }, *delayMicroseconds(us) { yield Math.max(0, +us) / 1e6; },
+      *pulseIn(p, state, timeout = 1000000) { return yield* Sensors.pulseIn(sim, rt, P(p), state, timeout); },
+      *pulseInLong(p, state, timeout = 1000000) { return yield* Sensors.pulseIn(sim, rt, P(p), state, timeout); },
+      map(x, a, b, c, d) { return Math.trunc((x - a) * (d - c) / (b - a) + c); },
+      constrain: clamp, abs: Math.abs, min: Math.min, max: Math.max, sq: x => x * x, sqrt: Math.sqrt, pow: Math.pow,
+      sin: Math.sin, cos: Math.cos, tan: Math.tan, atan2: Math.atan2, atan: Math.atan, asin: Math.asin, acos: Math.acos, exp: Math.exp, log: Math.log,
+      floor: Math.floor, ceil: Math.ceil, round: Math.round, fabs: Math.abs, isnan: isNaN, isinf: x => !isFinite(x),
+      random(a, b) { if (b === undefined) { b = a; a = 0; } return Math.floor(a + rt.rand() * (b - a)); },
+      randomSeed(s) { rt.rand = mulberry32(s | 0); },
+      bitRead: (v, b) => (v >> b) & 1, bitWrite: (v, b, x) => x ? v | (1 << b) : v & ~(1 << b), bit: b => 1 << b,
+      lowByte: v => v & 0xff, highByte: v => (v >> 8) & 0xff,
+      tone() { }, noTone() { }, interrupts() { }, noInterrupts() { },
+      attachInterrupt() { rt.out('ℹ attachInterrupt simülatörde desteklenmiyor (yok sayıldı).'); }, detachInterrupt() { }, digitalPinToInterrupt: p => p,
+      Serial: {
+        begin(b) { rt.serialOn = true; }, end() { }, available() { return 0; }, read() { return -1; }, peek() { return -1; }, flush() { },
+        print(v, a) { rt.print(fmt(v, a)); cost(1e-4); }, println(v, a) { rt.print((v === undefined ? '' : fmt(v, a)) + '\n'); cost(1e-4); },
+        write(v) { rt.print(typeof v === 'number' ? String.fromCharCode(v) : String(v)); }, setTimeout() { },
+        toString() { return 'Serial'; },
+      },
+    };
+    api.Serial[Symbol.toPrimitive] = () => 1;
+    return api;
+  }
+}
+
+// =====================================================================================
+//                                  SENSÖRLER
+// =====================================================================================
+const Sensors = {
+  // Işın - duvar/yumurta kesişimi. z: sensör yüksekliği.
+  ray(sim, x, y, a, z, maxD, opts = {}) {
+    if (sim.rayCast3D) { const r = sim.rayCast3D(x, y, z, a, maxD); if (r) return r; }
+    const F = RULES.FIELD, dx = Math.cos(a), dy = Math.sin(a); let best = maxD, hit = null;
+    const seeWall = z <= RULES.WALL_H + (opts.wallTol ?? 0.01);
+    if (seeWall) {
+      const ts = [];
+      if (dx > 1e-9) ts.push((F - x) / dx); if (dx < -1e-9) ts.push((0 - x) / dx);
+      if (dy > 1e-9) ts.push((F - y) / dy); if (dy < -1e-9) ts.push((0 - y) / dy);
+      for (const t of ts) if (t >= 0 && t < best) { best = t; hit = 'duvar'; }
+    }
+    if (z <= RULES.EGG_H + (opts.eggTol ?? 0.012)) {
+      const r = RULES.EGG_R;
+      for (const e of sim.eggs) {
+        if (e.gone) continue;
+        const ox = e.x - x, oy = e.y - y; const tc = ox * dx + oy * dy; if (tc < -r) continue;
+        const d2 = ox * ox + oy * oy - tc * tc; if (d2 > r * r) continue;
+        const t = tc - Math.sqrt(r * r - d2); if (t >= 0 && t < best) { best = t; hit = e; }
+      }
+    }
+    return { d: best, hit };
+  },
+  ultrasonic(sim, s) {
+    const w = sim.sensorWorld(s); let best = null;
+    for (const da of [-0.26, -0.13, 0, 0.13, 0.26]) { const r = Sensors.ray(sim, w.x, w.y, w.a + da, w.z, 4.0); if (r.hit && (best == null || r.d < best)) best = r.d; }
+    if (best == null) return null;
+    if (best < 0.02) best = 0.02 + Math.random() * 0.01;
+    return best + (Math.random() - 0.5) * 0.004;
+  },
+  irObstacle(sim, s) {
+    const w = sim.sensorWorld(s);
+    for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(sim, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; }
+    return false;
+  },
+  surfaceAt(sim, x, y) {
+    const r = RULES.EGG_R;
+    for (const e of sim.eggs) { if (e.gone) continue; const dx = x - e.x, dy = y - e.y; if (dx * dx + dy * dy <= r * r) return Sensors.eggSurface(e, x, y); }
+    const z = sim.zoneOf(x, y); if (x < 0 || y < 0 || x > RULES.FIELD || y > RULES.FIELD) return SURF.white;
+    return z === 'red' ? SURF.red : z === 'blue' ? SURF.blue : SURF.white;
+  },
+  eggSurface(e, x, y) {
+    if (e.kind !== 'penalty') return SURF[e.kind];
+    const ang = Math.atan2(y - e.y, x - e.x) - e.phi; const dist = Math.hypot(x - e.x, y - e.y);
+    if (dist < 0.004) return { ir: (SURF.red.ir + SURF.blue.ir) / 2, rgb: SURF.red.rgb.map((v, i) => (v + SURF.blue.rgb[i]) / 2), name: 'ceza' };
+    return Math.sin(ang) >= 0 ? SURF.red : SURF.blue;
+  },
+  tcrt(sim, s) {
+    const w = sim.sensorWorld(s); const sf = Sensors.surfaceAt(sim, w.x, w.y);
+    let v = sf.ir; if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); // çok yüksek → zayıf yansıma
+    return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023);
+  },
+  colorTarget(sim, s) {
+    const w = sim.sensorWorld(s);
+    if ((s.bakis || 'asagi') === 'asagi') return Sensors.surfaceAt(sim, w.x, w.y);
+    const r = Sensors.ray(sim, w.x, w.y, w.a, w.z, s.range, { wallTol: 0 });
+    if (!r.hit) return SURF.none;
+    if (r.hit === 'duvar') return SURF.white;
+    const hx = w.x + Math.cos(w.a) * r.d, hy = w.y + Math.sin(w.a) * r.d; return Sensors.eggSurface(r.hit, hx, hy);
+  },
+  tcsPeriod(sim, s, rt) { // yarım periyot µs
+    const g = (p, def) => p == null ? def : (rt.duty(p) > 0.5 ? 1 : 0);
+    const S0 = g(s.s0, 1), S1 = g(s.s1, 0); const scale = (!S0 && !S1) ? 0 : (!S0 && S1) ? 0.02 : (S0 && !S1) ? 0.2 : 1;
+    if (s.s0 == null && s.s1 == null && s.olcek) { /* sabit ölçek */ }
+    const sc = (s.s0 == null && s.s1 == null) ? (s.olcek ?? 20) / 100 : scale;
+    if (sc === 0) return null;
+    const S2 = g(s.s2, 0), S3 = g(s.s3, 0);
+    const sf = Sensors.colorTarget(sim, s); const [R, G, B] = sf.rgb;
+    let refl = (!S2 && !S3) ? R : (!S2 && S3) ? B : (S2 && !S3) ? (R + G + B) / 3 * 1.6 : G;
+    refl = 0.25 + 0.75 * refl;
+    const f = 60000 * sc * refl * (1 + (Math.random() - 0.5) * 0.04);
+    return 1e6 / (2 * f);
+  },
+  sharp(sim, s) {
+    const w = sim.sensorWorld(s); const r = Sensors.ray(sim, w.x, w.y, w.a, w.z, 1.5); let d = (r.hit ? r.d : 1.5) * 100;
+    let V; if (d < 7) V = 2.9 * d / 7; else V = 27.728 * Math.pow(Math.max(d, 7), -1.2045); V = clamp(V, 0.3, 3.1);
+    return clamp(Math.round(V / 5 * 1023 + (Math.random() - 0.5) * 8), 0, 1023);
+  },
+  digital(sim, p, rt) {
+    for (const s of sim.robot.sensors) {
+      if ((s.type === 'IR_ENGEL' || s.type === 'IR') && s.pin === p) return Sensors.irObstacle(sim, s) ? 0 : 1;
+      if (s.type === 'TCRT5000' && (s.dpin === p || (s.pin === p && s.dpin == null && p < 14))) return Sensors.tcrt(sim, s) > (s.esik ?? 500) ? 1 : 0;
+      if (s.type === 'BUTON' && s.pin === p) return (s.deger === 'HIGH' || s.deger === 1) ? 1 : 0;
+      if (s.type === 'TCS3200' && s.out === p) { const per = Sensors.tcsPeriod(sim, s, rt); if (per == null) return 0; return Math.floor(rt.t * 1e6 / per) % 2; }
+    }
+    return null;
+  },
+  analog(sim, p, rt) {
+    for (const s of sim.robot.sensors) {
+      if (s.type === 'TCRT5000' && s.pin === p) return Sensors.tcrt(sim, s);
+      if ((s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') && s.pin === p) return Sensors.sharp(sim, s);
+      if ((s.type === 'IR_ENGEL' || s.type === 'IR') && s.pin === p) return Sensors.irObstacle(sim, s) ? 40 : 980;
+    }
+    return null;
+  },
+  *pulseIn(sim, rt, p, state, timeout) {
+    const us = sim.robot.sensors.find(s => s.type === 'HC-SR04' && s.echo === p);
+    if (us) {
+      const u = rt.ultraState[us.trig] || {};
+      if (state && u.armed && rt.t - u.at < 0.06) {
+        u.armed = false; const d = Sensors.ultrasonic(sim, us);
+        let dur = d == null ? 38000 : d * 2 / 343 * 1e6;
+        yield 0.00045; // sensör hazırlık süresi
+        if (dur > timeout) { yield (timeout / 1e6); return 0; }
+        yield dur / 1e6; return Math.round(dur);
+      }
+      yield timeout / 1e6; return 0;
+    }
+    const tcs = sim.robot.sensors.find(s => s.type === 'TCS3200' && s.out === p);
+    if (tcs) { const per = Sensors.tcsPeriod(sim, tcs, rt); if (per == null) { yield timeout / 1e6; return 0; } yield (per * 2) / 1e6; return Math.round(per); }
+    yield timeout / 1e6; return 0;
+  },
+  readouts(sim) { // arayüz için (zaman harcamaz)
+    const rt = sim.rt || { duty: () => 0 };
+    return sim.robot.sensors.map(s => {
+      let val = '';
+      try {
+        if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(sim, s); val = d == null ? 'menzil dışı' : (d * 100).toFixed(1) + ' cm'; }
+        else if (s.type === 'IR_ENGEL' || s.type === 'IR') val = Sensors.irObstacle(sim, s) ? 'ENGEL (LOW)' : 'boş (HIGH)';
+        else if (s.type === 'TCRT5000') { const v = Sensors.tcrt(sim, s); val = `${v} → ${v > (s.esik ?? 500) ? 'HIGH (koyu)' : 'LOW (açık)'}`; }
+        else if (s.type === 'TCS3200') { const sf = Sensors.colorTarget(sim, s); val = sf.name; }
+        else if (s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') val = String(Sensors.sharp(sim, s));
+        else if (s.type === 'BUTON') val = s.deger;
+      } catch (e) { val = '?'; }
+      return { name: s.ad || s.type, type: s.type, val };
+    });
+  },
+};
+
+return { RULES, SURF, Sim, Runtime, Sensors, transpile, compile, stripJsonComments, pinNum, pinName };
+})();
+
+
+const DEFAULT_CONFIG = `{
+  // ====== SAHA (MEB Robot 2025 kurallarına göre 250x250 cm) ======
+  "saha": {
+    "yumurta_kutle_g": 25,        // kural: en fazla 40 g
+    "mu_yumurta_zemin": 0.35,     // yumurta - sunta kayma sürtünmesi
+    "mu_robot_yumurta": 0.30,
+    "mu_duvar": 0.40,
+    "esneklik_robot_yumurta": 0.2,
+    "tohum": 2026,                // yumurta dizilimi (değiştir → yeni dizilim)
+    "hakem_toplar": true,         // alanda 1 sn duran yumurtayı hakem alır
+    "renkler": { "zemin": "#f3f2ee", "kirmizi": "#c1121c", "mavi": "#25356b" }
+  },
+
+  // ====== ROBOT ======  (birimler: cm, kg; x = ileri, y = sola)
+  "robot": {
+    "isim": "Örnek MEB Yumurta Robotu",
+    "kutle_kg": 1.1,
+    "agirlik_merkezi_z_cm": 5,
+    "acil_stop": { "x": 2, "y": -4, "z": 8.9 },   // mantar başlı acil stop butonu
+
+    "tekerlek": {
+      "cap_cm": 6.5, "genislik_cm": 2.6,
+      "iz_cm": 17,                // iki teker arası mesafe
+      "x_cm": -2,                 // teker ekseninin merkeze göre konumu
+      "yuk_orani": 0.8,           // ağırlığın tekerlere binen oranı
+      "mu_statik": 0.9, "mu_kinetik": 0.75, "mu_yanal": 0.9,
+      "yuvarlanma_katsayisi": 0.015
+    },
+    "sarhos_teker": { "x_cm": -8, "y_cm": 0, "cap_cm": 1.6, "yuvarlanma_katsayisi": 0.03 },
+
+    "motor": {                    // çıkış milindeki (redüktör sonrası) değerler
+      "nominal_volt": 6, "bosta_rpm": 200,
+      "stall_tork_kgcm": 0.8, "ic_surtunme_kgcm": 0.04
+    },
+    "surucu": {
+      "tip": "L298N",             // L298N | TB6612 | L9110 | DRV8833
+      "pil_volt": 7.4, "dusum_volt": 1.8,
+      "sol": { "en": 5, "in1": 7, "in2": 8 },
+      "sag": { "en": 6, "in1": 9, "in2": 10 },
+      "sol_ters": false, "sag_ters": false
+    },
+
+    // Gövde parçaları: z0 = yerden alt yükseklik, z1 = üst yükseklik (cm).
+    // z0 >= 2 cm olan parçaların altından yumurta (2 cm) geçer, z0 >= 8 cm olanlar duvarın üstünden geçer.
+    // "sekil": "silindir" → uzunluk = çap. "kati": false → sadece görsel (çarpışmaz).
+    "parcalar": [
+      { "ad": "Sol TT motor", "x": -2, "y": 4.9, "uzunluk": 7, "genislik": 2.2, "z0": 2.2, "z1": 4.3, "renk": "#f2c230" },
+      { "ad": "Sağ TT motor", "x": -2, "y": -4.9, "uzunluk": 7, "genislik": 2.2, "z0": 2.2, "z1": 4.3, "renk": "#f2c230" },
+      { "ad": "Alt pleksi plaka", "x": 0, "y": 0, "uzunluk": 19, "genislik": 15, "z0": 4.3, "z1": 4.6, "renk": "#cfe3f0" },
+      { "ad": "Direk 1", "sekil": "silindir", "x": 7, "y": 6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227" },
+      { "ad": "Direk 2", "sekil": "silindir", "x": 7, "y": -6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227" },
+      { "ad": "Direk 3", "sekil": "silindir", "x": -7.5, "y": 6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227" },
+      { "ad": "Direk 4", "sekil": "silindir", "x": -7.5, "y": -6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227" },
+      { "ad": "Üst pleksi plaka", "x": -0.5, "y": 0, "uzunluk": 18, "genislik": 15, "z0": 8.6, "z1": 8.9, "renk": "#cfe3f0" },
+      { "ad": "Kepçe arka", "x": 10, "y": 0, "uzunluk": 1, "genislik": 12, "z0": 0.3, "z1": 4.3, "renk": "#374151" },
+      { "ad": "Sol kol", "x": 14, "y": 6, "uzunluk": 8, "genislik": 1, "z0": 0.3, "z1": 4.3, "renk": "#374151" },
+      { "ad": "Sağ kol", "x": 14, "y": -6, "uzunluk": 8, "genislik": 1, "z0": 0.3, "z1": 4.3, "renk": "#374151" },
+      { "ad": "SG90 servo", "x": 16.5, "y": 6.3, "uzunluk": 2.3, "genislik": 1.2, "z0": 4.3, "z1": 6.6, "renk": "#2563eb", "kati": false },
+      { "ad": "Kapak", "servo_pin": 3, "pivot": [18, 5.5], "uzunluk": 11, "genislik": 0.8,
+        "aci_ofset": -90, "yon": 1, "z0": 0.3, "z1": 4, "renk": "#f59e0b" }
+    ],
+    "servolar": [ { "ad": "Kapak servosu", "pin": 3, "hiz_derece_s": 450, "baslangic_aci": 0 } ],
+
+    "sensorler": [
+      { "tip": "HC-SR04", "ad": "Ön ultrasonik", "trig": 11, "echo": 12, "x": 9.3, "y": 0, "z": 6.5, "aci": 0 },
+      { "tip": "IR_ENGEL", "ad": "Sol IR", "pin": 2, "x": 8, "y": 7.5, "z": 1.5, "aci": 40, "menzil_cm": 14 },
+      { "tip": "IR_ENGEL", "ad": "Sağ IR", "pin": 4, "x": 8, "y": -7.5, "z": 1.5, "aci": -40, "menzil_cm": 14 },
+      { "tip": "TCRT5000", "ad": "Zemin", "pin": "A0", "x": 2, "y": 0, "z": 1, "esik": 500 },
+      { "tip": "TCS3200", "ad": "Renk (kepçe)", "s2": "A1", "s3": "A2", "out": 13, "olcek": 20,
+        "x": 10.6, "y": 0, "z": 1, "aci": 0, "bakis": "ileri", "menzil_cm": 2.5 }
+    ],
+    "led": { "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -7, "y": 0, "z": 8.9 },
+
+    // Devre katmanı (Fritzing düzeni) — sahada robotun üstünde çizilir
+    "devre": [
+      { "ad": "Arduino Uno", "x": 1, "y": 1.5, "z": 8.9, "uzunluk": 6.9, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490" },
+      { "ad": "L298N", "x": 4, "y": 0, "z": 4.6, "uzunluk": 4.3, "genislik": 4.3, "kalinlik": 2.5, "renk": "#b91c1c" },
+      { "ad": "Pil 2S 18650", "x": -4.5, "y": 0, "z": 4.6, "uzunluk": 4.2, "genislik": 7.6, "kalinlik": 2, "renk": "#1d4ed8" },
+      { "ad": "Mini breadboard", "x": -5, "y": 3.5, "z": 8.9, "uzunluk": 4.5, "genislik": 3.4, "kalinlik": 0.9, "renk": "#e5e7eb" }
+    ]
+  }
+}`;
+
+const DEFAULT_CODE = `// Örnek yumurta toplama kodu — kendi kodunu buraya yapıştır
+#include <Servo.h>
+
+#define ENA 5
+#define IN1 7
+#define IN2 8
+#define ENB 6
+#define IN3 9
+#define IN4 10
+#define TRIG 11
+#define ECHO 12
+#define IR_SOL 2
+#define IR_SAG 4
+#define ZEMIN A0
+#define S2 A1
+#define S3 A2
+#define RENK_OUT 13
+#define LED_K A3
+#define LED_M A4
+
+Servo kapak;
+const bool TAKIM_KIRMIZI = true;   // mavi köşedeysen false yap
+unsigned long sonYazdirma = 0;
+
+void motorlar(int sol, int sag) {
+  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);
+  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);
+  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);
+  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);
+  analogWrite(ENA, abs(sol));
+  analogWrite(ENB, abs(sag));
+}
+
+long mesafeCm() {
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+  long sure = pulseIn(ECHO, HIGH, 30000);
+  if (sure == 0) return 999;
+  return sure / 58;
+}
+
+int renkOku(int s2, int s3) {
+  digitalWrite(S2, s2);
+  digitalWrite(S3, s3);
+  delay(2);
+  return pulseIn(RENK_OUT, LOW);
+}
+
+// 0 = yumurta yok, 1 = kırmızı, 2 = mavi
+int yumurtaRengi() {
+  int r = renkOku(LOW, LOW);
+  int b = renkOku(LOW, HIGH);
+  if (r > 120 && b > 120) return 0;
+  if (r < b) return 1;
+  return 2;
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);
+  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);
+  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);
+  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT);
+  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);
+  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);
+  kapak.attach(3);
+  kapak.write(0);      // başlangıçta kapalı (30 cm sınırı)
+  delay(300);
+  kapak.write(90);     // maç başlayınca aç
+  Serial.println("Robot hazir");
+}
+
+void loop() {
+  int renk = yumurtaRengi();
+  int benim = TAKIM_KIRMIZI ? 1 : 2;
+  if (renk != 0 && renk != benim) {
+    // Yanlış renk / ceza yumurtası: geri çekil, bırak
+    motorlar(-180, -180);
+    delay(350);
+    motorlar(-170, 170);
+    delay(300);
+  }
+
+  long d = mesafeCm();
+  bool solVar = digitalRead(IR_SOL) == LOW;
+  bool sagVar = digitalRead(IR_SAG) == LOW;
+
+  if (d < 32) {                 // duvar (ultrasonik 6 cm yükseklikte → yumurtayı görmez); açık kapak önde 11 cm
+    motorlar(-170, -170);
+    delay(250);
+    motorlar(180, -180);
+    delay(random(250, 600));
+  } else if (solVar && !sagVar) {
+    motorlar(110, 200);         // solda yumurta → sola yönel
+  } else if (sagVar && !solVar) {
+    motorlar(200, 110);
+  } else {
+    motorlar(190, 190);
+  }
+
+  if (millis() - sonYazdirma > 500) {
+    sonYazdirma = millis();
+    Serial.print("mesafe=");
+    Serial.print(d);
+    Serial.print(" renk=");
+    Serial.println(renk);
+  }
+}
+`;
+
+
+// ===================== 3B FİZİK MOTORU (Rapier) =====================
+// Rapier: oyun ve robotik simülasyonlarında kullanılan katı cisim fizik motoru (Rust → WebAssembly).
+// Tekerlekler gerçek silindir cisimler, motorlar menteşe eklem motorları (DC motor tork-hız eğrisi),
+// kapak servo eklemi, yumurtalar 40x20 mm silindirler; sürtünme, patinaj, devrilme, sıkışma motor tarafından çözülür.
+function makeSim3D(R) {
+  const { RULES, Sim } = SIM;
+  const G_WORLD = 0x0001, G_ROBOT = 0x0002, G_FLOOR = 0x0008;
+  const grp = (m, f) => ((m & 0xffff) << 16) | (f & 0xffff);
+  const qYaw = (a) => ({ x: 0, y: 0, z: Math.sin(a / 2), w: Math.cos(a / 2) });
+  const qMul = (a, b) => ({ w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z, x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x, z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w });
+  const qRot = (q, v) => { // q * v * q^-1
+    const { x, y, z, w } = q; const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2], iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
+    return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
+  };
+  const yawOf = (q) => Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+  const toi = (h) => (h.toi !== undefined ? h.toi : h.timeOfImpact);
+  const MULT = R.CoefficientCombineRule ? R.CoefficientCombineRule.Multiply : undefined;
+  const fr = (cd, mu, rest = 0) => { cd.setFriction(mu); if (MULT !== undefined) cd.setFrictionCombineRule(MULT); cd.setRestitution(rest); return cd; };
+
+  return class Sim3D extends Sim {
+    get dt() { return 1 / 500; }
+    get engineName() { return '3B Rapier'; }
+    reset(team) { super.reset(team); this.servoCmd = Object.assign({}, this.servoAng); this.build(); }
+
+    build() {
+      if (this.world) { try { this.world.free(); } catch (e) { } }
+      const F = RULES.FIELD, rb = this.robot, E = this.field;
+      const W = new R.World({ x: 0, y: 0, z: -RULES.G }); W.timestep = this.dt;
+      try { if (W.integrationParameters && 'numSolverIterations' in W.integrationParameters) W.integrationParameters.numSolverIterations = 8; } catch (e) { }
+      this.world = W; this.eggByCollider = new Map(); this.robotColliders = new Set();
+      // Zemin
+      const fb = W.createRigidBody(R.RigidBodyDesc.fixed());
+      W.createCollider(fr(R.ColliderDesc.cuboid(F / 2 + 0.1, F / 2 + 0.1, 0.02).setTranslation(F / 2, F / 2, -0.02), 1.0).setCollisionGroups(grp(G_FLOOR, 0xffff)), fb);
+      // Duvarlar (8 cm)
+      const t = 0.02, H = RULES.WALL_H; this.wallColliders = new Set();
+      for (const [cx, cy, hx, hy] of [[-t / 2, F / 2, t / 2, F / 2 + t], [F + t / 2, F / 2, t / 2, F / 2 + t], [F / 2, -t / 2, F / 2 + t, t / 2], [F / 2, F + t / 2, F / 2 + t, t / 2]]) {
+        const c = W.createCollider(fr(R.ColliderDesc.cuboid(hx, hy, H / 2).setTranslation(cx, cy, H / 2), E.muWall, 0.15).setCollisionGroups(grp(G_WORLD, 0xffff)), fb);
+        this.wallColliders.add(c.handle);
+      }
+      // Yumurtalar (silindir: Rapier silindiri Y ekseninde → X etrafında 90° çevir)
+      const r = RULES.EGG_R, hh = RULES.EGG_H / 2, vol = Math.PI * r * r * RULES.EGG_H; const qx90 = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+      for (const e of this.eggs) {
+        const q = qMul(qYaw(e.phi), qx90);
+        const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(e.x, e.y, hh + 0.0005).setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.2));
+        const col = W.createCollider(fr(R.ColliderDesc.cylinder(hh, r).setDensity(E.eggMass / vol), E.muEggFloor, 0.2).setCollisionGroups(grp(G_WORLD, 0xffff)), body);
+        e.body = body; e.z = hh; e.q = q; this.eggByCollider.set(col.handle, e);
+      }
+      // ---- Robot ----
+      const s = this.state, wr = rb.wheelR, yaw = qYaw(s.th);
+      const mw = 0.045, gates = rb.parts.filter(p => p.servoPin != null && p.pivot), mg = 0.02;
+      const mBody = Math.max(0.2, rb.mass - 2 * mw - gates.length * mg);
+      const comX = rb.loadFrac * rb.wheelX + (1 - rb.loadFrac) * rb.caster.x;
+      const L = 0.2, Wd = 0.17, Hh = 0.08;
+      const bd = R.RigidBodyDesc.dynamic().setTranslation(s.x, s.y, wr + 0.001).setRotation(yaw).setCanSleep(false)
+        .setAdditionalMassProperties(mBody, { x: comX, y: 0, z: rb.comZ - wr }, { x: mBody * (Wd * Wd + Hh * Hh) / 12, y: mBody * (L * L + Hh * Hh) / 12, z: mBody * (L * L + Wd * Wd) / 12 }, { x: 0, y: 0, z: 0, w: 1 });
+      const chassis = W.createRigidBody(bd); this.chassis = chassis;
+      const RG = grp(G_ROBOT, 0xffff & ~G_ROBOT);
+      for (const p of rb.parts) {
+        if (p.auto || (p.servoPin != null && p.pivot) || !p.solid) continue;
+        const hz = Math.max(0.002, (p.z1 - p.z0) / 2);
+        const cd = fr(R.ColliderDesc.cuboid(p.hx, p.hy, hz).setTranslation(p.x, p.y, (p.z0 + p.z1) / 2 - wr).setRotation(qYaw(p.ang)).setDensity(0), E.muRobotEgg, 0.2).setCollisionGroups(RG);
+        this.robotColliders.add(W.createCollider(cd, chassis).handle);
+      }
+      // Sarhoş teker (sürtünmesiz bilye)
+      { const cr = Math.max(0.004, rb.caster.r); const cd = fr(R.ColliderDesc.ball(cr).setTranslation(rb.caster.x, rb.caster.y, cr - wr).setDensity(0), 0.02).setCollisionGroups(RG); this.robotColliders.add(W.createCollider(cd, chassis).handle); }
+      // Tekerlekler + motor eklemleri
+      this.wheels = {};
+      for (const [side, sy] of [['L', 1], ['R', -1]]) {
+        const lp = [rb.wheelX, sy * rb.track / 2, 0]; const wp = qRot(yaw, lp);
+        const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false));
+        const cd = fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr).setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0).setCollisionGroups(RG);
+        this.robotColliders.add(W.createCollider(cd, body).handle);
+        const jd = R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 });
+        const j = W.createImpulseJoint(jd, chassis, body, true);
+        if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
+        this.wheels[side] = { body, j, spin: 0 };
+      }
+      // Servo ile dönen parçalar (kapak vb.)
+      this.gates = [];
+      for (const p of gates) {
+        const pp = this.partPose(p); const zc = (p.z0 + p.z1) / 2 - wr; const wpv = qRot(yaw, [p.pivot[0], p.pivot[1], zc]);
+        const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wpv[0], s.y + wpv[1], wr + 0.001 + zc).setRotation(qYaw(s.th + pp.a)).setCanSleep(false));
+        const hz = Math.max(0.002, (p.z1 - p.z0) / 2);
+        const cd = fr(R.ColliderDesc.cuboid(p.len / 2, p.hy, hz).setTranslation(p.len / 2, 0, 0).setDensity(mg / (p.len * 2 * p.hy * 2 * hz)), E.muRobotEgg, 0.2).setCollisionGroups(RG);
+        this.robotColliders.add(W.createCollider(cd, body).handle);
+        const jd = R.JointData.revolute({ x: p.pivot[0], y: p.pivot[1], z: zc }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
+        const j = W.createImpulseJoint(jd, chassis, body, true);
+        if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
+        this.gates.push({ p, body, j });
+      }
+      this.syncState();
+    }
+
+    step(dt) {
+      const rb = this.robot, M = rb.motor, W = this.world;
+      if (this.rt && !this.rt.error) this.rt.runUntil(this.time);
+      // Servolar: hız sınırlı komut → eklem pozisyon motoru (SG90 ~1.8 kg·cm)
+      for (const sv of rb.servos) {
+        const tgt = this.rt ? this.rt.servoTarget(sv.pin) : null; const cur = this.servoCmd[sv.pin] ?? sv.angle;
+        if (tgt != null) { const md = sv.speed * dt; this.servoCmd[sv.pin] = cur + Math.max(-md, Math.min(md, tgt - cur)); }
+      }
+      for (const g of this.gates) {
+        const a = ((g.p.angOff + g.p.dir * (this.servoCmd[g.p.servoPin] ?? 0)) * Math.PI) / 180;
+        g.j.configureMotorPosition(a, 1.5, 0.05);
+      }
+      // DC motorlar: τ = k·duty·(ω_boşta − ω)  → eklem hız motoru (örtük, kararlı)
+      const k = M.tStall / M.w0;
+      for (const side of ['L', 'R']) {
+        const { V, mode, duty } = this.sideVoltage(side); const wh = this.wheels[side];
+        let target = 0, damp = M.tFric * 2;
+        if (mode === 'drive' && duty > 0) { target = (V / (M.vNom * duty)) * M.w0; damp = k * duty; }
+        else if (mode === 'brake') { target = 0; damp = k * Math.max(duty ?? 1, 0.05); }
+        wh.j.configureMotorVelocity(target, damp);
+        wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
+      }
+      W.step();
+      this.syncState();
+      this.time += dt;
+      const s = this.state;
+      if (this.trail.length === 0 || this.time - this.trail[this.trail.length - 1][2] > 0.05) { this.trail.push([s.x, s.y, this.time]); if (this.trail.length > 4000) this.trail.shift(); }
+      this.referee(dt);
+      for (const e of this.eggs) if (e.gone && e.body) { try { W.removeRigidBody(e.body); } catch (er) { } e.body = null; }
+    }
+
+    syncState() {
+      const c = this.chassis, s = this.state, rb = this.robot;
+      const t = c.translation(), q = c.rotation(), lv = c.linvel(), av = c.angvel();
+      s.x = t.x; s.y = t.y; s.z = t.z; s.th = yawOf(q); s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
+      s.tilt = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.y * q.y)))) * 180 / Math.PI;
+      const axle = qRot(q, [0, 1, 0]), fwd = qRot(q, [1, 0, 0]);
+      for (const side of ['L', 'R']) {
+        const wh = this.wheels[side]; if (!wh) continue; const wa = wh.body.angvel();
+        const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
+        const wp = wh.body.translation(), wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2];
+        const slip = Math.abs(wrel * rb.wheelR - vf) > 0.04;
+        const tau = (wh.damp || 0) * ((wh.target || 0) - wrel);
+        wh.spin += wrel * this.dt;
+        this.wheelInfo[side] = { V: wh.V || 0, F: tau / rb.wheelR, slip, rpm: wrel * 60 / (2 * Math.PI), mode: wh.mode, pos: [wp.x, wp.y, wp.z], q: wh.body.rotation(), spin: wh.spin };
+      }
+      for (const g of this.gates) {
+        const rel = yawOf(g.body.rotation()) - s.th; let d = rel * 180 / Math.PI; d = ((d % 360) + 540) % 360 - 180;
+        this.servoAng[g.p.servoPin] = (d - g.p.angOff) / (g.p.dir || 1); this.servoVel[g.p.servoPin] = 0;
+      }
+      for (const e of this.eggs) {
+        if (!e.body) continue; const p = e.body.translation(), v = e.body.linvel(), q = e.body.rotation();
+        e.x = p.x; e.y = p.y; e.z = p.z; e.vx = v.x; e.vy = v.y; e.q = q;
+        const ax = qRot(q, [1, 0, 0]); e.phi = Math.atan2(ax[1], ax[0]);
+        if (p.z < -0.05 || p.x < -0.05 || p.y < -0.05 || p.x > RULES.FIELD + 0.05 || p.y > RULES.FIELD + 0.05) { // tünelleme güvenliği
+          e.body.setTranslation({ x: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.x)), y: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.y)), z: 0.02 }, true); e.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      }
+    }
+    pose3() { const s = this.state; return { p: [s.x, s.y, s.z ?? this.robot.wheelR], q: s.q, yaw: s.th }; }
+
+    // 3B ışın: robotun kendisini ve zemini yok sayar, gerçek yüksekliklerle duvar/yumurta görür.
+    rayCast3D(x, y, z, a, maxD) {
+      try {
+        const ray = new R.Ray({ x, y, z }, { x: Math.cos(a), y: Math.sin(a), z: 0 });
+        let best = maxD, hit = null;
+        this.world.intersectionsWithRay(ray, maxD, true, (h) => {
+          const hc = h.collider; const hd = hc.handle; const d = toi(h);
+          if (this.robotColliders.has(hd)) return true;
+          if (d < best) { const e = this.eggByCollider.get(hd); if (e) { best = d; hit = e; } else if (this.wallColliders.has(hd)) { best = d; hit = 'duvar'; } }
+          return true;
+        });
+        return { d: best, hit };
+      } catch (er) { this.rayCast3D = null; return null; }
+    }
+  };
+}
+
+// ===================== 3B GÖRÜNÜM (three.js) =====================
+function makeView3D(THREE, host) {
+  const { RULES, Sensors } = SIM;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none';
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0d12);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.005, 40); camera.up.set(0, 0, 1);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x30343c, 0.9));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(0.6, -0.4, 3.2); sun.target.position.set(1.25, 1.25, 0);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 6 }); sun.shadow.bias = -0.0004;
+  scene.add(sun, sun.target);
+  const F = RULES.FIELD;
+  const std = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0.05 }, o));
+
+  // ---- Saha ----
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), std(0x16181d, { roughness: 1 })); ground.position.set(F / 2, F / 2, -0.001); ground.receiveShadow = true; scene.add(ground);
+  const fieldCanvas = document.createElement('canvas'); fieldCanvas.width = fieldCanvas.height = 1024;
+  const fieldTex = new THREE.CanvasTexture(fieldCanvas); if ('colorSpace' in fieldTex) fieldTex.colorSpace = THREE.SRGBColorSpace; fieldTex.anisotropy = 4;
+  const field = new THREE.Mesh(new THREE.PlaneGeometry(F, F), std(0xffffff, { map: fieldTex, roughness: 0.9 })); field.position.set(F / 2, F / 2, 0); field.receiveShadow = true; scene.add(field);
+  const wallMat = std(0xf4f4f1, { roughness: 0.6 });
+  for (const [cx, cy, sx, sy] of [[-0.01, F / 2, 0.02, F + 0.04], [F + 0.01, F / 2, 0.02, F + 0.04], [F / 2, -0.01, F, 0.02], [F / 2, F + 0.01, F, 0.02]]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, RULES.WALL_H), wallMat); m.position.set(cx, cy, RULES.WALL_H / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
+  }
+  let fieldColorsKey = '';
+  function paintField(col) {
+    const key = JSON.stringify(col); if (key === fieldColorsKey) return; fieldColorsKey = key;
+    const g = fieldCanvas.getContext('2d'), S = 1024, Z = S * RULES.ZONE / F;
+    g.fillStyle = col.zemin; g.fillRect(0, 0, S, S);
+    g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2; for (let i = 1; i < 10; i++) { const v = i * S / 10; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, S); g.moveTo(0, v); g.lineTo(S, v); g.stroke(); }
+    g.fillStyle = col.kirmizi; g.fillRect(0, S - Z, Z, Z); g.fillStyle = col.mavi; g.fillRect(S - Z, 0, Z, Z);
+    fieldTex.needsUpdate = true;
+  }
+
+  // ---- Yumurtalar ----
+  const eggGeo = new THREE.CylinderGeometry(RULES.EGG_R, RULES.EGG_R, RULES.EGG_H, 36);
+  const penCanvas = document.createElement('canvas'); penCanvas.width = penCanvas.height = 128;
+  const penTex = new THREE.CanvasTexture(penCanvas); if ('colorSpace' in penTex) penTex.colorSpace = THREE.SRGBColorSpace;
+  let eggMeshes = [], eggMats = null;
+  function buildEggs(sim) {
+    for (const m of eggMeshes) scene.remove(m); eggMeshes = [];
+    const col = sim.field.colors; const g = penCanvas.getContext('2d');
+    g.fillStyle = col.kirmizi; g.fillRect(0, 0, 128, 64); g.fillStyle = col.mavi; g.fillRect(0, 64, 128, 64); penTex.needsUpdate = true;
+    eggMats = { red: std(col.kirmizi, { roughness: 0.45 }), blue: std(col.mavi, { roughness: 0.45 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
+    for (const e of sim.eggs) {
+      const m = new THREE.Mesh(eggGeo, e.kind === 'penalty' ? eggMats.pen : eggMats[e.kind]); m.castShadow = m.receiveShadow = true; scene.add(m); eggMeshes.push(m);
+    }
+  }
+  const qx90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const tmpQ = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
+
+  // ---- Robot ----
+  const robot = new THREE.Group(); scene.add(robot);
+  let partMeshes = [], wheelMeshes = {}, ledMesh = null, ledLight = null, wireLines = [], sensorMeshes = [];
+  const labelTex = (txt, bg) => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, 256, 128); g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 6; g.strokeRect(3, 3, 250, 122);
+    g.fillStyle = '#fff'; g.font = '600 34px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const words = txt.split(' '); if (words.length > 1 && txt.length > 10) { g.fillText(words.slice(0, Math.ceil(words.length / 2)).join(' '), 128, 44); g.fillText(words.slice(Math.ceil(words.length / 2)).join(' '), 128, 86); } else g.fillText(txt, 128, 64);
+    const t = new THREE.CanvasTexture(c); if ('colorSpace' in t) t.colorSpace = THREE.SRGBColorSpace; return t;
+  };
+  function clearGroup(g) { while (g.children.length) { const c = g.children.pop(); c.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }
+  function buildRobot(sim) {
+    clearGroup(robot); partMeshes = []; wheelMeshes = {}; wireLines = []; sensorMeshes = []; ledMesh = ledLight = null;
+    const rb = sim.robot, wr = rb.wheelR;
+    for (const p of rb.parts) {
+      if (p.auto) continue;
+      const h = Math.max(0.002, p.z1 - p.z0); let geo;
+      if (p.shape === 'silindir') { geo = new THREE.CylinderGeometry(p.hx, p.hx, h, 28); geo.rotateX(Math.PI / 2); }
+      else geo = new THREE.BoxGeometry(p.hx * 2, p.hy * 2, h);
+      const transparent = /şeffaf|seffaf|pleksi|akrilik/i.test(p.name);
+      const m = new THREE.Mesh(geo, std(p.color, transparent ? { transparent: true, opacity: 0.55, roughness: 0.2 } : {}));
+      m.castShadow = m.receiveShadow = true; m.userData = { p, zc: (p.z0 + p.z1) / 2 - wr }; robot.add(m); partMeshes.push(m);
+    }
+    // tekerlekler (lastik + jant)
+    for (const side of ['L', 'R']) {
+      const g = new THREE.Group();
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 40), std(0x15171b, { roughness: 0.95 })); tire.castShadow = true;
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
+      g.add(tire, hub); robot.add(g); wheelMeshes[side] = g;
+    }
+    { const c = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.004, rb.caster.r), 20, 14), std(0xc0c4cc, { metalness: 0.8, roughness: 0.25 })); c.position.set(rb.caster.x, rb.caster.y, Math.max(0.004, rb.caster.r) - wr); c.castShadow = true; robot.add(c); }
+    // devre kartları (Fritzing düzeni)
+    for (const c of rb.circuit) {
+      const mats = Array.from({ length: 6 }, () => std(c.color, { roughness: 0.6 })); mats[4] = std(0xffffff, { map: labelTex(c.name, c.color), roughness: 0.6 });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(c.hx * 2, c.hy * 2, c.h), mats); m.position.set(c.x, c.y, c.z + c.h / 2 - wr); m.castShadow = true; robot.add(m);
+      c._top = [c.x, c.y, c.z + c.h - wr];
+    }
+    // sensörler
+    for (const s of rb.sensors) {
+      const g = new THREE.Group(); g.position.set(s.x, s.y, s.z - wr); g.rotation.z = s.ang;
+      if (s.type === 'HC-SR04') {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.02), std(0x1d4ed8)); b.position.x = -0.006; g.add(b);
+        for (const yy of [-0.013, 0.013]) { const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 20), std(0xd1d5db, { metalness: 0.7, roughness: 0.3 })); eye.rotation.z = Math.PI / 2; eye.position.set(0.005, yy, 0); g.add(eye); }
+      } else if (s.type === 'TCS3200') { const b = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.028, 0.028), std(0x1e3a8a)); g.add(b); const led = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.01, 0.01), std(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.8 })); led.position.x = 0.003; g.add(led); }
+      else { const b = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.014, 0.006), std(s.type === 'TCRT5000' ? 0x6d28d9 : 0x0f766e)); g.add(b); const ir = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.006, 12), std(0x111111)); ir.rotation.z = Math.PI / 2; ir.position.x = 0.006; g.add(ir); }
+      g.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(g); sensorMeshes.push(g);
+    }
+    // acil stop (mantar)
+    if (rb.stop) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
+    // LED
+    if (rb.led) { ledMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); ledMesh.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(ledMesh); ledLight = new THREE.PointLight(0xff0000, 0, 0.6); ledLight.position.copy(ledMesh.position); ledLight.position.z += 0.02; robot.add(ledLight); }
+    // teller
+    const ard = rb.circuit.find(c => /arduino|uno|nano|mega/i.test(c.name)) || rb.circuit[0];
+    const drv = rb.circuit.find(c => /l298|tb6612|l9110|drv|sürücü|surucu|driver/i.test(c.name));
+    if (ard) {
+      const add = (to, pin) => {
+        const from = ard._top; const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, Math.max(from[2], to[2]) + 0.025];
+        const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...from), new THREE.Vector3(...mid), new THREE.Vector3(...to));
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(14)), new THREE.LineBasicMaterial({ color: 0x94a3b8 }));
+        line.userData.pin = pin; robot.add(line); wireLines.push(line);
+      };
+      for (const s of rb.sensors) for (const k of ['pin', 'dpin', 'trig', 'echo', 's0', 's1', 's2', 's3', 'out']) if (s[k] != null) add([s.x, s.y, s.z - wr + 0.01], s[k]);
+      for (const p of rb.parts) if (p.servoPin != null && p.pivot) add([p.pivot[0], p.pivot[1], p.z1 - wr], p.servoPin);
+      if (rb.led) { if (rb.led.r != null) add([rb.led.x, rb.led.y, rb.led.z - wr], rb.led.r); if (rb.led.b != null) add([rb.led.x, rb.led.y, rb.led.z - wr], rb.led.b); }
+      if (drv) for (const k of ['L', 'R']) for (const v of Object.values(rb.driver[k])) if (v != null) add(drv._top, v);
+    }
+  }
+
+  // ---- Işınlar ve iz ----
+  const rayGeo = new THREE.BufferGeometry(); rayGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(600), 3)); rayGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(600), 3));
+  const rays = new THREE.LineSegments(rayGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 })); rays.frustumCulled = false; scene.add(rays);
+  const trailGeo = new THREE.BufferGeometry(); const trailBuf = new Float32Array(4100 * 3); trailGeo.setAttribute('position', new THREE.BufferAttribute(trailBuf, 3));
+  const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xf5a524, transparent: true, opacity: 0.7 })); trail.frustumCulled = false; scene.add(trail);
+
+  // ---- Kamera kontrolü (dokunmatik + fare) ----
+  const cam = { target: new THREE.Vector3(F / 2, F / 2, 0), dist: 3.3, az: -Math.PI / 2, pol: 0.75, mode: 'serbest' };
+  const ptrs = new Map(); let last = null;
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', e => { if (view.onPick && view.onPick(e)) return; el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button }); last = null; });
+  el.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointermove', e => {
+    if (view.onDrag && view.onDrag(e)) return;
+    if (!ptrs.has(e.pointerId)) return; const p = ptrs.get(e.pointerId); const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 1) {
+      if (p.b === 2 || e.shiftKey) pan(dx, dy); else { cam.az -= dx * 0.008; cam.pol = Math.min(1.5, Math.max(0.02, cam.pol - dy * 0.006)); }
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      if (last) { cam.dist = Math.min(8, Math.max(0.12, cam.dist * last.d / d)); pan(cx - last.cx, cy - last.cy); } last = { d, cx, cy };
+    }
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.min(8, Math.max(0.12, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  function pan(dx, dy) {
+    if (cam.mode === 'takip') return; const k = cam.dist * 0.0012;
+    const rx = Math.cos(cam.az + Math.PI / 2), ry = Math.sin(cam.az + Math.PI / 2); const fx = Math.cos(cam.az), fy = Math.sin(cam.az);
+    cam.target.x += (-dx * rx + dy * -fx) * k * -1; cam.target.y += (-dx * ry + dy * -fy) * k * -1;
+  }
+
+  let curSim = null; const colTmp = new THREE.Color();
+  const view = {
+    renderer, camera, cam, onPick: null, onDrag: null,
+    setSim(sim) { curSim = sim; paintField(sim.field.colors); buildEggs(sim); buildRobot(sim); },
+    setMode(m) {
+      cam.mode = m;
+      if (m === 'ustten') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.4; cam.pol = 0.02; cam.az = -Math.PI / 2; }
+      if (m === 'serbest') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.3; cam.pol = 0.75; cam.az = -Math.PI / 2; }
+      if (m === 'takip') { cam.dist = 0.75; cam.pol = 1.05; }
+    },
+    resize() { const r = host.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); },
+    // ekran → saha düzlemi (z=0)
+    pick(e) {
+      const r = el.getBoundingClientRect(); const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera); const t = -rc.ray.origin.z / rc.ray.direction.z; if (!(t > 0)) return null;
+      return [rc.ray.origin.x + rc.ray.direction.x * t, rc.ray.origin.y + rc.ray.direction.y * t];
+    },
+    render(opts) {
+      const sim = curSim; if (!sim) return;
+      const pose = sim.pose3(); const wr = sim.robot.wheelR;
+      robot.position.set(pose.p[0], pose.p[1], pose.p[2]);
+      if (pose.q) robot.quaternion.set(pose.q.x, pose.q.y, pose.q.z, pose.q.w); else robot.quaternion.setFromAxisAngle(zAxis, pose.yaw);
+      for (const m of partMeshes) { const pp = sim.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
+      const rb = sim.robot;
+      for (const [side, sy] of [['L', 1], ['R', -1]]) {
+        const g = wheelMeshes[side]; const wi = sim.wheelInfo[side];
+        if (wi.spin === undefined) { wi._spin = (wi._spin || 0) + (wi.rpm || 0) * 2 * Math.PI / 60 * (opts.dtSim || 0); }
+        g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin !== undefined ? wi.spin : wi._spin, 0);
+        g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b);
+      }
+      // yumurtalar
+      sim.eggs.forEach((e, i) => {
+        const m = eggMeshes[i]; if (!m) return; m.visible = !e.gone; if (e.gone) return;
+        m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
+        if (e.q) m.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w); else { tmpQ.setFromAxisAngle(zAxis, e.phi); m.quaternion.copy(tmpQ).multiply(qx90); }
+      });
+      // LED
+      if (ledMesh) { const c = sim.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; ledMesh.material.emissive.setHex(hex); ledMesh.material.emissiveIntensity = c ? 2.2 : 0; ledLight.color.setHex(hex || 0xffffff); ledLight.intensity = c ? 0.25 : 0; }
+      // teller
+      const rt = sim.rt; for (const l of wireLines) { const st = rt && rt.pins[l.userData.pin]; const sv = rt && rt.servoT[l.userData.pin] != null; const on = st && (st.pwm != null ? st.pwm > 0 : st.v);
+        l.visible = opts.circuit; l.material.color.setHex(sv || (st && st.pwm != null && st.pwm > 0 && st.pwm < 1) ? 0xf5a524 : on ? 0xff6347 : 0x94a3b8); }
+      // ışınlar
+      const pos = rayGeo.attributes.position.array, col = rayGeo.attributes.color.array; let n = 0;
+      const seg = (x1, y1, z1, x2, y2, z2, c) => { if (n >= 198) return; colTmp.setHex(c); pos.set([x1, y1, z1, x2, y2, z2], n * 6); col.set([colTmp.r, colTmp.g, colTmp.b, colTmp.r, colTmp.g, colTmp.b], n * 6); n++; };
+      if (opts.rays) for (const s of rb.sensors) {
+        const w = sim.sensorWorld(s);
+        if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(sim, s); const L = d == null ? 1.2 : d; for (const da of [-0.26, 0, 0.26]) seg(w.x, w.y, w.z, w.x + Math.cos(w.a + da) * L, w.y + Math.sin(w.a + da) * L, w.z, d == null ? 0x4c7dff : 0x22c55e); }
+        else if (s.type.startsWith('IR') || s.type === 'SHARP_IR') { const hit = s.type.startsWith('IR') ? Sensors.irObstacle(sim, s) : false; const L = s.type.startsWith('IR') ? s.range : 0.8; seg(w.x, w.y, w.z, w.x + Math.cos(w.a) * L, w.y + Math.sin(w.a) * L, w.z, hit ? 0xff3b3b : 0x7f1d1d); }
+      }
+      rayGeo.setDrawRange(0, n * 2); rayGeo.attributes.position.needsUpdate = true; rayGeo.attributes.color.needsUpdate = true;
+      // iz
+      const tr = sim.trail; const m = Math.min(tr.length, 4000); trail.visible = opts.trail && m > 1;
+      for (let i = 0; i < m; i++) { const p = tr[tr.length - m + i]; trailBuf[i * 3] = p[0]; trailBuf[i * 3 + 1] = p[1]; trailBuf[i * 3 + 2] = 0.002; }
+      trailGeo.setDrawRange(0, m); trailGeo.attributes.position.needsUpdate = true;
+      // kamera
+      if (cam.mode === 'takip') { cam.target.set(pose.p[0], pose.p[1], 0.04); cam.az = pose.yaw + Math.PI; }
+      const sp = Math.sin(cam.pol), cp = Math.cos(cam.pol);
+      camera.position.set(cam.target.x + cam.dist * sp * Math.cos(cam.az), cam.target.y + cam.dist * sp * Math.sin(cam.az), cam.target.z + cam.dist * cp);
+      camera.lookAt(cam.target);
+      renderer.render(scene, camera);
+    },
+  };
+  return view;
+}
+
+(() => {
+const $ = (id) => document.getElementById(id);
+const { RULES, Sim, Sensors, stripJsonComments, pinName } = SIM;
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
+
+const taCode = $('taCode'), taCfg = $('taCfg');
+taCode.value = store.get('mebsim_code') || DEFAULT_CODE;
+taCfg.value = store.get('mebsim_cfg') || DEFAULT_CONFIG;
+
+let SimClass = SIM.Sim, Sim3D = null, view3d = null, use3d = false, libs = null;
+let sim, running = false, loadedCode = null, lastFrame = 0, ended = false;
+function parseCfg(txt) { return JSON.parse(stripJsonComments(txt)); }
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('on'), 2600); }
+function showMsg(el, txt, kind) { el.className = 'msg ' + (kind || ''); el.textContent = txt || ''; if (!txt) el.className = 'msg'; }
+
+function buildSim() {
+  let cfg;
+  try { cfg = parseCfg(taCfg.value); } catch (e) { showMsg($('cfgMsg'), 'JSON hatası: ' + e.message, 'err'); return false; }
+  try {
+    const team = sim ? sim.team : $('sTeam').value; const pose = sim ? sim.startPose : null;
+    sim = new (use3d ? Sim3D : Sim)(cfg); sim.startPose = pose; if (pose) sim.reset(team); else if (team !== sim.team) sim.reset(team);
+    if (use3d && view3d) view3d.setSim(sim); sim.onSerial = () => { serialDirty = true; };
+    showMsg($('cfgMsg'), `Robot yüklendi: ${sim.robot.name} · ${sim.robot.parts.length} parça · ${sim.robot.sensors.length} sensör`, 'ok');
+    store.set('mebsim_cfg', taCfg.value);
+  } catch (e) { showMsg($('cfgMsg'), 'Yapılandırma hatası: ' + e.message, 'err'); return false; }
+  buildPinRoles(); renderChecks(); return true;
+}
+
+// ---------- Pin görev haritası ----------
+let pinRoles = {};
+function buildPinRoles() {
+  pinRoles = {}; const R = sim.robot; const add = (p, t) => { if (p == null) return; pinRoles[p] = (pinRoles[p] ? pinRoles[p] + ', ' : '') + t; };
+  for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) for (const [pk, v] of Object.entries(R.driver[k])) add(v, `${lab} ${pk.toUpperCase()}`);
+  add(R.driver.stby, 'Sürücü STBY');
+  for (const s of R.sensors) { const n = s.ad || s.type; for (const pk of ['pin', 'dpin', 'trig', 'echo', 's0', 's1', 's2', 's3', 'out']) if (s[pk] != null) add(s[pk], `${n} ${pk === 'pin' ? '' : pk.toUpperCase()}`.trim()); }
+  for (const s of R.servos) add(s.pin, s.name);
+  if (R.led) { add(R.led.r, 'LED kırmızı'); add(R.led.b, 'LED mavi'); }
+}
+
+// ---------- Program ----------
+function loadProgram() {
+  const code = taCode.value; store.set('mebsim_code', code);
+  try {
+    const tr = sim.loadProgram(code); loadedCode = code;
+    $('jsOut').textContent = tr.js;
+    showMsg($('codeMsg'), 'Derlendi ✓' + (tr.warnings.length ? '\n' + tr.warnings.join('\n') : ''), 'ok');
+    return true;
+  } catch (e) {
+    $('jsOut').textContent = e.js || '';
+    showMsg($('codeMsg'), e.message, 'err'); toast('Kod derlenemedi — Kod sekmesine bak'); return false;
+  }
+}
+function startRun() {
+  if (!buildSim()) { toast('Robot JSON hatalı'); setTab('robot'); return; }
+  sim.serialOut.length = 0; serialDirty = true;
+  if (!loadProgram()) { setTab('kod'); return; }
+  ended = false; running = true; $('result').classList.remove('on'); $('bPause').textContent = '⏸ Duraklat';
+  if (window.innerWidth < 1000) setTab('saha');
+}
+function resetAll() { running = false; ended = false; buildSim(); $('result').classList.remove('on'); $('bPause').textContent = '▶ Devam'; serialDirty = true; }
+
+// ---------- Sekmeler ----------
+function setTab(t) {
+  document.body.dataset.tab = t;
+  document.querySelectorAll('nav#bottom button,#sideTabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  if (t === 'monitor') serialDirty = true;
+}
+document.querySelectorAll('nav#bottom button,#sideTabs button').forEach(b => b.onclick = () => setTab(b.dataset.t));
+
+// ---------- Düğmeler ----------
+$('bStart').onclick = startRun; $('bStart2').onclick = startRun;
+$('bPause').onclick = () => { if (!sim.rt) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
+$('bReset').onclick = resetAll;
+$('sTeam').onchange = () => { sim.team = $('sTeam').value; sim.startPose = null; resetAll(); toast(sim.team === 'red' ? 'Kırmızı köşe — koddaki takım ayarını da kontrol et' : 'Mavi köşe — koddaki takım ayarını da kontrol et'); };
+$('bRotL').onclick = () => rotStart(15); $('bRotR').onclick = () => rotStart(-15);
+function rotStart(d) { if (running) return; const s = sim.state; s.th += d * Math.PI / 180; sim.startPose = { team: sim.team, x: s.x, y: s.y, th: s.th }; if (use3d) { const rt = sim.rt; sim.reset(); sim.rt = rt; } }
+$('bShuffle').onclick = () => { try { const c = parseCfg(taCfg.value); c.saha = c.saha || {}; c.saha.tohum = Math.floor(Math.random() * 1e6); taCfg.value = JSON.stringify(c, null, 2); } catch (e) { } resetAll(); toast('Yeni yumurta dizilimi'); };
+$('bApply').onclick = () => { running = false; if (buildSim()) { toast('Robot güncellendi'); $('bPause').textContent = '▶ Devam'; } };
+$('bExample').onclick = () => { if (confirmReplace()) { taCode.value = DEFAULT_CODE; store.set('mebsim_code', DEFAULT_CODE); } };
+$('bExCfg').onclick = () => { if (confirmReplace()) { taCfg.value = DEFAULT_CONFIG; buildSim(); } };
+function confirmReplace() { return true; }
+$('bClr').onclick = () => { sim.serialOut.length = 0; serialDirty = true; };
+const readFile = (inp, cb) => inp.onchange = () => { const f = inp.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => cb(String(r.result), f.name); r.readAsText(f); inp.value = ''; };
+readFile($('fCode'), (t, n) => { taCode.value = t; store.set('mebsim_code', t); toast(n + ' yüklendi'); });
+readFile($('fCfg'), (t, n) => { taCfg.value = t; buildSim(); toast(n + ' yüklendi'); });
+const dl = (name, txt) => { try { navigator.clipboard.writeText(txt).then(() => toast('Panoya kopyalandı'), () => toast('Kopyalanamadı — metni seçip kopyala')); } catch (e) { toast('Kopyalanamadı — metni seçip kopyala'); } };
+$('bDlCode').onclick = () => dl('robot.ino', taCode.value); $('bDlCfg').onclick = () => dl('robot.json', taCfg.value);
+taCode.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); const s = taCode.selectionStart; taCode.setRangeText('  ', s, taCode.selectionEnd, 'end'); } });
+taCode.addEventListener('input', () => store.set('mebsim_code', taCode.value));
+
+// ---------- Çizim ----------
+const cv = $('cv'), ctx = cv.getContext('2d'); let W = 0, H = 0, SC = 1, OX = 0, OY = 0; const M = 0.05;
+function resize() { const r = $('cvwrap').getBoundingClientRect(); const dpr = window.devicePixelRatio || 1; cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); W = cv.width; H = cv.height; SC = Math.min(W, H) / (RULES.FIELD + 2 * M); OX = (W - RULES.FIELD * SC) / 2; OY = (H - RULES.FIELD * SC) / 2; }
+new ResizeObserver(resize).observe($('cvwrap'));
+const X = (x) => OX + x * SC, Y = (y) => OY + (RULES.FIELD - y) * SC;
+function poly(pts) { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath(); }
+
+function draw() {
+  const F = RULES.FIELD, Z = RULES.ZONE, col = sim.field.colors;
+  const base = Math.min(W, H) / (RULES.FIELD + 2 * M);
+  if ($('cZoom').checked) { SC = base * 4; OX = W / 2 - sim.state.x * SC; OY = H / 2 - (RULES.FIELD - sim.state.y) * SC; }
+  else { SC = base; OX = (W - RULES.FIELD * SC) / 2; OY = (H - RULES.FIELD * SC) / 2; }
+  ctx.fillStyle = '#0a0c10'; ctx.fillRect(0, 0, W, H);
+  // çerçeve
+  ctx.fillStyle = col.duvar || '#d9d9d4'; ctx.fillRect(X(-0.03), Y(F + 0.03), (F + 0.06) * SC, (F + 0.06) * SC);
+  ctx.fillStyle = col.zemin; ctx.fillRect(X(0), Y(F), F * SC, F * SC);
+  // ızgara
+  ctx.strokeStyle = 'rgba(0,0,0,.06)'; ctx.lineWidth = 1;
+  for (let v = 0.25; v < F; v += 0.25) { ctx.beginPath(); ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(F)); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(F), Y(v)); ctx.stroke(); }
+  ctx.fillStyle = col.kirmizi; ctx.fillRect(X(0), Y(Z), Z * SC, Z * SC);
+  ctx.fillStyle = col.mavi; ctx.fillRect(X(F - Z), Y(F), Z * SC, Z * SC);
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `600 ${Math.max(10, SC * 0.035)}px system-ui`; ctx.textAlign = 'center';
+  ctx.fillText(`${sim.banked.red.length} toplandı`, X(Z / 2), Y(Z / 2)); ctx.fillText(`${sim.banked.blue.length} toplandı`, X(F - Z / 2), Y(F - Z / 2));
+  // ölçek
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.font = `${Math.max(9, SC * 0.028)}px system-ui`; ctx.textAlign = 'left'; ctx.fillText('250 × 250 cm · ızgara 25 cm', X(0.62), Y(0.03));
+  // iz
+  if ($('cTrail').checked && sim.trail.length > 1) { ctx.strokeStyle = 'rgba(245,165,36,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); sim.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.lineTo(X(sim.state.x), Y(sim.state.y)); ctx.stroke(); }
+  // yumurtalar
+  const r = RULES.EGG_R * SC;
+  for (const e of sim.eggs) {
+    if (e.gone) continue;
+    ctx.save(); ctx.translate(X(e.x), Y(e.y));
+    if (e.kind === 'penalty') {
+      ctx.rotate(-e.phi); ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 2 * Math.PI); ctx.fillStyle = col.kirmizi; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.fillStyle = col.mavi; ctx.fill();
+    } else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : col.mavi; ctx.fill(); }
+    ctx.lineWidth = Math.max(1, SC * 0.003); ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.stroke();
+    if (e.still > 0) { ctx.strokeStyle = '#3ecf8e'; ctx.beginPath(); ctx.arc(0, 0, r + 3, -Math.PI / 2, -Math.PI / 2 + e.still * 2 * Math.PI); ctx.stroke(); }
+    ctx.restore();
+  }
+  drawRobot();
+}
+
+function drawRobot() {
+  const parts = sim.worldParts(), R = sim.robot;
+  // gölge/zarf
+  for (const wp of parts) {
+    const p = wp.p; poly(wp.corners);
+    let fill = p.color; if (p.auto === 'wheel') { const side = p.name.startsWith('Sol') ? 'L' : 'R'; fill = sim.wheelInfo[side].slip ? '#b91c1c' : '#111827'; }
+    ctx.globalAlpha = p.z0 >= RULES.EGG_H && !p.auto ? 0.82 : 1; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = Math.max(1, SC * 0.002); ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.stroke();
+  }
+  // devre katmanı
+  if ($('cCirc').checked) drawCircuit();
+  // sensörler
+  const showRays = $('cRays').checked;
+  for (const s of R.sensors) {
+    const w = sim.sensorWorld(s);
+    if (showRays) {
+      if (s.type === 'HC-SR04') {
+        const d = Sensors.ultrasonic(sim, s); const L = d == null ? 4 : d;
+        ctx.fillStyle = d == null ? 'rgba(76,125,255,.08)' : 'rgba(62,207,142,.16)';
+        ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a - 0.26) * L), Y(w.y + Math.sin(w.a - 0.26) * L)); ctx.lineTo(X(w.x + Math.cos(w.a + 0.26) * L), Y(w.y + Math.sin(w.a + 0.26) * L)); ctx.closePath(); ctx.fill();
+        if (d != null) { ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(X(w.x + Math.cos(w.a) * d), Y(w.y + Math.sin(w.a) * d), 3, 0, 7); ctx.fill(); }
+      } else if (s.type === 'IR_ENGEL' || s.type === 'IR' || s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') {
+        const hit = (s.type.startsWith('IR')) ? Sensors.irObstacle(sim, s) : false; const L = s.type.startsWith('IR') ? s.range : 0.8;
+        ctx.strokeStyle = hit ? '#e5484d' : 'rgba(229,72,77,.3)'; ctx.lineWidth = hit ? 2.5 : 1.2;
+        ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a) * L), Y(w.y + Math.sin(w.a) * L)); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = s.type === 'TCS3200' ? '#f8fafc' : s.type === 'TCRT5000' ? '#a78bfa' : '#22d3ee';
+    ctx.beginPath(); ctx.arc(X(w.x), Y(w.y), Math.max(2.5, SC * 0.005), 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  // LED
+  if (R.led) { const [lx, ly] = sim.toWorld(R.led.x, R.led.y); const c = sim.ledColor(); ctx.beginPath(); ctx.arc(X(lx), Y(ly), Math.max(4, SC * 0.012), 0, 7);
+    ctx.fillStyle = c === 'red' ? '#ff3b3b' : c === 'blue' ? '#3b7bff' : c === 'mor' ? '#b84bff' : '#2b2f36'; if (c) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; } ctx.fill(); ctx.shadowBlur = 0; ctx.strokeStyle = '#000'; ctx.stroke(); }
+  // yön oku
+  const s = sim.state; ctx.strokeStyle = '#f5a524'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(s.x), Y(s.y)); ctx.lineTo(X(s.x + Math.cos(s.th) * 0.06), Y(s.y + Math.sin(s.th) * 0.06)); ctx.stroke();
+}
+
+function drawCircuit() {
+  const R = sim.robot, rt = sim.rt;
+  const comps = R.circuit; if (!comps.length) return;
+  const fs = Math.max(8, SC * 0.017);
+  const box = (c) => { const [wx, wy] = sim.toWorld(c.x, c.y); const th = sim.state.th; const cc = Math.cos(th), ss = Math.sin(th); return [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + cc * u * c.hx - ss * v * c.hy, wy + ss * u * c.hx + cc * v * c.hy]); };
+  const ard = comps.find(c => /arduino|uno|nano|mega/i.test(c.name)) || comps[0];
+  const drv = comps.find(c => /l298|tb6612|l9110|drv|sürücü|surucu|driver/i.test(c.name));
+  const [ax, ay] = sim.toWorld(ard.x, ard.y);
+  const wire = (tx, ty, pin) => {
+    const st = rt && rt.pins[pin]; const on = st && (st.pwm != null ? st.pwm > 0 : st.v);
+    ctx.strokeStyle = st && st.pwm != null && st.pwm > 0 && st.pwm < 1 ? 'rgba(245,165,36,.95)' : on ? 'rgba(255,99,71,.95)' : 'rgba(148,163,184,.7)';
+    ctx.lineWidth = Math.max(1, SC * 0.0025); ctx.beginPath(); ctx.moveTo(X(ax), Y(ay)); ctx.lineTo(X(tx), Y(ty)); ctx.stroke();
+  };
+  // teller
+  for (const sn of R.sensors) { const [tx, ty] = sim.toWorld(sn.x, sn.y); for (const k of ['pin', 'dpin', 'trig', 'echo', 's2', 's3', 'out']) if (sn[k] != null) wire(tx, ty, sn[k]); }
+  for (const p of R.parts) if (p.servoPin != null && p.pivot) { const [tx, ty] = sim.toWorld(p.pivot[0], p.pivot[1]); wire(tx, ty, p.servoPin); }
+  if (R.led) { const [tx, ty] = sim.toWorld(R.led.x, R.led.y); if (R.led.r != null) wire(tx, ty, R.led.r); if (R.led.b != null) wire(tx, ty, R.led.b); }
+  if (drv) { const [tx, ty] = sim.toWorld(drv.x, drv.y); for (const k of ['L', 'R']) for (const v of Object.values(R.driver[k])) if (v != null) wire(tx, ty, v); }
+  // kartlar
+  for (const c of comps) {
+    poly(box(c)); ctx.globalAlpha = 0.92; ctx.fillStyle = c.color; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.stroke();
+    const [wx, wy] = sim.toWorld(c.x, c.y); ctx.save(); ctx.translate(X(wx), Y(wy)); ctx.rotate(-sim.state.th);
+    ctx.fillStyle = '#fff'; ctx.font = `600 ${fs}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const short = c.name.length > 12 ? c.name.slice(0, 11) + '…' : c.name; ctx.fillText(short, 0, 0); ctx.restore();
+  }
+}
+
+// ---------- Göstergeler ----------
+let serialDirty = true, lastUi = 0;
+function fmtT(t) { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(1).padStart(4, '0')}`; }
+function updateUi() {
+  const sc = sim.score();
+  $('hTime').textContent = fmtT(sim.time) + ' / 3:00';
+  $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
+  $('hRed').classList.toggle('me', sim.team === 'red'); $('hBlue').classList.toggle('me', sim.team === 'blue');
+  const s = sim.state, v = Math.hypot(s.vx, s.vy) * 100;
+  $('ovl').textContent = `${sim.engineName} · ${running ? '● ' + realFactor.toFixed(1) + '×' : ended ? '■' : '❚❚'}  ${v.toFixed(0)} cm/s  ${(s.th * 180 / Math.PI % 360 + 360) % 360 | 0}°${s.tilt > 3 ? '  eğim ' + s.tilt.toFixed(0) + '°' : ''}`;
+  const cards = [];
+  const wi = sim.wheelInfo;
+  for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) cards.push([lab, `<span class="${wi[k].slip ? 'slip' : ''}">${wi[k].V.toFixed(2)} V · ${wi[k].rpm.toFixed(0)} rpm${wi[k].slip ? ' · PATİNAJ' : ''}</span>`]);
+  cards.push(['Konum', `x ${(s.x * 100).toFixed(1)} · y ${(s.y * 100).toFixed(1)} cm`]);
+  const led = sim.ledColor(); cards.push(['Üst LED', led ? (led === 'red' ? 'kırmızı' : led === 'blue' ? 'mavi' : 'kırmızı+mavi') + (led !== sim.team ? ' ⚠ köşe rengi değil' : ' ✓') : 'sönük ⚠']);
+  for (const r of Sensors.readouts(sim)) cards.push([r.name, r.val]);
+  if (sim.rt && sim.rt.error) cards.push(['Program', '<span class="slip">hata — monitöre bak</span>']);
+  $('readouts').innerHTML = cards.map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  // pin tablosu
+  const rt = sim.rt; const pins = new Set(Object.keys(pinRoles).map(Number)); if (rt) Object.keys(rt.pins).forEach(p => pins.add(+p));
+  $('pinTbl').querySelector('tbody').innerHTML = [...pins].sort((a, b) => a - b).map(p => {
+    const st = rt && rt.pins[p]; let mode = st ? (st.mode === 1 ? 'OUTPUT' : st.mode === 2 ? 'INPUT_PULLUP' : st.mode === 0 ? 'INPUT' : '—') : '—';
+    let val = '—', cls = 'lo';
+    if (st && st.pwm != null) { val = `PWM ${st.raw}`; cls = 'pwm'; } else if (st && st.mode === 1) { val = st.v ? 'HIGH' : 'LOW'; cls = st.v ? 'hi' : 'lo'; }
+    if (rt && st && st.mode !== 1) { const sv = rt.servoT[p]; if (sv != null) { val = `servo ${sv.toFixed(0)}° (şu an ${(sim.servoAng[p] || 0).toFixed(0)}°)`; cls = 'pwm'; mode = 'SERVO'; } }
+    if (rt && rt.servoT[p] != null && (!st)) { val = `servo ${rt.servoT[p].toFixed(0)}°`; cls = 'pwm'; mode = 'SERVO'; }
+    return `<tr><td>${pinName(p)}</td><td>${pinRoles[p] || ''}</td><td>${mode}</td><td class="${cls}">${val}</td></tr>`;
+  }).join('');
+  // seri
+  if (serialDirty && document.body.dataset.tab === 'monitor') {
+    serialDirty = false; const el = $('serial'); const ts = $('cTs').checked;
+    const lines = sim.serialOut.slice(-500);
+    el.innerHTML = lines.map(l => (ts ? `<span class="t">${l.t.toFixed(3).padStart(8)}  </span>` : '') + l.txt.replace(/[&<]/g, c => c === '&' ? '&amp;' : '&lt;')).join('\n');
+    if ($('cAuto').checked) el.scrollTop = el.scrollHeight;
+  }
+  // olaylar
+  $('events').innerHTML = sim.events.slice(-30).reverse().map(e => `<li><span class="t" style="color:var(--mute);font-family:var(--mono)">${fmtT(e.t)}</span> ${e.txt}</li>`).join('') || '<li style="color:var(--mute)">Henüz olay yok</li>';
+}
+function renderChecks() {
+  $('checks').innerHTML = sim.ruleChecks().map(c => `<li><span class="${c.ok ? 'okc' : 'badc'}">${c.ok ? '✓' : '✗'}</span> ${c.txt}</li>`).join('');
+}
+function endMatch() {
+  ended = true; running = false; $('bPause').textContent = '▶ Devam';
+  const sc = sim.score(); const me = sim.team, d = sc.detail[me];
+  const ownDropped = d.own > 0;
+  sim.events.push({ t: sim.time, txt: 'Süre doldu (3:00)' });
+  $('result').innerHTML = `<b>Maç bitti</b> — ${me === 'red' ? 'Kırmızı' : 'Mavi'} takım puanı: <b>${sc[me]}</b><br>
+    Kendi rengi: ${d.own} (+${d.own}) · yanlış renk: ${d.wrong} (−${d.wrong * 2}) · ceza: ${d.pen} (−${d.pen * 3})<br>
+    ${ownDropped ? '✓ En az bir kendi renginde yumurta bırakıldı' : '✗ Kendi alanına kendi renginde yumurta bırakılmadı → kural gereği kaybeder'}
+    ${sim.firstDrop ? `<br>İlk bırakılan: ${fmtT(sim.firstDrop.t)}` : ''}`;
+  $('result').classList.add('on');
+}
+
+// ---------- Robotu sürükleme (başlangıç konumu) ----------
+let drag = null;
+cv.addEventListener('pointerdown', (e) => {
+  if (running) return; const r = cv.getBoundingClientRect(); const dpr = cv.width / r.width;
+  const wx = ((e.clientX - r.left) * dpr - OX) / SC, wy = RULES.FIELD - ((e.clientY - r.top) * dpr - OY) / SC;
+  if (Math.hypot(wx - sim.state.x, wy - sim.state.y) < 0.18) { drag = { dx: sim.state.x - wx, dy: sim.state.y - wy }; cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!drag) return; const r = cv.getBoundingClientRect(); const dpr = cv.width / r.width;
+  const wx = ((e.clientX - r.left) * dpr - OX) / SC, wy = RULES.FIELD - ((e.clientY - r.top) * dpr - OY) / SC;
+  const s = sim.state; s.x = Math.min(RULES.FIELD - 0.1, Math.max(0.1, wx + drag.dx)); s.y = Math.min(RULES.FIELD - 0.1, Math.max(0.1, wy + drag.dy)); s.vx = s.vy = s.w = 0;
+  sim.startPose = { team: sim.team, x: s.x, y: s.y, th: s.th }; sim.trail.length = 0;
+});
+cv.addEventListener('pointerup', () => { drag = null; });
+
+// ---------- Ana döngü ----------
+let acc = 0, realFactor = 1;
+function frame(ts) {
+  const dt = Math.min(0.05, (ts - lastFrame) / 1000 || 0); lastFrame = ts;
+  if (running && sim) {
+    const speed = +$('sSpeed').value; const sdt = sim.dt; acc += dt * speed; let steps = Math.floor(acc / sdt); acc -= steps * sdt; const t0 = performance.now(); const simT0 = sim.time;
+    if (steps > 4000) { steps = 4000; acc = 0; }
+    for (let i = 0; i < steps; i++) {
+      sim.step(sdt);
+      if (!$('cNoLimit').checked && sim.time >= RULES.MATCH_TIME) { endMatch(); break; }
+      if (performance.now() - t0 > 30) { acc = 0; break; }
+    }
+    realFactor = realFactor * 0.9 + 0.1 * ((sim.time - simT0) / Math.max(1e-3, dt));
+  }
+  if (sim) { if (use3d && view3d) view3d.render({ rays: $('cRays').checked, circuit: $('cCirc').checked, trail: $('cTrail').checked, dtSim: dt * (running ? +$('sSpeed').value : 0) }); else draw(); if (ts - lastUi > 120) { lastUi = ts; updateUi(); } }
+  requestAnimationFrame(frame);
+}
+
+// ---------- 3B kütüphaneleri yükle (PC/APK'da yerel ./lib, tarayıcıda CDN) ----------
+function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('zaman aşımı')), ms))]); }
+async function tryImport(urls) { let err; for (const u of urls) { try { return await withTimeout(import(u), 15000); } catch (e) { err = e; } } throw err; }
+async function loadLibs() {
+  const THREE = await tryImport(['./lib/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://unpkg.com/three@0.160.0/build/three.module.js']);
+  const Rm = await tryImport(['./lib/rapier.es.js', 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js', 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm', 'https://unpkg.com/@dimforge/rapier3d-compat@0.12.0/rapier.es.js']);
+  const RAPIER = Rm.default && Rm.default.init ? Rm.default : Rm; await RAPIER.init();
+  return { THREE, RAPIER };
+}
+function setEngine(mode) {
+  running = false; $('bPause').textContent = '▶ Başlat';
+  use3d = mode === '3d' && !!libs; $('sEngine').value = use3d ? '3d' : '2d';
+  $('v3').style.display = use3d ? 'block' : 'none'; cv.style.display = use3d ? 'none' : 'block';
+  $('sCam').style.display = use3d ? '' : 'none'; $('cZoom').parentElement.style.display = use3d ? 'none' : '';
+  sim = null; buildSim(); if (use3d) { view3d.resize(); view3d.setMode($('sCam').value); }
+}
+$('sEngine').onchange = () => { if ($('sEngine').value === '3d' && !libs) { toast('3B motor yüklenemedi — internet bağlantısını kontrol et'); $('sEngine').value = '2d'; return; } setEngine($('sEngine').value); };
+$('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
+$('sCam').style.display = 'none';
+buildSim(); resize(); $('bPause').textContent = '▶ Başlat';
+requestAnimationFrame(frame);
+$('ovl').textContent = '3B fizik motoru yükleniyor…';
+loadLibs().then(L => {
+  libs = L; Sim3D = makeSim3D(L.RAPIER); view3d = makeView3D(L.THREE, $('v3'));
+  new ResizeObserver(() => view3d.resize()).observe($('v3'));
+  let drag3 = null;
+  view3d.onPick = (e) => { if (running) return false; const p = view3d.pick(e); if (!p) return false; if (Math.hypot(p[0] - sim.state.x, p[1] - sim.state.y) < 0.16) { drag3 = { dx: sim.state.x - p[0], dy: sim.state.y - p[1] }; e.target.setPointerCapture(e.pointerId); return true; } return false; };
+  view3d.onDrag = (e) => { if (!drag3) return false; const p = view3d.pick(e); if (!p) return true; const s = sim.state; s.x = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[0] + drag3.dx)); s.y = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[1] + drag3.dy)); sim.startPose = { team: sim.team, x: s.x, y: s.y, th: s.th }; return true; };
+  view3d.renderer.domElement.addEventListener('pointerup', () => { if (drag3) { drag3 = null; const rt = sim.rt; sim.reset(); sim.rt = rt; sim.trail.length = 0; } });
+  setEngine('3d'); toast('3B fizik motoru (Rapier) hazır');
+}).catch(err => { console.warn('3B yüklenemedi', err); $('sEngine').querySelector('option[value="3d"]').textContent = '3B · yüklenemedi'; toast('3B motor yüklenemedi, 2B motorla devam'); });
+})();
+
+</script>
+</body>
+</html>
