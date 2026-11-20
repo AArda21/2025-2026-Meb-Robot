@@ -78,6 +78,7 @@ function makeMatch3D(R) {
       this.syncRobot(rb);
     }
     step(dt) {
+      this.useRng();
       for (const rb of this.robots) rb.runPrograms(this.time);
       for (const rb of this.robots) {
         this.updateServos(rb, dt, rb.servoCmd);

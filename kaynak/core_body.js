@@ -1,3 +1,5 @@
+// Paylaşılan gürültü üreteci: her maç adımında o maçın tohumlu üretecine bağlanır (tekrarlanabilir maçlar)
+let RNG = Math.random;
 
 function trError(msg) {
   let m;
@@ -31,7 +33,7 @@ class Runtime {
     this.match = match; this.robot = robot; this.bi = bi; this.base = bi * 100;
     this.board = robot.boards[bi]; this.B = boardOf(this.board.tip);
     this.t = 0; this.pins = {}; this.servoT = {}; this.gen = null; this.phase = 'setup'; this.error = null;
-    this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi);
+    this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi + (((match && match.field && match.field.seed) | 0) * 31));
     this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {}; this.loopStats = { n: 0, sum: 0, max: 0, last: 0, setup: 0 };
   }
   track(key, op) { let s = this.ops.get(key); if (!s) this.ops.set(key, s = new Set()); s.add(op); }
@@ -100,7 +102,20 @@ class Runtime {
       __CLS_Servo: Servo, __CLS_NewPing: NewPing, __CLS_Adafruit_NeoPixel: Adafruit_NeoPixel,
       __b() { rt.t += 5e-6; return rt.t > m.time; },
       __i(v) { return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : v; },
+      __idiv(a, b) { if (typeof a !== 'number' || typeof b !== 'number') return a / b; if (b === 0) { rt.warnOnce('div0', 'Sıfıra bölme: Arduino çökmez ama sonuç anlamsız olur (−1 ya da rastgele).'); return -1; } return Math.trunc(a / b); },
+      __wi(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= -32768 && x <= 32767) return x; const w = ((x + 32768) % 65536 + 65536) % 65536 - 32768; rt.warnOnce('ovf_int', `int taşması: ${x} değeri int'e (−32768…32767) sığmıyor, Arduino'da ${w} olur. Büyük sayılar ve millis() için long ya da unsigned long kullan.`); return w; },
+      __wu(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= 0 && x <= 65535) return x; const w = ((x % 65536) + 65536) % 65536; rt.warnOnce('ovf_uint', `unsigned int taşması: ${x} → Arduino'da ${w} olur (0…65535).`); return w; },
+      __wl(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); return x >= -2147483648 && x <= 2147483647 ? x : (x | 0); },
+      __wul(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); return x >= 0 && x <= 4294967295 ? x : (x >>> 0); },
+      __wb(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= 0 && x <= 255) return x; const w = ((x % 256) + 256) % 256; rt.warnOnce('ovf_byte', `byte taşması: ${x} → Arduino'da ${w} olur (0…255).`); return w; },
       __arr(...d) { const mk = (k) => k >= d.length - 1 ? new Array(+d[k]).fill(0) : Array.from({ length: +d[k] }, () => mk(k + 1)); return mk(0); },
+      strlen: (s) => String(s ?? '').length, strcmp: (a, b) => { a = String(a); b = String(b); return a < b ? -1 : a > b ? 1 : 0; }, strncmp: (a, b, n) => { a = String(a).slice(0, n); b = String(b).slice(0, n); return a < b ? -1 : a > b ? 1 : 0; },
+      atoi: (s) => parseInt(s, 10) || 0, atol: (s) => parseInt(s, 10) || 0, atof: (s) => parseFloat(s) || 0,
+      isDigit: (c) => /^[0-9]$/.test(String.fromCharCode(typeof c === 'number' ? c : 0) || '') || /^[0-9]$/.test(c), isAlpha: (c) => /^[A-Za-z]$/.test(typeof c === 'number' ? String.fromCharCode(c) : c), isSpace: (c) => /^\s$/.test(typeof c === 'number' ? String.fromCharCode(c) : c),
+      toupper: (c) => typeof c === 'number' ? String.fromCharCode(c).toUpperCase().charCodeAt(0) : String(c).toUpperCase(), tolower: (c) => typeof c === 'number' ? String.fromCharCode(c).toLowerCase().charCodeAt(0) : String(c).toLowerCase(),
+      radians: (d) => d * Math.PI / 180, degrees: (r) => r * 180 / Math.PI, analogReference() { }, DEFAULT: 1, INTERNAL: 3, EXTERNAL: 0,
+      memset(a, v) { if (Array.isArray(a)) a.fill(v); return a; },
+      EEPROM: (() => { const mem = new Array(1024).fill(255); return { read: (i) => mem[i] ?? 255, write: (i, v) => { mem[i] = v & 255; }, update: (i, v) => { mem[i] = v & 255; }, length: () => mem.length, get(i, v) { return mem['o' + i] !== undefined ? mem['o' + i] : v; }, put(i, v) { mem['o' + i] = v; return v; } }; })(),
       sizeof(x) { return Array.isArray(x) ? x.length : (typeof x === 'string' ? x.length : 1); },
       F(s) { return s; },
       pinMode(p, md) { const k = P(p); const s = st(k); s.mode = md === 2 ? 0 : md; s.pull = md === 2; rt.track(k, md === 1 ? 'pinMode:OUTPUT' : 'pinMode:INPUT'); cost(3e-6); },
@@ -232,7 +247,7 @@ class Robot {
   duty(key) { if (key == null) return 0; if (this.cut && this.cut.has(key)) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
   servoTarget(key) { const rt = this.rtOf(key); return rt && key in rt.servoT ? rt.servoT[key] : null; }
   readDigital(k, rt) {
-    if (this.cut && this.cut.has(k)) return Math.random() < 0.5 ? 1 : 0;
+    if (this.cut && this.cut.has(k)) return RNG() < 0.5 ? 1 : 0;
     const r = Sensors.digital(this.match, this, k, rt); if (r != null) return r;
     const g = this.links.get(k); if (g) for (const o of g) { if (o === k) continue; const ort = this.rtOf(o); const os = ort && ort.pins[o]; if (os && (os.mode === 1 || os.pwm != null)) return os.pwm != null ? (os.pwm > 0.5 ? 1 : 0) : os.v; }
     const s = rt.pins[k]; if (s && s.mode === 1) return s.v; if (s && s.pull) return 1; return 0;

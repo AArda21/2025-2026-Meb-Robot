@@ -40,8 +40,8 @@ const Sensors = {
   ultrasonic(m, rb, s) {
     const w = rb.sensorWorld(s); let best = null;
     for (const da of [-0.26, -0.13, 0, 0.13, 0.26]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, 4.0); if (r.hit && (best == null || r.d < best)) best = r.d; }
-    if (best == null) return null; if (best < 0.02) best = 0.02 + Math.random() * 0.01;
-    return best + (Math.random() - 0.5) * 0.004;
+    if (best == null) return null; if (best < 0.02) best = 0.02 + RNG() * 0.01;
+    return best + (RNG() - 0.5) * 0.004;
   },
   irObstacle(m, rb, s) { if (s._mT === m.time && s._mR === rb) return s._mV; const v = Sensors._ir(m, rb, s); s._mT = m.time; s._mR = rb; s._mV = v; return v; },
   _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
@@ -55,7 +55,7 @@ const Sensors = {
     const ang = Math.atan2(y - e.y, x - e.x) - e.phi; if (Math.hypot(x - e.x, y - e.y) < 0.004) return { ir: (SURF.red.ir + SURF.blue.ir) / 2, rgb: SURF.red.rgb.map((v, i) => (v + SURF.blue.rgb[i]) / 2), name: 'ceza' };
     return Math.sin(ang) >= 0 ? SURF.red : SURF.blue;
   },
-  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (Math.random() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
+  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (RNG() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (RNG() - 0.5) * 16), 0, 1023); },
   colorTarget(m, rb, s) {
     const w = rb.sensorWorld(s); if ((s.bakis || 'asagi') === 'asagi') return Sensors.surfaceAt(m, w.x, w.y);
     const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, s.range, { wallTol: 0 }); if (!r.hit) return SURF.none; if (r.hit === 'duvar') return SURF.white; if (r.hit.robot) return SURF.robot;
@@ -67,12 +67,12 @@ const Sensors = {
     if (sc === 0) return null;
     const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const tgt = Sensors.colorTarget(m, rb, s);
     const fi = (!S2 && !S3) ? 0 : (!S2 && S3) ? 2 : (S2 && !S3) ? 3 : 1;
-    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (Math.random() - 0.5) * 0.04);
+    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (RNG() - 0.5) * 0.04);
     const [R, G, B] = tgt.rgb;
     let refl = (!S2 && !S3) ? R : (!S2 && S3) ? B : (S2 && !S3) ? (R + G + B) / 3 * 1.6 : G; refl = 0.25 + 0.75 * refl;
-    return 1e6 / (2 * 60000 * sc * refl * (1 + (Math.random() - 0.5) * 0.04));
+    return 1e6 / (2 * 60000 * sc * refl * (1 + (RNG() - 0.5) * 0.04));
   },
-  sharp(m, rb, s) { const w = rb.sensorWorld(s); const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, 1.5); const d = (r.hit ? r.d : 1.5) * 100; let V = d < 7 ? 2.9 * d / 7 : 27.728 * Math.pow(d, -1.2045); V = clamp(V, 0.3, 3.1); return clamp(Math.round(V / 5 * 1023 + (Math.random() - 0.5) * 8), 0, 1023); },
+  sharp(m, rb, s) { const w = rb.sensorWorld(s); const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, 1.5); const d = (r.hit ? r.d : 1.5) * 100; let V = d < 7 ? 2.9 * d / 7 : 27.728 * Math.pow(d, -1.2045); V = clamp(V, 0.3, 3.1); return clamp(Math.round(V / 5 * 1023 + (RNG() - 0.5) * 8), 0, 1023); },
   digital(m, rb, k, rt) {
     for (const s of rb.sensors) {
       if ((s.type === 'IR_ENGEL' || s.type === 'IR' || s.type === 'MZ80') && s.pin === k) { const ob = Sensors.irObstacle(m, rb, s); return (s.ters ? ob : !ob) ? 1 : 0; }
@@ -83,7 +83,7 @@ const Sensors = {
     return null;
   },
   analog(m, rb, k) {
-    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (Math.random() - 0.5) * 400);
+    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (RNG() - 0.5) * 400);
     for (const s of rb.sensors) {
       if (s.type === 'TCRT5000' && s.pin === k) return Sensors.tcrt(m, rb, s);
       if ((s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') && s.pin === k) return Sensors.sharp(m, rb, s);
@@ -149,6 +149,7 @@ class Match {
   get matchTime() { return this.rules.sure; }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
+    this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
     this.time = 0; this.ended = false; this.banked = { red: [], blue: [], green: [] }; this.firstDrop = null; this.events = [];
     this.placeEggs();
     this.robots = [];
@@ -184,7 +185,9 @@ class Match {
     I += 0.15 * Object.values(rb.servoVel || {}).filter(v => Math.abs(v) > 1).length;
     st.amp += I * dt; st.ampT += dt; st.ampPeak = Math.max(st.ampPeak, I); st.mAh += I * dt / 3.6;
   }
+  useRng() { RNG = this._rng || (this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0)); }
   step(dt) {
+    this.useRng();
     for (const rb of this.robots) rb.runPrograms(this.time);
     for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt); }
     const E = this.field, g = RULES.G;

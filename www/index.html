@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.8</title>
+<title>MEB Robot V3.9</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -93,7 +93,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.8</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.9</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -318,8 +318,10 @@ const SENSOR_TYPES = {
   'SHARP_IR': { ad: 'Sharp GP2Y0A21 mesafe', pins: ['pin'], ip: 'analog mesafe' },
   'BUTON': { ad: 'Buton / anahtar', pins: ['pin'], ip: 'deger: HIGH, LOW, KIRMIZIDA_HIGH, MAVIDE_HIGH' },
 };
-const BASE_T = 'void|int|long\\s+long|long|float|double|bool|boolean|byte|char|short|word|String|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|unsigned';
+const BASE_T = 'void|auto|int|long\\s+long|long|float|double|bool|boolean|byte|char|short|word|String|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|unsigned';
 const TYPES = `(?:(?:static|inline|volatile|const|unsigned|signed|register)\\s+)*(?:${BASE_T})(?:\\s*[*&])?`;
+const intKind = (m) => /long\s+long|u?int64_t/.test(m) ? 't' : /unsigned\s+long|uint32_t|size_t/.test(m) ? 'U' : /\blong\b|int32_t/.test(m) ? 'L' : /unsigned\s+char|\bbyte\b|uint8_t/.test(m) ? 'B' : /\bint8_t/.test(m) ? 't' : /unsigned|\bword\b|uint16_t/.test(m) ? 'W' : 'I';
+const WRAPF = { t: '__i', U: '__wul', L: '__wl', B: '__wb', W: '__wu', I: '__wi' };
 const isIntType = (m) => /\b(int|long|short|byte|word|unsigned|size_t|u?int\d+_t)\b/.test(m) && !/\b(float|double)\b/.test(m);
 const GEN_BUILTINS = ['delay', 'delayMicroseconds', 'pulseIn', 'pulseInLong'];
 const GEN_METHODS = ['ping_cm', 'ping', 'ping_in', 'ping_median'];
@@ -383,6 +385,30 @@ function transpile(src) {
   });
   for (const en of enumNames) t = t.replace(new RegExp(`(?<![\\w.])${en}(?=\\s+[A-Za-z_*&])`, 'g'), 'int').replace(new RegExp(`(?<![\\w.])${en}::`, 'g'), '');
   t = t.replace(/\.length\s*\(\s*\)/g, '.length');
+  t = t.replace(/(?<![\w.])bitSet\s*\(\s*([\w.\[\]]+)\s*,/g, '__BS($1,').replace(/(?<![\w.])bitClear\s*\(\s*([\w.\[\]]+)\s*,/g, '__BC($1,');
+  { let k; while ((k = t.search(/__B[SC]\(/)) >= 0) { const o = k + 4, c = matchBracket(t, o); if (c < 0) break; const [v, n] = splitTop(t.slice(o + 1, c)); t = t.slice(0, k) + (t[k + 3] === 'S' ? `(${v} |= (1 << (${n})))` : `(${v} &= ~(1 << (${n})))`) + t.slice(c + 1); } }
+  t = t.replace(/(?<![\w.])EEPROM\.get\s*\(\s*([^,]+),\s*(\w+)\s*\)/g, '($2 = EEPROM.get($1, $2))');
+  // 1c) Sayı sonekleri: 100000L, 10UL, 3.14f
+  t = t.replace(/(?<![\w.])((?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?)[fF](?!\w)/g, '$1').replace(/(?<![\w.])(0[xX][0-9a-fA-F]+|0[bB][01]+|\d+)(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)(?!\w)/g, '$1');
+  t = t.replace(/(?<![\w.])B([01]{1,8})(?!\w)/g, '0b$1');
+  // 1d) struct → sınıf
+  const structs = [];
+  t = t.replace(/(?<![\w.])(?:typedef\s+)?struct\s+(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;/g, (all, name, body, alias) => {
+    name = name || alias; if (!name) return all; structs.push(name); if (alias && alias !== name) structs.push(alias);
+    const fields = []; for (const stmt of body.split(';')) { const st = stmt.trim(); if (!st) continue; const m = st.match(new RegExp(`^(?:${TYPES}|\\w+)\\s+(.+)$`)); if (!m) continue;
+      for (const d of splitTop(m[1])) { const mm = d.trim().match(/^(\w+)\s*((?:\[[^\]]*\])*)\s*(?:=\s*([\s\S]+))?$/); if (mm) fields.push({ n: mm[1], dims: mm[2], init: mm[3] }); } }
+    const ctor = fields.map((f, i) => `this.${f.n} = __a.length > ${i} ? __a[${i}] : ${f.dims ? `__arr(${f.dims.match(/\[([^\]]*)\]/g).map(x => x.slice(1, -1) || '0').join(',')})` : (f.init ? f.init.replace(/\{/g, '[').replace(/\}/g, ']') : '0')};`).join(' ');
+    return `class ${name} { constructor(...__a) { ${ctor} } }` + (alias && alias !== name ? ` const ${alias} = ${name};` : '');
+  });
+  for (const sn of structs) {
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*\\[([^\\]]*)\\]\\s*;`, 'g'), (a, v, n) => `let ${v} = Array.from({ length: ${n || 0} }, () => new ${sn}());`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*\\[([^\\]]*)\\]\\s*=\\s*\\{`, 'g'), (a, v) => `let ${v} = __SARR_${sn}{`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*=\\s*\\{([^{}]*)\\}\\s*;`, 'g'), (a, v, args) => `let ${v} = new ${sn}(${args});`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*;`, 'g'), (a, v) => `let ${v} = new ${sn}();`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}(?=\\s*[&*]?\\s*\\w+\\s*[,)=(])`, 'g'), 'auto');
+    // dizi başlatıcı: { {1,2}, {3,4} } → [new S(1,2), new S(3,4)]
+    let k; while ((k = t.indexOf(`__SARR_${sn}{`)) >= 0) { const o = k + `__SARR_${sn}`.length; const c = matchBracket(t, o); if (c < 0) break; const inner = t.slice(o + 1, c); const items = splitTop(inner).map(x => x.trim()).filter(Boolean).map(x => x.startsWith('{') ? `new ${sn}(${x.slice(1, -1)})` : x); t = t.slice(0, k) + '[' + items.join(', ') + ']' + t.slice(c + 1); }
+  }
   // 2) Nesneler (Servo, NewPing)
   t = t.replace(/(?<![\w.])(Servo|NewPing|Adafruit_NeoPixel)\s+(?=[A-Za-z_])([^;]+);/g, (all, cls, decl) => {
     const ds = splitTop(decl).map(d => { const m = d.trim().match(/^(\w+)\s*(?:\(([\s\S]*)\))?$/); return m ? `${m[1]} = new __CLS_${cls}(${m[2] || ''})` : d; });
@@ -405,9 +431,9 @@ function transpile(src) {
   t = t.replace(reDef, (all, ty, name, params) => {
     if (['if', 'while', 'for', 'switch', 'return'].includes(name)) return all;
     const cp = convParams(params); let fname = name;
-    if (defCount[name] > 1) { const n = cp ? cp.split(',').length : 0; fname = `${name}__a${n}`; (overloads[name] = overloads[name] || []).push(n); }
+    if (defCount[name] > 1) { const n = cp ? cp.split(',').length : 0; const L = (overloads[name] = overloads[name] || []); const same = L.filter(o => o.n === n).length; fname = `${name}__a${n}` + (same ? '_' + same : ''); L.push({ n, f: fname, fl: /\b(float|double)\b/.test(params), st: /\bString\b|char\s*\*/.test(params) }); }
     funcs.push(name);
-    return `function* ${fname}(${cp}) {${isIntType(ty) ? '\u0002' : ''}`;
+    return `function* ${fname}(${cp}) {${isIntType(ty) ? '\u0002' + intKind(ty) : ''}`;
   });
   // 6) Prototipler
   const reProto = new RegExp(`(?<![\\w.])(${TYPES})\\s+(\\w+)\\s*\\(([^()]*)\\)\\s*;`, 'g');
@@ -422,9 +448,9 @@ function transpile(src) {
   t = t.replace(reStatic, (all, ty, name, init) => { statics.push(`let ${name} ${init || (/String/.test(ty) ? '= ""' : '= 0')};`); return ''; });
   // 8) Değişken bildirimleri
   const reDecl = new RegExp(`(?<![\\w.])(${TYPES})\\s+(?=[A-Za-z_])`, 'g');
-  t = t.replace(reDecl, (m, ty) => (/\bconst\b/.test(ty) ? 'const' : 'let') + (isIntType(ty) ? '\u0001' : '') + ' ');
+  t = t.replace(reDecl, (m, ty) => (/\bconst\b/.test(ty) ? 'const' : 'let') + (isIntType(ty) ? '\u0001' + intKind(ty) : '') + ' ');
   // 9) Diziler
-  t = t.replace(/\b(let|const)(\u0001?)\s+(\w+)\s*((?:\[[^\]]*\])+)\s*(=|;)/g, (all, kw, mk, name, dims, end) => {
+  t = t.replace(/\b(let|const)(\u0001[tULBWI])?\s+(\w+)\s*((?:\[[^\]]*\])+)\s*(=|;)/g, (all, kw, mk, name, dims, end) => {
     if (end === '=') return `${kw} ${name} =`;
     const ds = dims.match(/\[([^\]]*)\]/g).map(d => d.slice(1, -1).trim() || '0');
     return `${kw} ${name} = __arr(${ds.join(',')});`;
@@ -437,16 +463,17 @@ function transpile(src) {
       t = t.slice(0, o) + inner + t.slice(c + 1); re.lastIndex = o + 1;
     }
   }
-  // 10) let varsayılanları ve tamsayı kırpma
+  // 10) let varsayılanları ve tamsayı kırpma (Arduino Uno/Nano/Mega: int 16 bit, long 32 bit)
+  const typed = {};
   {
-    let out = '', i = 0; const re = /\b(let|const)(\u0001?)\s+/g; let m;
+    let out = '', i = 0; const re = /\b(let|const)(\u0001[tULBWI])?\s+/g; let m;
     while ((m = re.exec(t))) {
       const start = m.index + m[0].length; const end = findStmtEnd(t, start);
       const body = t.slice(start, end + (t[end] === ';' ? 0 : 1));
       const decls = splitTop(body).map(d => {
         const eq = (() => { let dd = 0; for (let k = 0; k < d.length; k++) { const c = d[k]; if ('([{'.includes(c)) dd++; else if (')]}'.includes(c)) dd--; else if (c === '=' && dd === 0 && d[k + 1] !== '=' && !'!<>='.includes(d[k - 1])) return k; } return -1; })();
         if (eq < 0) return d.trim() ? d.replace(/\s*$/, '') + ' = 0' : d;
-        if (m[2]) return d.slice(0, eq + 1) + ' __i(' + d.slice(eq + 1).trim() + ')';
+        if (m[2]) { const nm = (d.slice(0, eq).trim().match(/^(\w+)$/) || [])[1]; if (nm) typed[nm] = nm in typed && typed[nm] !== m[2][1] ? null : m[2][1]; return d.slice(0, eq + 1) + ' ' + WRAPF[m[2][1]] + '(' + d.slice(eq + 1).trim() + ')'; }
         return d;
       });
       out += t.slice(i, m.index) + m[1] + ' ' + decls.join(', ');
@@ -454,12 +481,34 @@ function transpile(src) {
     }
     t = out + t.slice(i);
   }
+  // 10b) Tamsayı değişkenlere sonradan yapılan atamalar da taşar (ör. int t = millis() 32 sn sonra eksiye döner)
+  {
+    const names = Object.keys(typed).filter(n => typed[n] && typed[n] !== 't');
+    if (names.length) {
+      const re = new RegExp(`(^|[;{}])(\\s*)(${names.join('|')})\\s*(\\+\\+|--|(?:[-+*/%&|^]|<<|>>)?=(?!=))`, 'g'); let m; const edits = [];
+      while ((m = re.exec(t))) {
+        const nm = m[3], op = m[4], st = m.index + m[1].length + m[2].length; const after = st + m[0].length - m[1].length - m[2].length;
+        const end = findStmtEnd(t, after); if (t[end] !== ';') continue; const rhs = t.slice(after, end).trim(); const W = WRAPF[typed[nm]];
+        let rep;
+        if (op === '++' || op === '--') { if (rhs) continue; rep = `${nm} = ${W}(${nm} ${op[0]} 1);`; }
+        else if (op === '=') rep = `${nm} = ${W}(${rhs});`;
+        else rep = `${nm} = ${W}(${nm} ${op.slice(0, -1)} (${rhs}));`;
+        edits.push([st, end + 1, rep]);
+      }
+      for (const [a, b, r] of edits.reverse()) t = t.slice(0, a) + r + t.slice(b);
+    }
+  }
+  // 10c) Tamsayı bölmesi: iki taraf da tamsayıysa sonuç kesirsiz (7 / 2 = 3)
+  {
+    const isI = (x) => /^\d+$/.test(x) || (typed[x] && true);
+    t = t.replace(/(?<![\w.\])\]])(\w+)\s*\/\s*(\w+)(?![\w.(\[])/g, (all, a, b) => (isI(a) && isI(b)) ? `__idiv(${a}, ${b})` : all);
+  }
   // 11) int fonksiyonlarda return kırpma
   {
     let k;
     while ((k = t.indexOf('\u0002')) >= 0) {
-      const o = k - 1; const c = matchBracket(t, o);
-      let body = t.slice(k + 1, c).replace(/\breturn\s+([^;]+);/g, 'return __i($1);');
+      const o = k - 1; const c = matchBracket(t, o); const W = WRAPF[t[k + 1]] || '__i';
+      let body = t.slice(k + 2, c).replace(/\breturn\s+([^;]+);/g, `return ${W}($1);`);
       t = t.slice(0, k) + body + t.slice(c);
     }
   }
@@ -496,10 +545,11 @@ function transpile(src) {
       } else { const e = findStmtEnd(t, k); t = t.slice(0, k) + '{' + BUD + ' ' + t.slice(k, e + 1) + '}' + t.slice(e + 1); }
     }
   }
-  t = t.replace(/\u0001/g, '');
+  t = t.replace(/\u0001[tULBWI]?/g, '');
   // 14) Değişmezleri geri koy
   t = t.replace(/__S(\d+)__/g, (a, n) => lits[+n]);
-  for (const [name, ns] of Object.entries(overloads)) t += `\nfunction* ${name}(...__a){ switch(__a.length){ ${ns.map(n => `case ${n}: return yield* ${name}__a${n}(...__a);`).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`;
+  for (const [name, L] of Object.entries(overloads)) { const ns = [...new Set(L.map(o => o.n))];
+    t += `\nfunction* ${name}(...__a){ const __fl = __a.some(x => typeof x === 'number' && !Number.isInteger(x)), __st = __a.some(x => typeof x === 'string'); switch(__a.length){ ${ns.map(n => { const c = L.filter(o => o.n === n); if (c.length === 1) return `case ${n}: return yield* ${c[0].f}(...__a);`; return `case ${n}: ${c.map(o => `if (${o.st ? '__st' : '!__st'} && ${o.fl ? '__fl' : '!__fl'}) return yield* ${o.f}(...__a);`).join(' ')} return yield* ${c[0].f}(...__a);`; }).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`; }
   const prefix = statics.join(' ');
   // izlenecek global değişkenler (izleme paneli için)
   const globals = statics.map(s => (s.match(/^let\s+(\w+)/) || [])[1]).filter(Boolean);
@@ -541,6 +591,8 @@ function errLine(e) {
   return m ? (+m[1] - 2) : null;
 }
 
+// Paylaşılan gürültü üreteci: her maç adımında o maçın tohumlu üretecine bağlanır (tekrarlanabilir maçlar)
+let RNG = Math.random;
 
 function trError(msg) {
   let m;
@@ -574,7 +626,7 @@ class Runtime {
     this.match = match; this.robot = robot; this.bi = bi; this.base = bi * 100;
     this.board = robot.boards[bi]; this.B = boardOf(this.board.tip);
     this.t = 0; this.pins = {}; this.servoT = {}; this.gen = null; this.phase = 'setup'; this.error = null;
-    this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi);
+    this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi + (((match && match.field && match.field.seed) | 0) * 31));
     this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {}; this.loopStats = { n: 0, sum: 0, max: 0, last: 0, setup: 0 };
   }
   track(key, op) { let s = this.ops.get(key); if (!s) this.ops.set(key, s = new Set()); s.add(op); }
@@ -643,7 +695,20 @@ class Runtime {
       __CLS_Servo: Servo, __CLS_NewPing: NewPing, __CLS_Adafruit_NeoPixel: Adafruit_NeoPixel,
       __b() { rt.t += 5e-6; return rt.t > m.time; },
       __i(v) { return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : v; },
+      __idiv(a, b) { if (typeof a !== 'number' || typeof b !== 'number') return a / b; if (b === 0) { rt.warnOnce('div0', 'Sıfıra bölme: Arduino çökmez ama sonuç anlamsız olur (−1 ya da rastgele).'); return -1; } return Math.trunc(a / b); },
+      __wi(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= -32768 && x <= 32767) return x; const w = ((x + 32768) % 65536 + 65536) % 65536 - 32768; rt.warnOnce('ovf_int', `int taşması: ${x} değeri int'e (−32768…32767) sığmıyor, Arduino'da ${w} olur. Büyük sayılar ve millis() için long ya da unsigned long kullan.`); return w; },
+      __wu(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= 0 && x <= 65535) return x; const w = ((x % 65536) + 65536) % 65536; rt.warnOnce('ovf_uint', `unsigned int taşması: ${x} → Arduino'da ${w} olur (0…65535).`); return w; },
+      __wl(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); return x >= -2147483648 && x <= 2147483647 ? x : (x | 0); },
+      __wul(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); return x >= 0 && x <= 4294967295 ? x : (x >>> 0); },
+      __wb(v) { if (typeof v !== 'number' || !isFinite(v)) return v; const x = Math.trunc(v); if (x >= 0 && x <= 255) return x; const w = ((x % 256) + 256) % 256; rt.warnOnce('ovf_byte', `byte taşması: ${x} → Arduino'da ${w} olur (0…255).`); return w; },
       __arr(...d) { const mk = (k) => k >= d.length - 1 ? new Array(+d[k]).fill(0) : Array.from({ length: +d[k] }, () => mk(k + 1)); return mk(0); },
+      strlen: (s) => String(s ?? '').length, strcmp: (a, b) => { a = String(a); b = String(b); return a < b ? -1 : a > b ? 1 : 0; }, strncmp: (a, b, n) => { a = String(a).slice(0, n); b = String(b).slice(0, n); return a < b ? -1 : a > b ? 1 : 0; },
+      atoi: (s) => parseInt(s, 10) || 0, atol: (s) => parseInt(s, 10) || 0, atof: (s) => parseFloat(s) || 0,
+      isDigit: (c) => /^[0-9]$/.test(String.fromCharCode(typeof c === 'number' ? c : 0) || '') || /^[0-9]$/.test(c), isAlpha: (c) => /^[A-Za-z]$/.test(typeof c === 'number' ? String.fromCharCode(c) : c), isSpace: (c) => /^\s$/.test(typeof c === 'number' ? String.fromCharCode(c) : c),
+      toupper: (c) => typeof c === 'number' ? String.fromCharCode(c).toUpperCase().charCodeAt(0) : String(c).toUpperCase(), tolower: (c) => typeof c === 'number' ? String.fromCharCode(c).toLowerCase().charCodeAt(0) : String(c).toLowerCase(),
+      radians: (d) => d * Math.PI / 180, degrees: (r) => r * 180 / Math.PI, analogReference() { }, DEFAULT: 1, INTERNAL: 3, EXTERNAL: 0,
+      memset(a, v) { if (Array.isArray(a)) a.fill(v); return a; },
+      EEPROM: (() => { const mem = new Array(1024).fill(255); return { read: (i) => mem[i] ?? 255, write: (i, v) => { mem[i] = v & 255; }, update: (i, v) => { mem[i] = v & 255; }, length: () => mem.length, get(i, v) { return mem['o' + i] !== undefined ? mem['o' + i] : v; }, put(i, v) { mem['o' + i] = v; return v; } }; })(),
       sizeof(x) { return Array.isArray(x) ? x.length : (typeof x === 'string' ? x.length : 1); },
       F(s) { return s; },
       pinMode(p, md) { const k = P(p); const s = st(k); s.mode = md === 2 ? 0 : md; s.pull = md === 2; rt.track(k, md === 1 ? 'pinMode:OUTPUT' : 'pinMode:INPUT'); cost(3e-6); },
@@ -775,7 +840,7 @@ class Robot {
   duty(key) { if (key == null) return 0; if (this.cut && this.cut.has(key)) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
   servoTarget(key) { const rt = this.rtOf(key); return rt && key in rt.servoT ? rt.servoT[key] : null; }
   readDigital(k, rt) {
-    if (this.cut && this.cut.has(k)) return Math.random() < 0.5 ? 1 : 0;
+    if (this.cut && this.cut.has(k)) return RNG() < 0.5 ? 1 : 0;
     const r = Sensors.digital(this.match, this, k, rt); if (r != null) return r;
     const g = this.links.get(k); if (g) for (const o of g) { if (o === k) continue; const ort = this.rtOf(o); const os = ort && ort.pins[o]; if (os && (os.mode === 1 || os.pwm != null)) return os.pwm != null ? (os.pwm > 0.5 ? 1 : 0) : os.v; }
     const s = rt.pins[k]; if (s && s.mode === 1) return s.v; if (s && s.pull) return 1; return 0;
@@ -892,8 +957,8 @@ const Sensors = {
   ultrasonic(m, rb, s) {
     const w = rb.sensorWorld(s); let best = null;
     for (const da of [-0.26, -0.13, 0, 0.13, 0.26]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, 4.0); if (r.hit && (best == null || r.d < best)) best = r.d; }
-    if (best == null) return null; if (best < 0.02) best = 0.02 + Math.random() * 0.01;
-    return best + (Math.random() - 0.5) * 0.004;
+    if (best == null) return null; if (best < 0.02) best = 0.02 + RNG() * 0.01;
+    return best + (RNG() - 0.5) * 0.004;
   },
   irObstacle(m, rb, s) { if (s._mT === m.time && s._mR === rb) return s._mV; const v = Sensors._ir(m, rb, s); s._mT = m.time; s._mR = rb; s._mV = v; return v; },
   _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
@@ -907,7 +972,7 @@ const Sensors = {
     const ang = Math.atan2(y - e.y, x - e.x) - e.phi; if (Math.hypot(x - e.x, y - e.y) < 0.004) return { ir: (SURF.red.ir + SURF.blue.ir) / 2, rgb: SURF.red.rgb.map((v, i) => (v + SURF.blue.rgb[i]) / 2), name: 'ceza' };
     return Math.sin(ang) >= 0 ? SURF.red : SURF.blue;
   },
-  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (Math.random() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
+  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (RNG() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (RNG() - 0.5) * 16), 0, 1023); },
   colorTarget(m, rb, s) {
     const w = rb.sensorWorld(s); if ((s.bakis || 'asagi') === 'asagi') return Sensors.surfaceAt(m, w.x, w.y);
     const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, s.range, { wallTol: 0 }); if (!r.hit) return SURF.none; if (r.hit === 'duvar') return SURF.white; if (r.hit.robot) return SURF.robot;
@@ -919,12 +984,12 @@ const Sensors = {
     if (sc === 0) return null;
     const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const tgt = Sensors.colorTarget(m, rb, s);
     const fi = (!S2 && !S3) ? 0 : (!S2 && S3) ? 2 : (S2 && !S3) ? 3 : 1;
-    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (Math.random() - 0.5) * 0.04);
+    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (RNG() - 0.5) * 0.04);
     const [R, G, B] = tgt.rgb;
     let refl = (!S2 && !S3) ? R : (!S2 && S3) ? B : (S2 && !S3) ? (R + G + B) / 3 * 1.6 : G; refl = 0.25 + 0.75 * refl;
-    return 1e6 / (2 * 60000 * sc * refl * (1 + (Math.random() - 0.5) * 0.04));
+    return 1e6 / (2 * 60000 * sc * refl * (1 + (RNG() - 0.5) * 0.04));
   },
-  sharp(m, rb, s) { const w = rb.sensorWorld(s); const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, 1.5); const d = (r.hit ? r.d : 1.5) * 100; let V = d < 7 ? 2.9 * d / 7 : 27.728 * Math.pow(d, -1.2045); V = clamp(V, 0.3, 3.1); return clamp(Math.round(V / 5 * 1023 + (Math.random() - 0.5) * 8), 0, 1023); },
+  sharp(m, rb, s) { const w = rb.sensorWorld(s); const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, 1.5); const d = (r.hit ? r.d : 1.5) * 100; let V = d < 7 ? 2.9 * d / 7 : 27.728 * Math.pow(d, -1.2045); V = clamp(V, 0.3, 3.1); return clamp(Math.round(V / 5 * 1023 + (RNG() - 0.5) * 8), 0, 1023); },
   digital(m, rb, k, rt) {
     for (const s of rb.sensors) {
       if ((s.type === 'IR_ENGEL' || s.type === 'IR' || s.type === 'MZ80') && s.pin === k) { const ob = Sensors.irObstacle(m, rb, s); return (s.ters ? ob : !ob) ? 1 : 0; }
@@ -935,7 +1000,7 @@ const Sensors = {
     return null;
   },
   analog(m, rb, k) {
-    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (Math.random() - 0.5) * 400);
+    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (RNG() - 0.5) * 400);
     for (const s of rb.sensors) {
       if (s.type === 'TCRT5000' && s.pin === k) return Sensors.tcrt(m, rb, s);
       if ((s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') && s.pin === k) return Sensors.sharp(m, rb, s);
@@ -1001,6 +1066,7 @@ class Match {
   get matchTime() { return this.rules.sure; }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
+    this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
     this.time = 0; this.ended = false; this.banked = { red: [], blue: [], green: [] }; this.firstDrop = null; this.events = [];
     this.placeEggs();
     this.robots = [];
@@ -1036,7 +1102,9 @@ class Match {
     I += 0.15 * Object.values(rb.servoVel || {}).filter(v => Math.abs(v) > 1).length;
     st.amp += I * dt; st.ampT += dt; st.ampPeak = Math.max(st.ampPeak, I); st.mAh += I * dt / 3.6;
   }
+  useRng() { RNG = this._rng || (this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0)); }
   step(dt) {
+    this.useRng();
     for (const rb of this.robots) rb.runPrograms(this.time);
     for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt); }
     const E = this.field, g = RULES.G;
@@ -1197,6 +1265,13 @@ function staticChecks(profile) {
   const out = []; const add = (cat, level, txt) => out.push({ cat, level, txt });
   let rb; try { rb = new Robot(profile, 'red', { robots: [], eggs: [], zoneOf: () => null }); rb.reset({ x: 1, y: 1, th: 0 }); } catch (e) { add('Genel', 'err', 'Profil okunamadı: ' + e.message); return { items: out }; }
   const cmS = (v) => (v * 100).toFixed(1) + ' cm';
+  // --- Kod: Arduino'ya özgü sinsi hatalar ---
+  for (const b of (profile.kartlar || [])) { const src = String(b.kod || '').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ints = new Set(); for (const m of src.matchAll(/(?<![\w.])(?:(?:unsigned|signed|const|static|volatile)\s+)*(int|short|byte|word|int16_t|uint8_t|uint16_t|unsigned)\s+([\w\s,=\[\]]+?);/g)) { if (/unsigned\s+long/.test(m[0])) continue; for (const d of m[2].split(',')) { const n = (d.trim().match(/^(\w+)/) || [])[1]; if (n) ints.add(n); } }
+    for (const m of src.matchAll(/(?<![\w.])(\w+)\s*=\s*(millis|micros)\s*\(\s*\)/g)) if (ints.has(m[1])) { add('Kod', 'warn', `[${b.id}] '${m[1]}' int/byte türünde ama ${m[2]}() değerini tutuyor: Arduino'da int en fazla 32767'dir, ${m[2] === 'millis' ? '32,7 saniye' : '33 milisaniye'} sonra taşar ve süre hesapları bozulur. 'unsigned long' kullan.`); break; }
+    for (const m of src.matchAll(/(?<![\w.])(?:int|byte)\s+(\w+)\s*=\s*pulseIn\s*\(/g)) { add('Kod', 'info', `[${b.id}] '${m[1]}' = pulseIn(...): pulseIn uzun (unsigned long) döndürür; 32767 µs'yi aşan ölçümlerde int taşar. Mesafe sensöründe 'long' kullanmak daha güvenli.`); break; }
+    if (/(?<![\w.])delay\s*\(\s*([3-9]\d{3}|\d{5,})\s*\)/.test(src.replace(/void\s+setup\s*\([^)]*\)\s*\{[\s\S]*?\n\}/, ''))) add('Kod', 'info', `[${b.id}] loop içinde 3 saniyeden uzun delay() var: bu sürede robot hiçbir sensöre bakmaz (yarışma 2 dakika).`);
+  }
   // --- Kurallar ---
   const env = rb.envelope(true); const L = env.maxX - env.minX, W = env.maxY - env.minY, H = rb.height();
   add('Kurallar', L <= 0.3001 ? 'ok' : 'err', `Uzunluk ${cmS(L)} (en fazla 30 cm)`);
@@ -2320,6 +2395,7 @@ function makeMatch3D(R) {
       this.syncRobot(rb);
     }
     step(dt) {
+      this.useRng();
       for (const rb of this.robots) rb.runPrograms(this.time);
       for (const rb of this.robots) {
         this.updateServos(rb, dt, rb.servoCmd);
@@ -3134,7 +3210,7 @@ function renderBatch(A, B, rows, N) {
   $('batchOut').innerHTML = `${errNote}<div class="stats"><div class="stat"><div class="k">${esc(A.ad)} kazandı</div><div class="v">${wa} / ${n} (%${(wa / n * 100).toFixed(0)})</div></div><div class="stat"><div class="k">${esc(B.ad)} kazandı</div><div class="v">${wb} / ${n}</div></div><div class="stat"><div class="k">Kazanan yok</div><div class="v">${n - wa - wb}</div></div>
     <div class="stat"><div class="k">Ort. puan ${esc(A.ad)}</div><div class="v">${avg('sA')}</div></div><div class="stat"><div class="k">Ort. puan ${esc(B.ad)}</div><div class="v">${avg('sB')}</div></div><div class="stat"><div class="k">Ort. kendi rengi (${esc(A.ad)})</div><div class="v">${avg('ownA')}</div></div></div>
     <div class="scroll" style="margin-top:10px"><table><thead><tr><th>#</th><th>${esc(A.ad)} köşe</th><th>Puan A</th><th>Puan B</th><th>Kazanan</th><th>Neden</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.i}</td><td>${r.aRed ? 'Kırmızı' : 'Mavi'}</td><td>${r.sA}</td><td>${r.sB}</td><td>${r.w === 'A' ? esc(A.ad) : r.w === 'B' ? esc(B.ad) : '—'}</td><td>${esc(r.reason)}</td><td><button class="btn sm" data-watch="${r.i}">İzle</button></td></tr>`).join('')}</tbody></table></div>`;
-  $('batchOut').querySelectorAll('[data-watch]').forEach(b => b.onclick = () => { const r = rows[+b.dataset.watch - 1]; seed = r.sd; $('selRed').value = r.aRed ? A.id : B.id; $('selBlue').value = r.aRed ? B.id : A.id; setTab('saha'); startRun(); toast('Bu maç sahada aynı yumurta dizilimiyle yeniden oynatılıyor (sensör gürültüsü yüzünden birebir aynı olmayabilir)'); });
+  $('batchOut').querySelectorAll('[data-watch]').forEach(b => b.onclick = () => { const r = rows[+b.dataset.watch - 1]; seed = r.sd; $('selRed').value = r.aRed ? A.id : B.id; $('selBlue').value = r.aRed ? B.id : A.id; setTab('saha'); startRun(); toast('Bu maç aynı yumurta dizilimi ve aynı sensör gürültüsüyle yeniden oynatılıyor (2B fizikte birebir aynı olur)'); });
 }
 
 // =====================================================================================

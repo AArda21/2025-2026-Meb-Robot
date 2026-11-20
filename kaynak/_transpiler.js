@@ -1,5 +1,7 @@
-const BASE_T = 'void|int|long\\s+long|long|float|double|bool|boolean|byte|char|short|word|String|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|unsigned';
+const BASE_T = 'void|auto|int|long\\s+long|long|float|double|bool|boolean|byte|char|short|word|String|size_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|unsigned';
 const TYPES = `(?:(?:static|inline|volatile|const|unsigned|signed|register)\\s+)*(?:${BASE_T})(?:\\s*[*&])?`;
+const intKind = (m) => /long\s+long|u?int64_t/.test(m) ? 't' : /unsigned\s+long|uint32_t|size_t/.test(m) ? 'U' : /\blong\b|int32_t/.test(m) ? 'L' : /unsigned\s+char|\bbyte\b|uint8_t/.test(m) ? 'B' : /\bint8_t/.test(m) ? 't' : /unsigned|\bword\b|uint16_t/.test(m) ? 'W' : 'I';
+const WRAPF = { t: '__i', U: '__wul', L: '__wl', B: '__wb', W: '__wu', I: '__wi' };
 const isIntType = (m) => /\b(int|long|short|byte|word|unsigned|size_t|u?int\d+_t)\b/.test(m) && !/\b(float|double)\b/.test(m);
 const GEN_BUILTINS = ['delay', 'delayMicroseconds', 'pulseIn', 'pulseInLong'];
 const GEN_METHODS = ['ping_cm', 'ping', 'ping_in', 'ping_median'];
@@ -63,6 +65,30 @@ function transpile(src) {
   });
   for (const en of enumNames) t = t.replace(new RegExp(`(?<![\\w.])${en}(?=\\s+[A-Za-z_*&])`, 'g'), 'int').replace(new RegExp(`(?<![\\w.])${en}::`, 'g'), '');
   t = t.replace(/\.length\s*\(\s*\)/g, '.length');
+  t = t.replace(/(?<![\w.])bitSet\s*\(\s*([\w.\[\]]+)\s*,/g, '__BS($1,').replace(/(?<![\w.])bitClear\s*\(\s*([\w.\[\]]+)\s*,/g, '__BC($1,');
+  { let k; while ((k = t.search(/__B[SC]\(/)) >= 0) { const o = k + 4, c = matchBracket(t, o); if (c < 0) break; const [v, n] = splitTop(t.slice(o + 1, c)); t = t.slice(0, k) + (t[k + 3] === 'S' ? `(${v} |= (1 << (${n})))` : `(${v} &= ~(1 << (${n})))`) + t.slice(c + 1); } }
+  t = t.replace(/(?<![\w.])EEPROM\.get\s*\(\s*([^,]+),\s*(\w+)\s*\)/g, '($2 = EEPROM.get($1, $2))');
+  // 1c) Sayı sonekleri: 100000L, 10UL, 3.14f
+  t = t.replace(/(?<![\w.])((?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?)[fF](?!\w)/g, '$1').replace(/(?<![\w.])(0[xX][0-9a-fA-F]+|0[bB][01]+|\d+)(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)(?!\w)/g, '$1');
+  t = t.replace(/(?<![\w.])B([01]{1,8})(?!\w)/g, '0b$1');
+  // 1d) struct → sınıf
+  const structs = [];
+  t = t.replace(/(?<![\w.])(?:typedef\s+)?struct\s+(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;/g, (all, name, body, alias) => {
+    name = name || alias; if (!name) return all; structs.push(name); if (alias && alias !== name) structs.push(alias);
+    const fields = []; for (const stmt of body.split(';')) { const st = stmt.trim(); if (!st) continue; const m = st.match(new RegExp(`^(?:${TYPES}|\\w+)\\s+(.+)$`)); if (!m) continue;
+      for (const d of splitTop(m[1])) { const mm = d.trim().match(/^(\w+)\s*((?:\[[^\]]*\])*)\s*(?:=\s*([\s\S]+))?$/); if (mm) fields.push({ n: mm[1], dims: mm[2], init: mm[3] }); } }
+    const ctor = fields.map((f, i) => `this.${f.n} = __a.length > ${i} ? __a[${i}] : ${f.dims ? `__arr(${f.dims.match(/\[([^\]]*)\]/g).map(x => x.slice(1, -1) || '0').join(',')})` : (f.init ? f.init.replace(/\{/g, '[').replace(/\}/g, ']') : '0')};`).join(' ');
+    return `class ${name} { constructor(...__a) { ${ctor} } }` + (alias && alias !== name ? ` const ${alias} = ${name};` : '');
+  });
+  for (const sn of structs) {
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*\\[([^\\]]*)\\]\\s*;`, 'g'), (a, v, n) => `let ${v} = Array.from({ length: ${n || 0} }, () => new ${sn}());`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*\\[([^\\]]*)\\]\\s*=\\s*\\{`, 'g'), (a, v) => `let ${v} = __SARR_${sn}{`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*=\\s*\\{([^{}]*)\\}\\s*;`, 'g'), (a, v, args) => `let ${v} = new ${sn}(${args});`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}\\s+(\\w+)\\s*;`, 'g'), (a, v) => `let ${v} = new ${sn}();`);
+    t = t.replace(new RegExp(`(?<![\\w.])(?:struct\\s+)?${sn}(?=\\s*[&*]?\\s*\\w+\\s*[,)=(])`, 'g'), 'auto');
+    // dizi başlatıcı: { {1,2}, {3,4} } → [new S(1,2), new S(3,4)]
+    let k; while ((k = t.indexOf(`__SARR_${sn}{`)) >= 0) { const o = k + `__SARR_${sn}`.length; const c = matchBracket(t, o); if (c < 0) break; const inner = t.slice(o + 1, c); const items = splitTop(inner).map(x => x.trim()).filter(Boolean).map(x => x.startsWith('{') ? `new ${sn}(${x.slice(1, -1)})` : x); t = t.slice(0, k) + '[' + items.join(', ') + ']' + t.slice(c + 1); }
+  }
   // 2) Nesneler (Servo, NewPing)
   t = t.replace(/(?<![\w.])(Servo|NewPing|Adafruit_NeoPixel)\s+(?=[A-Za-z_])([^;]+);/g, (all, cls, decl) => {
     const ds = splitTop(decl).map(d => { const m = d.trim().match(/^(\w+)\s*(?:\(([\s\S]*)\))?$/); return m ? `${m[1]} = new __CLS_${cls}(${m[2] || ''})` : d; });
@@ -85,9 +111,9 @@ function transpile(src) {
   t = t.replace(reDef, (all, ty, name, params) => {
     if (['if', 'while', 'for', 'switch', 'return'].includes(name)) return all;
     const cp = convParams(params); let fname = name;
-    if (defCount[name] > 1) { const n = cp ? cp.split(',').length : 0; fname = `${name}__a${n}`; (overloads[name] = overloads[name] || []).push(n); }
+    if (defCount[name] > 1) { const n = cp ? cp.split(',').length : 0; const L = (overloads[name] = overloads[name] || []); const same = L.filter(o => o.n === n).length; fname = `${name}__a${n}` + (same ? '_' + same : ''); L.push({ n, f: fname, fl: /\b(float|double)\b/.test(params), st: /\bString\b|char\s*\*/.test(params) }); }
     funcs.push(name);
-    return `function* ${fname}(${cp}) {${isIntType(ty) ? '\u0002' : ''}`;
+    return `function* ${fname}(${cp}) {${isIntType(ty) ? '\u0002' + intKind(ty) : ''}`;
   });
   // 6) Prototipler
   const reProto = new RegExp(`(?<![\\w.])(${TYPES})\\s+(\\w+)\\s*\\(([^()]*)\\)\\s*;`, 'g');
@@ -102,9 +128,9 @@ function transpile(src) {
   t = t.replace(reStatic, (all, ty, name, init) => { statics.push(`let ${name} ${init || (/String/.test(ty) ? '= ""' : '= 0')};`); return ''; });
   // 8) Değişken bildirimleri
   const reDecl = new RegExp(`(?<![\\w.])(${TYPES})\\s+(?=[A-Za-z_])`, 'g');
-  t = t.replace(reDecl, (m, ty) => (/\bconst\b/.test(ty) ? 'const' : 'let') + (isIntType(ty) ? '\u0001' : '') + ' ');
+  t = t.replace(reDecl, (m, ty) => (/\bconst\b/.test(ty) ? 'const' : 'let') + (isIntType(ty) ? '\u0001' + intKind(ty) : '') + ' ');
   // 9) Diziler
-  t = t.replace(/\b(let|const)(\u0001?)\s+(\w+)\s*((?:\[[^\]]*\])+)\s*(=|;)/g, (all, kw, mk, name, dims, end) => {
+  t = t.replace(/\b(let|const)(\u0001[tULBWI])?\s+(\w+)\s*((?:\[[^\]]*\])+)\s*(=|;)/g, (all, kw, mk, name, dims, end) => {
     if (end === '=') return `${kw} ${name} =`;
     const ds = dims.match(/\[([^\]]*)\]/g).map(d => d.slice(1, -1).trim() || '0');
     return `${kw} ${name} = __arr(${ds.join(',')});`;
@@ -117,16 +143,17 @@ function transpile(src) {
       t = t.slice(0, o) + inner + t.slice(c + 1); re.lastIndex = o + 1;
     }
   }
-  // 10) let varsayılanları ve tamsayı kırpma
+  // 10) let varsayılanları ve tamsayı kırpma (Arduino Uno/Nano/Mega: int 16 bit, long 32 bit)
+  const typed = {};
   {
-    let out = '', i = 0; const re = /\b(let|const)(\u0001?)\s+/g; let m;
+    let out = '', i = 0; const re = /\b(let|const)(\u0001[tULBWI])?\s+/g; let m;
     while ((m = re.exec(t))) {
       const start = m.index + m[0].length; const end = findStmtEnd(t, start);
       const body = t.slice(start, end + (t[end] === ';' ? 0 : 1));
       const decls = splitTop(body).map(d => {
         const eq = (() => { let dd = 0; for (let k = 0; k < d.length; k++) { const c = d[k]; if ('([{'.includes(c)) dd++; else if (')]}'.includes(c)) dd--; else if (c === '=' && dd === 0 && d[k + 1] !== '=' && !'!<>='.includes(d[k - 1])) return k; } return -1; })();
         if (eq < 0) return d.trim() ? d.replace(/\s*$/, '') + ' = 0' : d;
-        if (m[2]) return d.slice(0, eq + 1) + ' __i(' + d.slice(eq + 1).trim() + ')';
+        if (m[2]) { const nm = (d.slice(0, eq).trim().match(/^(\w+)$/) || [])[1]; if (nm) typed[nm] = nm in typed && typed[nm] !== m[2][1] ? null : m[2][1]; return d.slice(0, eq + 1) + ' ' + WRAPF[m[2][1]] + '(' + d.slice(eq + 1).trim() + ')'; }
         return d;
       });
       out += t.slice(i, m.index) + m[1] + ' ' + decls.join(', ');
@@ -134,12 +161,34 @@ function transpile(src) {
     }
     t = out + t.slice(i);
   }
+  // 10b) Tamsayı değişkenlere sonradan yapılan atamalar da taşar (ör. int t = millis() 32 sn sonra eksiye döner)
+  {
+    const names = Object.keys(typed).filter(n => typed[n] && typed[n] !== 't');
+    if (names.length) {
+      const re = new RegExp(`(^|[;{}])(\\s*)(${names.join('|')})\\s*(\\+\\+|--|(?:[-+*/%&|^]|<<|>>)?=(?!=))`, 'g'); let m; const edits = [];
+      while ((m = re.exec(t))) {
+        const nm = m[3], op = m[4], st = m.index + m[1].length + m[2].length; const after = st + m[0].length - m[1].length - m[2].length;
+        const end = findStmtEnd(t, after); if (t[end] !== ';') continue; const rhs = t.slice(after, end).trim(); const W = WRAPF[typed[nm]];
+        let rep;
+        if (op === '++' || op === '--') { if (rhs) continue; rep = `${nm} = ${W}(${nm} ${op[0]} 1);`; }
+        else if (op === '=') rep = `${nm} = ${W}(${rhs});`;
+        else rep = `${nm} = ${W}(${nm} ${op.slice(0, -1)} (${rhs}));`;
+        edits.push([st, end + 1, rep]);
+      }
+      for (const [a, b, r] of edits.reverse()) t = t.slice(0, a) + r + t.slice(b);
+    }
+  }
+  // 10c) Tamsayı bölmesi: iki taraf da tamsayıysa sonuç kesirsiz (7 / 2 = 3)
+  {
+    const isI = (x) => /^\d+$/.test(x) || (typed[x] && true);
+    t = t.replace(/(?<![\w.\])\]])(\w+)\s*\/\s*(\w+)(?![\w.(\[])/g, (all, a, b) => (isI(a) && isI(b)) ? `__idiv(${a}, ${b})` : all);
+  }
   // 11) int fonksiyonlarda return kırpma
   {
     let k;
     while ((k = t.indexOf('\u0002')) >= 0) {
-      const o = k - 1; const c = matchBracket(t, o);
-      let body = t.slice(k + 1, c).replace(/\breturn\s+([^;]+);/g, 'return __i($1);');
+      const o = k - 1; const c = matchBracket(t, o); const W = WRAPF[t[k + 1]] || '__i';
+      let body = t.slice(k + 2, c).replace(/\breturn\s+([^;]+);/g, `return ${W}($1);`);
       t = t.slice(0, k) + body + t.slice(c);
     }
   }
@@ -176,10 +225,11 @@ function transpile(src) {
       } else { const e = findStmtEnd(t, k); t = t.slice(0, k) + '{' + BUD + ' ' + t.slice(k, e + 1) + '}' + t.slice(e + 1); }
     }
   }
-  t = t.replace(/\u0001/g, '');
+  t = t.replace(/\u0001[tULBWI]?/g, '');
   // 14) Değişmezleri geri koy
   t = t.replace(/__S(\d+)__/g, (a, n) => lits[+n]);
-  for (const [name, ns] of Object.entries(overloads)) t += `\nfunction* ${name}(...__a){ switch(__a.length){ ${ns.map(n => `case ${n}: return yield* ${name}__a${n}(...__a);`).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`;
+  for (const [name, L] of Object.entries(overloads)) { const ns = [...new Set(L.map(o => o.n))];
+    t += `\nfunction* ${name}(...__a){ const __fl = __a.some(x => typeof x === 'number' && !Number.isInteger(x)), __st = __a.some(x => typeof x === 'string'); switch(__a.length){ ${ns.map(n => { const c = L.filter(o => o.n === n); if (c.length === 1) return `case ${n}: return yield* ${c[0].f}(...__a);`; return `case ${n}: ${c.map(o => `if (${o.st ? '__st' : '!__st'} && ${o.fl ? '__fl' : '!__fl'}) return yield* ${o.f}(...__a);`).join(' ')} return yield* ${c[0].f}(...__a);`; }).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`; }
   const prefix = statics.join(' ');
   // izlenecek global değişkenler (izleme paneli için)
   const globals = statics.map(s => (s.match(/^let\s+(\w+)/) || [])[1]).filter(Boolean);

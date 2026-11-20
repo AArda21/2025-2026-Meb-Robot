@@ -15,6 +15,13 @@ function staticChecks(profile) {
   const out = []; const add = (cat, level, txt) => out.push({ cat, level, txt });
   let rb; try { rb = new Robot(profile, 'red', { robots: [], eggs: [], zoneOf: () => null }); rb.reset({ x: 1, y: 1, th: 0 }); } catch (e) { add('Genel', 'err', 'Profil okunamadı: ' + e.message); return { items: out }; }
   const cmS = (v) => (v * 100).toFixed(1) + ' cm';
+  // --- Kod: Arduino'ya özgü sinsi hatalar ---
+  for (const b of (profile.kartlar || [])) { const src = String(b.kod || '').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const ints = new Set(); for (const m of src.matchAll(/(?<![\w.])(?:(?:unsigned|signed|const|static|volatile)\s+)*(int|short|byte|word|int16_t|uint8_t|uint16_t|unsigned)\s+([\w\s,=\[\]]+?);/g)) { if (/unsigned\s+long/.test(m[0])) continue; for (const d of m[2].split(',')) { const n = (d.trim().match(/^(\w+)/) || [])[1]; if (n) ints.add(n); } }
+    for (const m of src.matchAll(/(?<![\w.])(\w+)\s*=\s*(millis|micros)\s*\(\s*\)/g)) if (ints.has(m[1])) { add('Kod', 'warn', `[${b.id}] '${m[1]}' int/byte türünde ama ${m[2]}() değerini tutuyor: Arduino'da int en fazla 32767'dir, ${m[2] === 'millis' ? '32,7 saniye' : '33 milisaniye'} sonra taşar ve süre hesapları bozulur. 'unsigned long' kullan.`); break; }
+    for (const m of src.matchAll(/(?<![\w.])(?:int|byte)\s+(\w+)\s*=\s*pulseIn\s*\(/g)) { add('Kod', 'info', `[${b.id}] '${m[1]}' = pulseIn(...): pulseIn uzun (unsigned long) döndürür; 32767 µs'yi aşan ölçümlerde int taşar. Mesafe sensöründe 'long' kullanmak daha güvenli.`); break; }
+    if (/(?<![\w.])delay\s*\(\s*([3-9]\d{3}|\d{5,})\s*\)/.test(src.replace(/void\s+setup\s*\([^)]*\)\s*\{[\s\S]*?\n\}/, ''))) add('Kod', 'info', `[${b.id}] loop içinde 3 saniyeden uzun delay() var: bu sürede robot hiçbir sensöre bakmaz (yarışma 2 dakika).`);
+  }
   // --- Kurallar ---
   const env = rb.envelope(true); const L = env.maxX - env.minX, W = env.maxY - env.minY, H = rb.height();
   add('Kurallar', L <= 0.3001 ? 'ok' : 'err', `Uzunluk ${cmS(L)} (en fazla 30 cm)`);
