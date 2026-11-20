@@ -27,7 +27,7 @@ code = code.replace('if (renk != 0 && renk != benim) {', 'if (renk != 0 && renk 
 F = False; T = True; N = None
 yum = {
  "id": "yumyum", "ad": "Yum Yum", "renk": "#f08c00", "aciklama": "Takımın bu yılki robotu (örnek değerlerle başlar — kendi ölçülerinizi girin).",
- "kartlar": [{"id": "ana", "tip": "Uno", "kod": code}],
+ "kartlar": [{"id": "ana", "tip": "Uno", "kod": open(os.path.join(HERE, "strateji.ino")).read()}],
  "kart_baglantilari": [],
  "mekanik": {
   "kutle_kg": 1.1, "agirlik_merkezi": {"x_cm": N, "z_cm": 5},

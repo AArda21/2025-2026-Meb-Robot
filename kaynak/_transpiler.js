@@ -55,6 +55,14 @@ function transpile(src) {
     if (/^\s*#/.test(line)) { warnings.push('Yok sayılan satır: ' + line.trim()); return ''; }
     return line;
   }).join('\n');
+  // 1b) enum → sabitler; enum adları int gibi davranır
+  const enumNames = [];
+  t = t.replace(/(?<![\w.])enum\s+(?:class\s+)?(\w+)?\s*(?::\s*\w+\s*)?\{([^}]*)\}\s*(\w+)?\s*;/g, (all, name, body, varName) => {
+    if (name) enumNames.push(name); let n = -1; const parts = body.split(',').map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^(\w+)\s*(?:=\s*(.+))?$/); if (!m) return null; if (m[2] !== undefined) { const v = Number(m[2]); n = isNaN(v) ? n + 1 : v; return `${m[1]} = ${m[2]}`; } n++; return `${m[1]} = ${n}`; }).filter(Boolean);
+    return `const ${parts.join(', ')};` + (varName ? ` let ${varName} = 0;` : '');
+  });
+  for (const en of enumNames) t = t.replace(new RegExp(`(?<![\\w.])${en}(?=\\s+[A-Za-z_*&])`, 'g'), 'int').replace(new RegExp(`(?<![\\w.])${en}::`, 'g'), '');
+  t = t.replace(/\.length\s*\(\s*\)/g, '.length');
   // 2) Nesneler (Servo, NewPing)
   t = t.replace(/(?<![\w.])(Servo|NewPing|Adafruit_NeoPixel)\s+(?=[A-Za-z_])([^;]+);/g, (all, cls, decl) => {
     const ds = splitTop(decl).map(d => { const m = d.trim().match(/^(\w+)\s*(?:\(([\s\S]*)\))?$/); return m ? `${m[1]} = new __CLS_${cls}(${m[2] || ''})` : d; });
@@ -176,6 +184,24 @@ function transpile(src) {
   return { js: t, prefix, funcs, warnings };
 }
 
+// Arduino derleyicisinin yakalayacağı ama JS'in affettiği hatalar için basit denetim
+function lint(src) {
+  const { code } = mask(src.replace(/\r/g, '')); const L = code.split('\n'); const out = [];
+  let par = 0, br = 0, brStack = [];
+  L.forEach((raw, i) => { for (const ch of raw) { if (ch === '(') par++; else if (ch === ')') par--; else if (ch === '{') { br++; brStack.push(i + 1); } else if (ch === '}') { br--; brStack.pop(); if (br < 0) { out.push({ line: i + 1, msg: 'Fazladan kapanan süslü parantez }' }); br = 0; } } } });
+  if (br > 0) out.push({ line: brStack[brStack.length - 1] || L.length, msg: `${br} süslü parantez { kapatılmamış` });
+  for (let i = 0; i < L.length; i++) {
+    const s = L[i].trim(); if (!s || s.startsWith('#')) continue;
+    if (/[;{},:(\[]$|&&$|\|\|$|[+\-*\/=<>!?]$/.test(s)) continue;
+    if (/^(if|for|while|else|switch|do|case|default|template|public|private|class|struct|enum)\b/.test(s) || /^}?\s*else\b/.test(s)) continue;
+    let j = i + 1; while (j < L.length && !L[j].trim()) j++; const nx = j < L.length ? L[j].trim() : '';
+    if (nx.startsWith('{') || /^[)\]&|?:.+\-*\/=<>]/.test(nx)) continue;
+    if (/^\w[\w\s\*&<>,]*\([^;]*\)\s*(const)?$/.test(s) && nx.startsWith('{')) continue;
+    if (/\)$/.test(s) && /^(\w[\w\s\*&]*)\s+\w+\s*\(/.test(s) && nx.startsWith('{')) continue;
+    out.push({ line: i + 1, msg: 'Satır sonunda noktalı virgül ; eksik olabilir' });
+  }
+  return out;
+}
 function compile(src, api) {
   const tr = transpile(src);
   const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null};}`;

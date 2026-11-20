@@ -33,7 +33,7 @@ const Sensors = {
       const r = RULES.EGG_R;
       for (const e of m.eggs) { if (e.gone) continue; const ox = e.x - x, oy = e.y - y; const tc = ox * dx + oy * dy; if (tc < -r) continue; const d2 = ox * ox + oy * oy - tc * tc; if (d2 > r * r) continue; const t = tc - Math.sqrt(r * r - d2); if (t >= 0 && t < best) { best = t; hit = e; } }
     }
-    for (const o of m.robots) { if (o === rb) continue; for (const wp of o.worldParts()) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o }; } } }
+    for (const o of m.robots) { if (o === rb) continue; if (Math.hypot(o.state.x - x, o.state.y - y) > maxD + (o.radius || 0.3)) continue; for (const wp of o.cachedParts(m.time)) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o }; } } }
     if (opts.self) for (const wp of rb.worldParts()) { if (wp.p.auto || !wp.p.solid || z < wp.p.z0 || z > wp.p.z1) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t > 0.002 && t < best) { best = t; hit = { self: wp.p }; } }
     return { d: best, hit };
   },
@@ -43,7 +43,8 @@ const Sensors = {
     if (best == null) return null; if (best < 0.02) best = 0.02 + Math.random() * 0.01;
     return best + (Math.random() - 0.5) * 0.004;
   },
-  irObstacle(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
+  irObstacle(m, rb, s) { if (s._mT === m.time && s._mR === rb) return s._mV; const v = Sensors._ir(m, rb, s); s._mT = m.time; s._mR = rb; s._mV = v; return v; },
+  _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
   surfaceAt(m, x, y) {
     const r = RULES.EGG_R;
     for (const e of m.eggs) { if (e.gone) continue; const dx = x - e.x, dy = y - e.y; if (dx * dx + dy * dy <= r * r) return Sensors.eggSurface(e, x, y); }
@@ -195,7 +196,7 @@ class Match {
     for (const [side, sy] of [['L', 1], ['R', -1]]) {
       const wxL = rb.wheelX, wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
-      let tau = mode === 'drive' ? M.tStall * (V / M.vNom) - k * wr * duty : mode === 'brake' ? -k * wr * duty : 0;
+      let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
       if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }

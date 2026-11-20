@@ -105,7 +105,7 @@ function makeView3D(THREE, host) {
       g.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(g);
     }
     if (rb.stop) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
-    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.6); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
+    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.18, 2); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
     const ard = rb.circuit.find(c => /arduino|uno|nano|mega/i.test(c.name)) || rb.circuit[0];
     const drv = rb.circuit.find(c => /l298|l293|tb6612|l9110|drv|bts|sürücü|surucu|driver/i.test(c.name));
     if (ard) {
@@ -178,7 +178,7 @@ function makeView3D(THREE, host) {
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
         for (const [side, sy] of [['L', 1], ['R', -1]]) { const g = v.wheels[side], wi = rb.wheelInfo[side]; g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
-        if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.25 : 0; }
+        if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {
           const w = rb.sensorWorld(s2);

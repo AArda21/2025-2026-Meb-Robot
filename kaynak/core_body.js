@@ -51,6 +51,8 @@ class Runtime {
   }
   api() {
     const rt = this, rb = this.robot, m = this.match, B = this.B, board = this.board;
+    const SP = String.prototype; const def = (k, f) => { if (!SP[k]) Object.defineProperty(SP, k, { value: f, configurable: true, writable: true }); };
+    def('toInt', function () { return parseInt(this, 10) || 0; }); def('toFloat', function () { return parseFloat(this) || 0; }); def('equals', function (o) { return String(this) === String(o); }); def('equalsIgnoreCase', function (o) { return String(this).toLowerCase() === String(o).toLowerCase(); }); def('remove', function (i, n) { return this.slice(0, i) + (n === undefined ? '' : this.slice(i + n)); });
     const P = (p) => {
       let n = typeof p === 'number' ? p : boardPinNum(p, board.tip);
       if (n == null || !isFinite(n)) throw new Error('Geçersiz pin: ' + p);
@@ -96,7 +98,7 @@ class Runtime {
       DEC: 10, HEX: 16, OCT: 8, BIN: 2, NULL: 0, nullptr: 0, MSBFIRST: 1, LSBFIRST: 0, CHANGE: 1, RISING: 3, FALLING: 2,
       NEO_GRB: 0x52, NEO_RGB: 0x06, NEO_RGBW: 0x1B, NEO_KHZ800: 0, NEO_KHZ400: 0x100,
       __CLS_Servo: Servo, __CLS_NewPing: NewPing, __CLS_Adafruit_NeoPixel: Adafruit_NeoPixel,
-      __b() { rt.t += 1e-6; return rt.t > m.time; },
+      __b() { rt.t += 5e-6; return rt.t > m.time; },
       __i(v) { return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : v; },
       __arr(...d) { const mk = (k) => k >= d.length - 1 ? new Array(+d[k]).fill(0) : Array.from({ length: +d[k] }, () => mk(k + 1)); return mk(0); },
       sizeof(x) { return Array.isArray(x) ? x.length : (typeof x === 'string' ? x.length : 1); },
@@ -240,6 +242,7 @@ class Robot {
     return { cx: p.x, cy: p.y, a: p.ang, pivot: null, wS: 0 };
   }
   toWorld(lx, ly) { const s = this.state, c = Math.cos(s.th), n = Math.sin(s.th); return [s.x + c * lx - n * ly, s.y + n * lx + c * ly]; }
+  cachedParts(t) { if (this._cpT !== t || !this._cp) { this._cp = this.worldParts(); this._cpT = t; } return this._cp; }
   worldParts() {
     const out = [], th = this.state.th;
     for (const p of this.parts) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.3</title>
+<title>MEB Robot V3.4</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -57,6 +57,9 @@ label.chk{display:inline-flex;gap:6px;align-items:center;font-size:14px;cursor:p
 .seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 textarea{width:100%;min-height:340px;background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 var(--mono);white-space:pre;overflow:auto;resize:vertical;tab-size:2}
 textarea.short{min-height:90px}
+.editor{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fbfcfd;height:min(68vh,620px);resize:vertical}
+.editor textarea{border:0;border-radius:0;min-height:0;height:100%;line-height:19.5px;flex:1;resize:none}
+.gutter{margin:0;padding:10px 6px 10px 8px;min-width:44px;height:100%;box-sizing:border-box;text-align:right;color:#9aa3b2;background:#f1f4f8;font:13px/19.5px var(--mono);overflow:hidden;user-select:none;border-right:1px solid var(--line);max-height:none}
 .msg{font:12.5px/1.45 var(--mono);white-space:pre-wrap;padding:7px 9px;border-radius:7px;margin:6px 0;display:none}
 .msg.err{display:block;background:#fdecec;color:#8a1c1c;border:1px solid #f5c2c2}.msg.ok{display:block;background:#e9f7ef;color:#14532d;border:1px solid #b7e1c7}
 .list .item{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;background:var(--panel2)}
@@ -76,6 +79,9 @@ td input{width:100%;min-height:32px;padding:4px 6px;font-size:13px}
 #serial{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:10px;font:12.5px/1.45 var(--mono);height:46vh;overflow:auto;white-space:pre-wrap}
 #serial .t{color:#9aa3b2}
 .hi{color:#c2410c;font-weight:700}.lo{color:#94a3b8}.pwm{color:var(--accent);font-weight:700}
+.modal{position:fixed;inset:0;background:rgba(20,26,36,.45);z-index:40;display:none;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.modal.on{display:flex}.modal .box{background:var(--panel);border-radius:12px;max-width:760px;width:100%;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h2{font-size:18px;margin:0 0 6px}.modal h3{font-size:15px;margin:18px 0 6px}.modal p,.modal li{font-size:15px;line-height:1.55;color:#2c3442}.modal ol,.modal ul{padding-left:20px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1d2430;color:#fff;padding:9px 15px;border-radius:9px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none;max-width:92vw;font-size:14px}
 .toast.on{opacity:1}
 .hint{font-size:13px;color:var(--mute);margin:4px 0 8px}
@@ -87,7 +93,8 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.3</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.4</span></h1>
+  <button class="btn sm" id="bGuide" style="margin-left:6px">Rehber</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -147,6 +154,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
         <label class="f" style="flex:1 1 200px">Robot profili<select id="selProfile"></select></label>
         <button class="btn sm" id="bNew">+ Yeni</button><button class="btn sm" id="bDup">Çoğalt</button>
         <button class="btn sm" id="bExport">Dışa aktar</button><label class="btn sm">İçe aktar<input type="file" id="fImport" accept=".json,.txt" hidden></label>
+        <button class="btn sm" id="bUndo" title="Son değişikliği geri al">↶ Geri al</button>
         <button class="btn sm" id="bDefaults" title="Uygulamadaki en güncel örnek robotları ekler">Hazır örnekler</button>
         <button class="btn sm danger" id="bDel">Sil</button>
       </div>
@@ -186,6 +194,25 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
     <div class="card"><h2>Pinler</h2><div class="scroll"><table id="pinTbl" style="min-width:0"><thead><tr><th>Pin</th><th>Bağlı olan</th><th>Mod</th><th>Değer</th></tr></thead><tbody></tbody></table></div></div>
   </section>
 </main>
+<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle"><div class="box">
+  <div class="row" style="margin-top:0"><h2 id="gTitle" style="margin:0">Rehber</h2><button class="btn sm" id="bGuideClose" style="margin-left:auto">Kapat</button></div>
+  <p>Bu uygulama robotunu sahaya çıkmadan önce sanal olarak dener: kodun, devren ve mekaniğin birlikte nasıl davranacağını gösterir ve hataları yakalar.</p>
+  <h3>1. Hızlı başlangıç</h3>
+  <ol><li><b>Saha</b> sekmesinde kırmızı ve mavi köşeye birer robot seç, <b>▶ Başlat</b>'a bas.</li><li><b>Görünüm ve saha ayarları</b>'ndan 3B/2B fizik, kamera (serbest, üstten, robotu takip) ve kural setini (2026 / 2025) seç.</li><li>Maç bitince <b>⏪ Tekrar</b> ile maçı zaman çizgisinde geri sarıp izle.</li></ol>
+  <h3>2. Robotunu tanıtmak</h3>
+  <ul><li><b>Robotlar → Kod</b>: Arduino kodunu yapıştır ya da .ino dosyasını aç. İki Arduino varsa (Mega + Nano) ikinci kartı ekle ve aradaki telleri yaz.</li>
+  <li><b>Mekanik</b>: kütle, lastik türü, motor modeli, pil, teker ölçüleri. En iyisi 3D modeli yüklemek: Fusion 360 / Tinkercad / SolidWorks'ten <b>OBJ</b> veya <b>GLB</b> olarak dışa aktar; parçalara anlamlı ad ver ("Arduino Uno", "HC-SR04", "Sol teker", "Acil stop"). Uygulama her parçanın ne olduğunu tahmin eder, <b>Yerleşimi modelden uygula</b> ile sensör, kart ve teker yerlerini modelden alır.</li>
+  <li><b>Devre</b>: motor sürücüsü, sensörler, servolar ve LED'in hangi pinlere bağlı olduğu. Fritzing'de <i>Dosya → Dışa Aktar → XML Netlist</i> dosyasını yüklersen şema ile pinler karşılaştırılır.</li>
+  <li><b>Kalibrasyon</b>: renk sensörü (TCS3200) ve zemin sensörü (TCRT5000) için gerçek robotta ölçtüğün değerleri gir; simülasyon bu değerleri kullanır, kodundaki renk formülünü her renk için hesaplar.</li></ul>
+  <h3>3. Kontrol raporu</h3>
+  <p>Kontrol sekmesi kurallara uygunluğu (30×30×30 cm, 5 kg, LED, acil stop), mekanik sorunları (sürtünen teker, iç içe geçen parça, devrilme, kapak çarpması), devre hatalarını (pin çakışması, PWM olmayan pin, servo/PWM çakışması, sürücü akım sınırı) ve kodu (derleme, eksik noktalı virgül, kullanılmayan pin, yanlış pin modu) denetler. Sonra robotu 15 sn tek başına sürüp ne yaptığını anlatır ve yolunu çizer. Kırmızı ✕ büyük ihtimalle gerçek robotta sorun çıkarır.</p>
+  <h3>4. Toplu maç</h3>
+  <p>Kontrol sekmesinin altında iki robotu 10–50 maç oynatıp kazanma oranını ve ortalama puanı görürsün. Kodda yaptığın değişikliğin işe yarayıp yaramadığını böyle ölç.</p>
+  <h3>5. 2026 kuralları (Antalya)</h3>
+  <ul><li>Saha 250×250 cm, 8 cm beyaz çerçeve; kırmızı, mavi ve yeşil 50×50 cm köşeler. Maç 2 dakika.</li><li>10 kırmızı, 10 mavi, 3 yeşil ödül yumurtası (≈40 mm çap, 20 mm yükseklik, ≤40 g). Ceza yumurtası yok.</li><li>Kendi köşene kendi rengin +1, farklı renk −2, yeşil köşeye yeşil +2 (bırakan robota). Rakibin rengini rakip köşeye atarsan rakibe +1.</li><li>Köşe LED'i 5 sn'den uzun sönerse −10. Kendi köşesine kendi renginde en az bir yumurta bırakamayan kaybeder; eşitlikte ilk yumurtayı bırakan kazanır.</li><li>Yeşil köşenin yeri kılavuzun yazısında yok; ayarlardan seçebilirsin.</li></ul>
+  <h3>6. Simülasyonun sınırları</h3>
+  <ul><li>Sürtünme, motor torku ve sensör değerleri gerçekçi ama yaklaşık; kendi ölçümlerini girdikçe gerçeğe yaklaşır.</li><li>attachInterrupt, I2C (Wire) kütüphaneleri ve enkoderler henüz yok.</li><li>3B fizik telefonda ağırsa 2B hızlı moda geç.</li></ul>
+</div></div>
 <div class="toast" id="toast"></div>
 <script>
 /*CORE*/

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.3</title>
+<title>MEB Robot V3.4</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -57,6 +57,9 @@ label.chk{display:inline-flex;gap:6px;align-items:center;font-size:14px;cursor:p
 .seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 textarea{width:100%;min-height:340px;background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 var(--mono);white-space:pre;overflow:auto;resize:vertical;tab-size:2}
 textarea.short{min-height:90px}
+.editor{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fbfcfd;height:min(68vh,620px);resize:vertical}
+.editor textarea{border:0;border-radius:0;min-height:0;height:100%;line-height:19.5px;flex:1;resize:none}
+.gutter{margin:0;padding:10px 6px 10px 8px;min-width:44px;height:100%;box-sizing:border-box;text-align:right;color:#9aa3b2;background:#f1f4f8;font:13px/19.5px var(--mono);overflow:hidden;user-select:none;border-right:1px solid var(--line);max-height:none}
 .msg{font:12.5px/1.45 var(--mono);white-space:pre-wrap;padding:7px 9px;border-radius:7px;margin:6px 0;display:none}
 .msg.err{display:block;background:#fdecec;color:#8a1c1c;border:1px solid #f5c2c2}.msg.ok{display:block;background:#e9f7ef;color:#14532d;border:1px solid #b7e1c7}
 .list .item{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;background:var(--panel2)}
@@ -76,6 +79,9 @@ td input{width:100%;min-height:32px;padding:4px 6px;font-size:13px}
 #serial{background:#fbfcfd;border:1px solid var(--line);border-radius:8px;padding:10px;font:12.5px/1.45 var(--mono);height:46vh;overflow:auto;white-space:pre-wrap}
 #serial .t{color:#9aa3b2}
 .hi{color:#c2410c;font-weight:700}.lo{color:#94a3b8}.pwm{color:var(--accent);font-weight:700}
+.modal{position:fixed;inset:0;background:rgba(20,26,36,.45);z-index:40;display:none;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.modal.on{display:flex}.modal .box{background:var(--panel);border-radius:12px;max-width:760px;width:100%;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h2{font-size:18px;margin:0 0 6px}.modal h3{font-size:15px;margin:18px 0 6px}.modal p,.modal li{font-size:15px;line-height:1.55;color:#2c3442}.modal ol,.modal ul{padding-left:20px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1d2430;color:#fff;padding:9px 15px;border-radius:9px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none;max-width:92vw;font-size:14px}
 .toast.on{opacity:1}
 .hint{font-size:13px;color:var(--mute);margin:4px 0 8px}
@@ -87,7 +93,8 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.3</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.4</span></h1>
+  <button class="btn sm" id="bGuide" style="margin-left:6px">Rehber</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -147,6 +154,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
         <label class="f" style="flex:1 1 200px">Robot profili<select id="selProfile"></select></label>
         <button class="btn sm" id="bNew">+ Yeni</button><button class="btn sm" id="bDup">Çoğalt</button>
         <button class="btn sm" id="bExport">Dışa aktar</button><label class="btn sm">İçe aktar<input type="file" id="fImport" accept=".json,.txt" hidden></label>
+        <button class="btn sm" id="bUndo" title="Son değişikliği geri al">↶ Geri al</button>
         <button class="btn sm" id="bDefaults" title="Uygulamadaki en güncel örnek robotları ekler">Hazır örnekler</button>
         <button class="btn sm danger" id="bDel">Sil</button>
       </div>
@@ -186,6 +194,25 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
     <div class="card"><h2>Pinler</h2><div class="scroll"><table id="pinTbl" style="min-width:0"><thead><tr><th>Pin</th><th>Bağlı olan</th><th>Mod</th><th>Değer</th></tr></thead><tbody></tbody></table></div></div>
   </section>
 </main>
+<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle"><div class="box">
+  <div class="row" style="margin-top:0"><h2 id="gTitle" style="margin:0">Rehber</h2><button class="btn sm" id="bGuideClose" style="margin-left:auto">Kapat</button></div>
+  <p>Bu uygulama robotunu sahaya çıkmadan önce sanal olarak dener: kodun, devren ve mekaniğin birlikte nasıl davranacağını gösterir ve hataları yakalar.</p>
+  <h3>1. Hızlı başlangıç</h3>
+  <ol><li><b>Saha</b> sekmesinde kırmızı ve mavi köşeye birer robot seç, <b>▶ Başlat</b>'a bas.</li><li><b>Görünüm ve saha ayarları</b>'ndan 3B/2B fizik, kamera (serbest, üstten, robotu takip) ve kural setini (2026 / 2025) seç.</li><li>Maç bitince <b>⏪ Tekrar</b> ile maçı zaman çizgisinde geri sarıp izle.</li></ol>
+  <h3>2. Robotunu tanıtmak</h3>
+  <ul><li><b>Robotlar → Kod</b>: Arduino kodunu yapıştır ya da .ino dosyasını aç. İki Arduino varsa (Mega + Nano) ikinci kartı ekle ve aradaki telleri yaz.</li>
+  <li><b>Mekanik</b>: kütle, lastik türü, motor modeli, pil, teker ölçüleri. En iyisi 3D modeli yüklemek: Fusion 360 / Tinkercad / SolidWorks'ten <b>OBJ</b> veya <b>GLB</b> olarak dışa aktar; parçalara anlamlı ad ver ("Arduino Uno", "HC-SR04", "Sol teker", "Acil stop"). Uygulama her parçanın ne olduğunu tahmin eder, <b>Yerleşimi modelden uygula</b> ile sensör, kart ve teker yerlerini modelden alır.</li>
+  <li><b>Devre</b>: motor sürücüsü, sensörler, servolar ve LED'in hangi pinlere bağlı olduğu. Fritzing'de <i>Dosya → Dışa Aktar → XML Netlist</i> dosyasını yüklersen şema ile pinler karşılaştırılır.</li>
+  <li><b>Kalibrasyon</b>: renk sensörü (TCS3200) ve zemin sensörü (TCRT5000) için gerçek robotta ölçtüğün değerleri gir; simülasyon bu değerleri kullanır, kodundaki renk formülünü her renk için hesaplar.</li></ul>
+  <h3>3. Kontrol raporu</h3>
+  <p>Kontrol sekmesi kurallara uygunluğu (30×30×30 cm, 5 kg, LED, acil stop), mekanik sorunları (sürtünen teker, iç içe geçen parça, devrilme, kapak çarpması), devre hatalarını (pin çakışması, PWM olmayan pin, servo/PWM çakışması, sürücü akım sınırı) ve kodu (derleme, eksik noktalı virgül, kullanılmayan pin, yanlış pin modu) denetler. Sonra robotu 15 sn tek başına sürüp ne yaptığını anlatır ve yolunu çizer. Kırmızı ✕ büyük ihtimalle gerçek robotta sorun çıkarır.</p>
+  <h3>4. Toplu maç</h3>
+  <p>Kontrol sekmesinin altında iki robotu 10–50 maç oynatıp kazanma oranını ve ortalama puanı görürsün. Kodda yaptığın değişikliğin işe yarayıp yaramadığını böyle ölç.</p>
+  <h3>5. 2026 kuralları (Antalya)</h3>
+  <ul><li>Saha 250×250 cm, 8 cm beyaz çerçeve; kırmızı, mavi ve yeşil 50×50 cm köşeler. Maç 2 dakika.</li><li>10 kırmızı, 10 mavi, 3 yeşil ödül yumurtası (≈40 mm çap, 20 mm yükseklik, ≤40 g). Ceza yumurtası yok.</li><li>Kendi köşene kendi rengin +1, farklı renk −2, yeşil köşeye yeşil +2 (bırakan robota). Rakibin rengini rakip köşeye atarsan rakibe +1.</li><li>Köşe LED'i 5 sn'den uzun sönerse −10. Kendi köşesine kendi renginde en az bir yumurta bırakamayan kaybeder; eşitlikte ilk yumurtayı bırakan kazanır.</li><li>Yeşil köşenin yeri kılavuzun yazısında yok; ayarlardan seçebilirsin.</li></ul>
+  <h3>6. Simülasyonun sınırları</h3>
+  <ul><li>Sürtünme, motor torku ve sensör değerleri gerçekçi ama yaklaşık; kendi ölçümlerini girdikçe gerçeğe yaklaşır.</li><li>attachInterrupt, I2C (Wire) kütüphaneleri ve enkoderler henüz yok.</li><li>3B fizik telefonda ağırsa 2B hızlı moda geç.</li></ul>
+</div></div>
 <div class="toast" id="toast"></div>
 <script>
 // ===================== MEB ROBOT YUMURTA TOPLAMA SİMÜLATÖRÜ — ÇEKİRDEK v3 =====================
@@ -332,6 +359,14 @@ function transpile(src) {
     if (/^\s*#/.test(line)) { warnings.push('Yok sayılan satır: ' + line.trim()); return ''; }
     return line;
   }).join('\n');
+  // 1b) enum → sabitler; enum adları int gibi davranır
+  const enumNames = [];
+  t = t.replace(/(?<![\w.])enum\s+(?:class\s+)?(\w+)?\s*(?::\s*\w+\s*)?\{([^}]*)\}\s*(\w+)?\s*;/g, (all, name, body, varName) => {
+    if (name) enumNames.push(name); let n = -1; const parts = body.split(',').map(x => x.trim()).filter(Boolean).map(x => { const m = x.match(/^(\w+)\s*(?:=\s*(.+))?$/); if (!m) return null; if (m[2] !== undefined) { const v = Number(m[2]); n = isNaN(v) ? n + 1 : v; return `${m[1]} = ${m[2]}`; } n++; return `${m[1]} = ${n}`; }).filter(Boolean);
+    return `const ${parts.join(', ')};` + (varName ? ` let ${varName} = 0;` : '');
+  });
+  for (const en of enumNames) t = t.replace(new RegExp(`(?<![\\w.])${en}(?=\\s+[A-Za-z_*&])`, 'g'), 'int').replace(new RegExp(`(?<![\\w.])${en}::`, 'g'), '');
+  t = t.replace(/\.length\s*\(\s*\)/g, '.length');
   // 2) Nesneler (Servo, NewPing)
   t = t.replace(/(?<![\w.])(Servo|NewPing|Adafruit_NeoPixel)\s+(?=[A-Za-z_])([^;]+);/g, (all, cls, decl) => {
     const ds = splitTop(decl).map(d => { const m = d.trim().match(/^(\w+)\s*(?:\(([\s\S]*)\))?$/); return m ? `${m[1]} = new __CLS_${cls}(${m[2] || ''})` : d; });
@@ -453,6 +488,24 @@ function transpile(src) {
   return { js: t, prefix, funcs, warnings };
 }
 
+// Arduino derleyicisinin yakalayacağı ama JS'in affettiği hatalar için basit denetim
+function lint(src) {
+  const { code } = mask(src.replace(/\r/g, '')); const L = code.split('\n'); const out = [];
+  let par = 0, br = 0, brStack = [];
+  L.forEach((raw, i) => { for (const ch of raw) { if (ch === '(') par++; else if (ch === ')') par--; else if (ch === '{') { br++; brStack.push(i + 1); } else if (ch === '}') { br--; brStack.pop(); if (br < 0) { out.push({ line: i + 1, msg: 'Fazladan kapanan süslü parantez }' }); br = 0; } } } });
+  if (br > 0) out.push({ line: brStack[brStack.length - 1] || L.length, msg: `${br} süslü parantez { kapatılmamış` });
+  for (let i = 0; i < L.length; i++) {
+    const s = L[i].trim(); if (!s || s.startsWith('#')) continue;
+    if (/[;{},:(\[]$|&&$|\|\|$|[+\-*\/=<>!?]$/.test(s)) continue;
+    if (/^(if|for|while|else|switch|do|case|default|template|public|private|class|struct|enum)\b/.test(s) || /^}?\s*else\b/.test(s)) continue;
+    let j = i + 1; while (j < L.length && !L[j].trim()) j++; const nx = j < L.length ? L[j].trim() : '';
+    if (nx.startsWith('{') || /^[)\]&|?:.+\-*\/=<>]/.test(nx)) continue;
+    if (/^\w[\w\s\*&<>,]*\([^;]*\)\s*(const)?$/.test(s) && nx.startsWith('{')) continue;
+    if (/\)$/.test(s) && /^(\w[\w\s\*&]*)\s+\w+\s*\(/.test(s) && nx.startsWith('{')) continue;
+    out.push({ line: i + 1, msg: 'Satır sonunda noktalı virgül ; eksik olabilir' });
+  }
+  return out;
+}
 function compile(src, api) {
   const tr = transpile(src);
   const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null};}`;
@@ -521,6 +574,8 @@ class Runtime {
   }
   api() {
     const rt = this, rb = this.robot, m = this.match, B = this.B, board = this.board;
+    const SP = String.prototype; const def = (k, f) => { if (!SP[k]) Object.defineProperty(SP, k, { value: f, configurable: true, writable: true }); };
+    def('toInt', function () { return parseInt(this, 10) || 0; }); def('toFloat', function () { return parseFloat(this) || 0; }); def('equals', function (o) { return String(this) === String(o); }); def('equalsIgnoreCase', function (o) { return String(this).toLowerCase() === String(o).toLowerCase(); }); def('remove', function (i, n) { return this.slice(0, i) + (n === undefined ? '' : this.slice(i + n)); });
     const P = (p) => {
       let n = typeof p === 'number' ? p : boardPinNum(p, board.tip);
       if (n == null || !isFinite(n)) throw new Error('Geçersiz pin: ' + p);
@@ -566,7 +621,7 @@ class Runtime {
       DEC: 10, HEX: 16, OCT: 8, BIN: 2, NULL: 0, nullptr: 0, MSBFIRST: 1, LSBFIRST: 0, CHANGE: 1, RISING: 3, FALLING: 2,
       NEO_GRB: 0x52, NEO_RGB: 0x06, NEO_RGBW: 0x1B, NEO_KHZ800: 0, NEO_KHZ400: 0x100,
       __CLS_Servo: Servo, __CLS_NewPing: NewPing, __CLS_Adafruit_NeoPixel: Adafruit_NeoPixel,
-      __b() { rt.t += 1e-6; return rt.t > m.time; },
+      __b() { rt.t += 5e-6; return rt.t > m.time; },
       __i(v) { return (typeof v === 'number' && isFinite(v)) ? Math.trunc(v) : v; },
       __arr(...d) { const mk = (k) => k >= d.length - 1 ? new Array(+d[k]).fill(0) : Array.from({ length: +d[k] }, () => mk(k + 1)); return mk(0); },
       sizeof(x) { return Array.isArray(x) ? x.length : (typeof x === 'string' ? x.length : 1); },
@@ -710,6 +765,7 @@ class Robot {
     return { cx: p.x, cy: p.y, a: p.ang, pivot: null, wS: 0 };
   }
   toWorld(lx, ly) { const s = this.state, c = Math.cos(s.th), n = Math.sin(s.th); return [s.x + c * lx - n * ly, s.y + n * lx + c * ly]; }
+  cachedParts(t) { if (this._cpT !== t || !this._cp) { this._cp = this.worldParts(); this._cpT = t; } return this._cp; }
   worldParts() {
     const out = [], th = this.state.th;
     for (const p of this.parts) {
@@ -805,7 +861,7 @@ const Sensors = {
       const r = RULES.EGG_R;
       for (const e of m.eggs) { if (e.gone) continue; const ox = e.x - x, oy = e.y - y; const tc = ox * dx + oy * dy; if (tc < -r) continue; const d2 = ox * ox + oy * oy - tc * tc; if (d2 > r * r) continue; const t = tc - Math.sqrt(r * r - d2); if (t >= 0 && t < best) { best = t; hit = e; } }
     }
-    for (const o of m.robots) { if (o === rb) continue; for (const wp of o.worldParts()) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o }; } } }
+    for (const o of m.robots) { if (o === rb) continue; if (Math.hypot(o.state.x - x, o.state.y - y) > maxD + (o.radius || 0.3)) continue; for (const wp of o.cachedParts(m.time)) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o }; } } }
     if (opts.self) for (const wp of rb.worldParts()) { if (wp.p.auto || !wp.p.solid || z < wp.p.z0 || z > wp.p.z1) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t > 0.002 && t < best) { best = t; hit = { self: wp.p }; } }
     return { d: best, hit };
   },
@@ -815,7 +871,8 @@ const Sensors = {
     if (best == null) return null; if (best < 0.02) best = 0.02 + Math.random() * 0.01;
     return best + (Math.random() - 0.5) * 0.004;
   },
-  irObstacle(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
+  irObstacle(m, rb, s) { if (s._mT === m.time && s._mR === rb) return s._mV; const v = Sensors._ir(m, rb, s); s._mT = m.time; s._mR = rb; s._mV = v; return v; },
+  _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
   surfaceAt(m, x, y) {
     const r = RULES.EGG_R;
     for (const e of m.eggs) { if (e.gone) continue; const dx = x - e.x, dy = y - e.y; if (dx * dx + dy * dy <= r * r) return Sensors.eggSurface(e, x, y); }
@@ -967,7 +1024,7 @@ class Match {
     for (const [side, sy] of [['L', 1], ['R', -1]]) {
       const wxL = rb.wheelX, wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
-      let tau = mode === 'drive' ? M.tStall * (V / M.vNom) - k * wr * duty : mode === 'brake' ? -k * wr * duty : 0;
+      let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
       if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }
@@ -1200,6 +1257,7 @@ function runTrial(profile, MatchClass, opts = {}) {
     const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose });
     const rb = m.robots[0]; const errs = m.compileAll(); const items = []; const add = (cat, level, txt) => items.push({ cat, level, txt });
     for (const e of errs) add('Kod', 'err', `[${e.board}] ${e.msg}`);
+    for (const b of rb.boards) for (const l of lint(b.kod).slice(0, 5)) add('Kod', 'err', `[${b.id}] Satır ${l.line}: ${l.msg} — Arduino IDE bu kodu derlemez.`);
     if (errs.length === rb.boards.length) { resolve({ items, path: [], robot: rb, match: m }); return; }
     const s0 = Object.assign({}, rb.state); const path = []; let firstMove = null; const eggs0 = m.eggs.map(e => [e.x, e.y]);
     const step = () => {
@@ -1349,7 +1407,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -1363,7 +1421,7 @@ const DEFAULT_PROFILES = [
    {
     "id": "ana",
     "tip": "Uno",
-    "kod": "// Örnek yumurta toplama kodu — kendi kodunu buraya yapıştır\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;   // köşe anahtarından okunur (A5: kırmızıda HIGH)\nunsigned long sonYazdirma = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yumurta yok, 1 = kırmızı, 2 = mavi, 3 = yeşil (2026 ödül yumurtası)\n// TCS3200: periyot ne kadar KÜÇÜKSE o renk o kadar GÜÇLÜ\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);    // kırmızı filtre\n  int b = renkOku(LOW, HIGH);   // mavi filtre\n  int g = renkOku(HIGH, HIGH);  // yeşil filtre\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT);\n  pinMode(A5, INPUT);\n  TAKIM_KIRMIZI = digitalRead(A5) == HIGH;   // köşe anahtarı\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(0);      // başlangıçta kapalı (30 cm sınırı)\n  delay(300);\n  kapak.write(90);     // maç başlayınca aç\n  Serial.println(\"Robot hazir\");\n}\n\nvoid loop() {\n  int renk = yumurtaRengi();\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (renk != 0 && renk != benim && renk != 3) {   // yeşil ödül yumurtasını tut\n    // Yanlış renk / ceza yumurtası: geri çekil, bırak\n    motorlar(-180, -180);\n    delay(350);\n    motorlar(-170, 170);\n    delay(300);\n  }\n\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n\n  if (d < 32) {                 // duvar (ultrasonik 6 cm yükseklikte → yumurtayı görmez); açık kapak önde 11 cm\n    motorlar(-170, -170);\n    delay(250);\n    motorlar(180, -180);\n    delay(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(110, 200);         // solda yumurta → sola yönel\n  } else if (sagVar && !solVar) {\n    motorlar(200, 110);\n  } else {\n    motorlar(190, 190);\n  }\n\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"mesafe=\");\n    Serial.print(d);\n    Serial.print(\" renk=\");\n    Serial.println(renk);\n  }\n}\n"
+    "kod": "// Yum Yum — örnek strateji (2026 kuralları)\n// 1) ARA: sahada dolaş, kepçeye giren yumurtanın rengine bak\n// 2) Kendi rengimiz ya da yeşilse kapağı kapat, yumurtayı tut\n// 3) EVE: duvarı sola alıp duvar takibi yap; zemin sensörü hedef köşenin rengini görünce bırak\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define KAPAK_ACIK 90\n#define KAPAK_KAPALI 0\n\n// zemin (TCRT5000 analog) eşikleri — kendi ölçümlerinle güncelle\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;\nint durum = 0;          // 0 = ARA, 1 = EVE (duvar takibi)\nint hedef = 0;          // EVE durumunda hedef zemin: 1 kırmızı, 2 mavi, 3 yeşil\nunsigned long durumZamani = 0;\nunsigned long sonYazdirma = 0;\nbool duvarBulundu = false;\nlong sonMesafe = 0;\nunsigned long sonKontrol = 0;\nint ayniSayac = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);\n  int b = renkOku(LOW, HIGH);\n  int g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid donSaga(int ms) { motorlar(170, -170); delay(ms); }\nvoid donSola(int ms) { motorlar(-170, 170); delay(ms); }\n\nvoid durumDegistir(int yeni) {\n  durum = yeni;\n  durumZamani = millis();\n  duvarBulundu = false;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(KAPAK_KAPALI);\n  delay(200);\n  kapak.write(KAPAK_ACIK);\n  // köşeden sahanın ortasına doğru çık\n  motorlar(200, 200);\n  delay(700);\n  durumDegistir(0);\n  Serial.println(TAKIM_KIRMIZI ? \"Takim: KIRMIZI\" : \"Takim: MAVI\");\n}\n\nvoid ara() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int renk = yumurtaRengi();\n  if (renk == benim || renk == 3) {\n    motorlar(0, 0);\n    kapak.write(KAPAK_KAPALI);       // yumurtayı kepçeye hapset\n    delay(250);\n    hedef = renk;\n    Serial.print(\"Yumurta alindi, hedef=\");\n    Serial.println(hedef);\n    durumDegistir(1);\n    return;\n  }\n  if (renk != 0) {                   // rakip rengi: geri çekilip bırak\n    motorlar(-180, -180);\n    delay(350);\n    donSaga(250);\n    return;\n  }\n  if (zeminRengi() != 0 && millis() > 3000) {   // ararken köşelere girme (yanlış yumurta itmeyelim)\n    motorlar(-180, -180);\n    delay(300);\n    donSaga(random(300, 600));\n    return;\n  }\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n  if (d < 25) {\n    motorlar(-170, -170);\n    delay(200);\n    donSaga(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(120, 200);\n  } else if (sagVar && !solVar) {\n    motorlar(200, 120);\n  } else {\n    motorlar(190, 190);\n  }\n}\n\nvoid eve() {\n  // hedef köşeye geldik mi?\n  if (zeminRengi() == hedef) {\n    motorlar(120, 120);\n    delay(250);                       // biraz daha içeri gir\n    motorlar(0, 0);\n    kapak.write(KAPAK_ACIK);\n    delay(250);\n    motorlar(-180, -180);             // yumurtayı köşede bırakıp geri çekil\n    delay(500);\n    donSaga(450);\n    Serial.println(\"Yumurta birakildi\");\n    durumDegistir(0);\n    return;\n  }\n  long d = mesafeCm();\n  bool solDuvar = digitalRead(IR_SOL) == LOW;\n  if (!duvarBulundu) {               // önce bir duvar bul\n    if (d < 18) { donSaga(320); duvarBulundu = true; }\n    else motorlar(190, 190);\n    return;\n  }\n  if (d < 16) {                      // köşe: sağa dön, duvar solda kalsın\n    motorlar(-150, -150);\n    delay(120);\n    donSaga(330);\n  } else if (solDuvar) {\n    motorlar(200, 130);              // duvara çok yakın: hafif sağa\n  } else {\n    motorlar(120, 200);              // duvarı kaybettik: sola yanaş\n  }\n  if (millis() - durumZamani > 40000) {   // çok uzun sürdü: bırak, yeniden ara\n    kapak.write(KAPAK_ACIK);\n    durumDegistir(0);\n  }\n}\n\n// Sıkışma kontrolü: ileri giderken mesafe 1.5 sn boyunca değişmiyorsa geri çık\nvoid sikismaKontrol() {\n  if (millis() - sonKontrol < 500) return;\n  sonKontrol = millis();\n  long d = mesafeCm();\n  if (abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;\n  sonMesafe = d;\n  if (ayniSayac >= 3) {\n    Serial.println(\"Sikisma! geri cikiliyor\");\n    motorlar(-200, -200);\n    delay(450);\n    donSaga(random(250, 550));\n    ayniSayac = 0;\n    if (durum == 1) duvarBulundu = false;\n  }\n}\n\nvoid loop() {\n  sikismaKontrol();\n  if (durum == 0) ara(); else eve();\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"durum=\");\n    Serial.print(durum);\n    Serial.print(\" zemin=\");\n    Serial.print(analogRead(ZEMIN));\n    Serial.print(\" mesafe=\");\n    Serial.println(mesafeCm());\n  }\n}\n"
    }
   ],
   "kart_baglantilari": [],
@@ -2157,7 +2215,7 @@ function makeMatch3D(R) {
         for (const side of ['L', 'R']) {
           const { V, mode, duty } = rb.sideVoltage(side); const wh = rb.wheels[side];
           let target = 0, damp = M.tFric * 2;
-          if (mode === 'drive' && duty > 0) { target = (V / (M.vNom * duty)) * M.w0; damp = k * duty; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
+          if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
         }
       }
@@ -2169,7 +2227,7 @@ function makeMatch3D(R) {
     }
     syncRobot(rb) {
       const c = rb.body, s = rb.state; const t = c.translation(), q = c.rotation(), lv = c.linvel(), av = c.angvel();
-      s.x = t.x; s.y = t.y; s.z = t.z; s.th = yawOf(q); s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
+      s.x = t.x; s.y = t.y; s.z = t.z; { const yw = yawOf(q); s.th = s.th == null ? yw : s.th + Math.atan2(Math.sin(yw - s.th), Math.cos(yw - s.th)); } s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
       s.tilt = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.y * q.y)))) * 180 / Math.PI;
       const axle = qRot(q, [0, 1, 0]), fwd = qRot(q, [1, 0, 0]);
       for (const side of ['L', 'R']) {
@@ -2309,7 +2367,7 @@ function makeView3D(THREE, host) {
       g.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(g);
     }
     if (rb.stop) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
-    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.6); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
+    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.18, 2); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
     const ard = rb.circuit.find(c => /arduino|uno|nano|mega/i.test(c.name)) || rb.circuit[0];
     const drv = rb.circuit.find(c => /l298|l293|tb6612|l9110|drv|bts|sürücü|surucu|driver/i.test(c.name));
     if (ard) {
@@ -2382,7 +2440,7 @@ function makeView3D(THREE, host) {
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
         for (const [side, sy] of [['L', 1], ['R', -1]]) { const g = v.wheels[side], wi = rb.wheelInfo[side]; g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
-        if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.25 : 0; }
+        if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {
           const w = rb.sensorWorld(s2);
@@ -2431,7 +2489,10 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
 let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
 if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
 else { for (const d of DEFAULT_PROFILES) if (!profiles.some(p => p.id === d.id)) profiles.push(deepCopy(d)); }
-let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
+const undoStack = []; let lastUndoT = 0, lastSaved = JSON.stringify(profiles);
+function pushUndo() { const now = Date.now(); if (now - lastUndoT > 1500) { undoStack.push(lastSaved); if (undoStack.length > 40) undoStack.shift(); } lastUndoT = now; }
+let saveT = null; function saveProfiles() { pushUndo(); clearTimeout(saveT); saveT = setTimeout(() => { lastSaved = JSON.stringify(profiles); LS.set('mebsim3_profiller', lastSaved); }, 300); dirty = true; }
+function _unusedSave() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
 const byId = (id) => profiles.find(p => p.id === id);
 const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
 async function attachSTL(p) {
@@ -2442,6 +2503,12 @@ async function attachSTL(p) {
   try { const objs = SIM.parseModel(buf, name); setS(SIM.transformModel(objs, cfg)); } catch (e) { setS(null); toast('3D model okunamadı: ' + e.message); }
 }
 
+// ---------------- Rehber ----------------
+$('bGuide').onclick = () => { $('guide').classList.add('on'); $('bGuideClose').focus(); };
+$('bGuideClose').onclick = () => $('guide').classList.remove('on');
+$('guide').onclick = (e) => { if (e.target.id === 'guide') $('guide').classList.remove('on'); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('guide').classList.remove('on'); });
+if (!LS.get('mebsim3_rehber')) { LS.set('mebsim3_rehber', '1'); setTimeout(() => $('guide').classList.add('on'), 600); }
 // ---------------- Sekmeler ----------------
 let tab = 'saha';
 function setTab(t) { tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === t)); if (t === 'robotlar') renderEditor(); if (t === 'monitor') serialDirty = true; if (t === 'saha' && view3d) setTimeout(() => view3d.resize(), 30); }
@@ -2545,6 +2612,7 @@ function updateUi() {
     const wi = rb.wheelInfo, cards = [];
     for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) cards.push([lab, `<span class="${wi[k].slip ? 'bad' : ''}">${wi[k].V.toFixed(1)} V · ${wi[k].rpm.toFixed(0)} rpm${wi[k].slip ? ' · PATİNAJ' : ''}</span>`]);
     const led = rb.ledColor(); cards.push(['Üst LED', led ? ({ red: 'kırmızı', blue: 'mavi', mor: 'mor' }[led] + (led === rb.team ? ' ✓' : ' <span class="bad">⚠ yanlış renk</span>')) : '<span class="bad">sönük</span>']);
+    { const d = sc.detail[rb.team]; const parts = [`kendi ${d.own}`, `yanlış ${d.wrong}`]; if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (match.rules.ceza) parts.push(`ceza ${d.pen}`); if (d.led) parts.push(`LED −${10 * d.led}`); cards.push(['Puan ' + sc[rb.team], parts.join(' · ')]); }
     if (rb.state.tilt > 3) cards.push(['Eğim', rb.state.tilt.toFixed(0) + '°']);
     for (const r of Sensors.readouts(match, rb)) cards.push([r.name, esc(r.val)]);
     for (const rt of rb.rts) if (rt.error || rt.compileError) cards.push([`Kod (${rt.board.id})`, '<span class="bad">hata — Monitör</span>']);
@@ -2625,6 +2693,7 @@ $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfi
 $('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
+$('bUndo').onclick = () => { if (!undoStack.length) { toast('Geri alınacak değişiklik yok'); return; } const cur = $('selProfile').value; const prev = undoStack.pop(); try { const restored = JSON.parse(prev); for (const p of restored) { const old = byId(p.id); if (old && old._stl !== undefined) Object.defineProperty(p, '_stl', { value: old._stl, writable: true, configurable: true, enumerable: false }); } profiles = restored; lastSaved = prev; LS.set('mebsim3_profiller', prev); fillProfileSelects(); if (byId(cur)) $('selProfile').value = cur; renderEditor(); dirty = true; toast('Son değişiklik geri alındı'); } catch (e) { toast('Geri alınamadı'); } };
 $('bDefaults').onclick = () => { let n = 0; for (const d of DEFAULT_PROFILES) { const c = deepCopy(d); if (profiles.some(p => p.id === c.id)) { c.id = newId(); c.ad = d.ad + ' (güncel örnek)'; } profiles.push(c); n++; } saveProfiles(); fillProfileSelects(); renderEditor(); toast(n + ' hazır örnek profil eklendi (seninkiler silinmedi)'); };
 $('bExport').onclick = () => { const txt = JSON.stringify(curProfile(), null, 1); try { navigator.clipboard.writeText(txt).then(() => toast('Profil JSON panoya kopyalandı'), () => toast('Kopyalanamadı')); } catch (e) { toast('Kopyalanamadı'); } };
 $('fImport').onchange = () => { const f = $('fImport').files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const p = JSON.parse(SIM.stripJsonComments(String(r.result))); p.id = newId(); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast((p.ad || 'Profil') + ' içe aktarıldı'); } catch (e) { toast('JSON okunamadı: ' + e.message); } }; r.readAsText(f); $('fImport').value = ''; };
@@ -2648,6 +2717,19 @@ function renderEditor() {
   for (const s of ['kod', 'mekanik', 'devre']) $('sec' + s[0].toUpperCase() + s.slice(1)).style.display = s === seg ? '' : 'none';
   if (seg === 'kod') renderKod(p); if (seg === 'mekanik') renderMekanik(p); if (seg === 'devre') renderDevre(p);
 }
+// ---------- Kod düzenleyici (satır numaralı) ----------
+function makeEditor(ta) {
+  const gut = h('pre', { class: 'gutter', 'aria-hidden': 'true' }); const el = h('div', { class: 'editor' }, gut, ta); let marked = null;
+  const upd = () => { const n = ta.value.split('\n').length; let s = ''; for (let k = 1; k <= n; k++) s += (k === marked ? '▶' : '') + k + '\n'; gut.textContent = s; gut.scrollTop = ta.scrollTop; };
+  ta.addEventListener('input', upd); ta.addEventListener('scroll', () => { gut.scrollTop = ta.scrollTop; }); setTimeout(upd, 0);
+  return { el, mark(ln) { marked = ln; upd(); if (ln) { const pos = ta.value.split('\n').slice(0, ln - 1).join('\n').length + 1; ta.focus(); ta.setSelectionRange(pos, pos + (ta.value.split('\n')[ln - 1] || '').length); const lh = 19.5; ta.scrollTop = Math.max(0, (ln - 5) * lh); } } };
+}
+// Söz dizimi hatasının satırını bul (kodu çalıştırmadan, tarayıcının ayrıştırıcısıyla)
+function syntaxLine(js) {
+  let line = null; const onErr = (ev) => { line = ev.lineno; ev.preventDefault(); };
+  try { window.addEventListener('error', onErr); const sc = document.createElement('script'); sc.textContent = 'function __mebKontrol(){with({}){\n' + js + '\n}}'; document.head.appendChild(sc); sc.remove(); } catch (e) { } finally { window.removeEventListener('error', onErr); }
+  return line ? Math.max(1, line - 1) : null;
+}
 // ---------- KOD ----------
 function renderKod(p) {
   const root = $('secKod'); root.innerHTML = ''; p.kartlar = p.kartlar && p.kartlar.length ? p.kartlar : [{ id: 'ana', tip: 'Uno', kod: '' }];
@@ -2655,13 +2737,15 @@ function renderKod(p) {
     const msg = h('div', { class: 'msg' }); const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off' }); ta.value = b.kod || '';
     ta.oninput = () => { b.kod = ta.value; saveProfiles(); }; ta.onkeydown = (e) => { if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); b.kod = ta.value; } };
     const file = h('input', { type: 'file', accept: '.ino,.cpp,.c,.h,.txt', hidden: true }); file.onchange = () => { const f = file.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { ta.value = b.kod = String(r.result); saveProfiles(); toast(f.name + ' yüklendi'); }; r.readAsText(f); };
-    const check = () => { try { const fakeM = { robots: [], eggs: [], time: 0, zoneOf: () => null }; const rb = new SIM.Robot(p, 'red', fakeM); rb.reset({ x: 1, y: 1, th: 0 }); const rt = new SIM.Runtime(fakeM, rb, i); SIM.compile(b.kod, rt.api()); msg.className = 'msg ok'; msg.textContent = 'Derlendi ✓ (söz dizimi doğru)'; } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; } };
+    const ed = makeEditor(ta);
+    const check = () => { try { const fakeM = { robots: [], eggs: [], time: 0, zoneOf: () => null }; const rb = new SIM.Robot(p, 'red', fakeM); rb.reset({ x: 1, y: 1, th: 0 }); const rt = new SIM.Runtime(fakeM, rb, i); SIM.compile(b.kod, rt.api()); const lw = SIM.lint(b.kod); if (lw.length) { msg.className = 'msg err'; msg.textContent = lw.slice(0, 6).map(l => `Satır ${l.line}: ${l.msg}`).join('\n') + '\n(Arduino IDE bu hatalarla derlemez; simülatör yine de çalıştırabilir.)'; ed.mark(lw[0].line); } else { msg.className = 'msg ok'; msg.textContent = 'Derlendi ✓ (söz dizimi doğru)'; ed.mark(null); } }
+      catch (e) { const ln = e.js ? syntaxLine(e.js) : null; msg.className = 'msg err'; msg.textContent = e.message + (ln ? `\n→ yaklaşık satır ${ln}` : ''); ed.mark(ln); } };
     root.append(card(null,
       h('div', { class: 'row', style: 'margin-top:0' }, h('strong', {}, p.kartlar.length > 1 ? `Kart ${i + 1}` : 'Arduino kodu'),
         fld(b, 'id', 'Kart adı', { type: 'text', w: '110px' }), fld(b, 'tip', 'Kart', { type: 'select', options: Object.fromEntries(Object.entries(BOARDS).map(([k, v]) => [k, v.ad])) }),
         h('label', { class: 'btn sm' }, '.ino aç', file), h('button', { class: 'btn sm', on: { click: check } }, 'Derle'),
         p.kartlar.length > 1 ? h('button', { class: 'btn sm danger', on: { click: () => { p.kartlar.splice(i, 1); saveProfiles(); renderKod(p); } } }, 'Kartı kaldır') : null),
-      msg, ta));
+      msg, ed.el));
   });
   const links = h('textarea', { class: 'short', placeholder: 'mega:A0 - nano:A0' }); links.value = (p.kart_baglantilari || []).map(x => Array.isArray(x) ? x.join(' - ') : x).join('\n');
   links.onchange = () => { p.kart_baglantilari = links.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.split(/\s*(?:<->|↔|-|,)\s*/)); saveProfiles(); };

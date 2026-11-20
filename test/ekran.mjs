@@ -5,7 +5,7 @@ const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftsha
 for (const [name, vp] of [['mobil', { width: 390, height: 844, deviceScaleFactor: 2 }], ['masaustu', { width: 1366, height: 860 }]]) {
   const pg = await b.newPage({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: vp.deviceScaleFactor || 1 });
   pg.on('console', m => logs.push(`[${name}] ${m.type()}: ${m.text()}`)); pg.on('pageerror', e => logs.push(`[${name}] PAGEERROR: ${e.message}`));
-  await pg.goto('http://localhost:8080/index.html'); await pg.waitForTimeout(6000);
+  await pg.goto('http://localhost:8080/index.html'); await pg.waitForTimeout(6000); await pg.screenshot({ path: `sonuc/${name}_rehber.png` }); if (await pg.isVisible('#guide.on')) await pg.click('#bGuideClose');
   logs.push(`[${name}] motor=` + await pg.inputValue('#sEngine') + ' ovl=' + await pg.textContent('#ovl'));
   await pg.screenshot({ path: `sonuc/${name}_0_acilis.png` });
   await pg.click('#bStart'); await pg.waitForTimeout(4000); await pg.screenshot({ path: `sonuc/${name}_1_serbest.png` });

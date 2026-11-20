@@ -110,6 +110,7 @@ function runTrial(profile, MatchClass, opts = {}) {
     const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose });
     const rb = m.robots[0]; const errs = m.compileAll(); const items = []; const add = (cat, level, txt) => items.push({ cat, level, txt });
     for (const e of errs) add('Kod', 'err', `[${e.board}] ${e.msg}`);
+    for (const b of rb.boards) for (const l of lint(b.kod).slice(0, 5)) add('Kod', 'err', `[${b.id}] Satır ${l.line}: ${l.msg} — Arduino IDE bu kodu derlemez.`);
     if (errs.length === rb.boards.length) { resolve({ items, path: [], robot: rb, match: m }); return; }
     const s0 = Object.assign({}, rb.state); const path = []; let firstMove = null; const eggs0 = m.eggs.map(e => [e.x, e.y]);
     const step = () => {
@@ -259,6 +260,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

@@ -17,7 +17,10 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
 let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
 if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
 else { for (const d of DEFAULT_PROFILES) if (!profiles.some(p => p.id === d.id)) profiles.push(deepCopy(d)); }
-let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
+const undoStack = []; let lastUndoT = 0, lastSaved = JSON.stringify(profiles);
+function pushUndo() { const now = Date.now(); if (now - lastUndoT > 1500) { undoStack.push(lastSaved); if (undoStack.length > 40) undoStack.shift(); } lastUndoT = now; }
+let saveT = null; function saveProfiles() { pushUndo(); clearTimeout(saveT); saveT = setTimeout(() => { lastSaved = JSON.stringify(profiles); LS.set('mebsim3_profiller', lastSaved); }, 300); dirty = true; }
+function _unusedSave() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
 const byId = (id) => profiles.find(p => p.id === id);
 const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
 async function attachSTL(p) {
@@ -28,6 +31,12 @@ async function attachSTL(p) {
   try { const objs = SIM.parseModel(buf, name); setS(SIM.transformModel(objs, cfg)); } catch (e) { setS(null); toast('3D model okunamadı: ' + e.message); }
 }
 
+// ---------------- Rehber ----------------
+$('bGuide').onclick = () => { $('guide').classList.add('on'); $('bGuideClose').focus(); };
+$('bGuideClose').onclick = () => $('guide').classList.remove('on');
+$('guide').onclick = (e) => { if (e.target.id === 'guide') $('guide').classList.remove('on'); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('guide').classList.remove('on'); });
+if (!LS.get('mebsim3_rehber')) { LS.set('mebsim3_rehber', '1'); setTimeout(() => $('guide').classList.add('on'), 600); }
 // ---------------- Sekmeler ----------------
 let tab = 'saha';
 function setTab(t) { tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === t)); if (t === 'robotlar') renderEditor(); if (t === 'monitor') serialDirty = true; if (t === 'saha' && view3d) setTimeout(() => view3d.resize(), 30); }
@@ -131,6 +140,7 @@ function updateUi() {
     const wi = rb.wheelInfo, cards = [];
     for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) cards.push([lab, `<span class="${wi[k].slip ? 'bad' : ''}">${wi[k].V.toFixed(1)} V · ${wi[k].rpm.toFixed(0)} rpm${wi[k].slip ? ' · PATİNAJ' : ''}</span>`]);
     const led = rb.ledColor(); cards.push(['Üst LED', led ? ({ red: 'kırmızı', blue: 'mavi', mor: 'mor' }[led] + (led === rb.team ? ' ✓' : ' <span class="bad">⚠ yanlış renk</span>')) : '<span class="bad">sönük</span>']);
+    { const d = sc.detail[rb.team]; const parts = [`kendi ${d.own}`, `yanlış ${d.wrong}`]; if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (match.rules.ceza) parts.push(`ceza ${d.pen}`); if (d.led) parts.push(`LED −${10 * d.led}`); cards.push(['Puan ' + sc[rb.team], parts.join(' · ')]); }
     if (rb.state.tilt > 3) cards.push(['Eğim', rb.state.tilt.toFixed(0) + '°']);
     for (const r of Sensors.readouts(match, rb)) cards.push([r.name, esc(r.val)]);
     for (const rt of rb.rts) if (rt.error || rt.compileError) cards.push([`Kod (${rt.board.id})`, '<span class="bad">hata — Monitör</span>']);
@@ -211,6 +221,7 @@ $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfi
 $('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
+$('bUndo').onclick = () => { if (!undoStack.length) { toast('Geri alınacak değişiklik yok'); return; } const cur = $('selProfile').value; const prev = undoStack.pop(); try { const restored = JSON.parse(prev); for (const p of restored) { const old = byId(p.id); if (old && old._stl !== undefined) Object.defineProperty(p, '_stl', { value: old._stl, writable: true, configurable: true, enumerable: false }); } profiles = restored; lastSaved = prev; LS.set('mebsim3_profiller', prev); fillProfileSelects(); if (byId(cur)) $('selProfile').value = cur; renderEditor(); dirty = true; toast('Son değişiklik geri alındı'); } catch (e) { toast('Geri alınamadı'); } };
 $('bDefaults').onclick = () => { let n = 0; for (const d of DEFAULT_PROFILES) { const c = deepCopy(d); if (profiles.some(p => p.id === c.id)) { c.id = newId(); c.ad = d.ad + ' (güncel örnek)'; } profiles.push(c); n++; } saveProfiles(); fillProfileSelects(); renderEditor(); toast(n + ' hazır örnek profil eklendi (seninkiler silinmedi)'); };
 $('bExport').onclick = () => { const txt = JSON.stringify(curProfile(), null, 1); try { navigator.clipboard.writeText(txt).then(() => toast('Profil JSON panoya kopyalandı'), () => toast('Kopyalanamadı')); } catch (e) { toast('Kopyalanamadı'); } };
 $('fImport').onchange = () => { const f = $('fImport').files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const p = JSON.parse(SIM.stripJsonComments(String(r.result))); p.id = newId(); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast((p.ad || 'Profil') + ' içe aktarıldı'); } catch (e) { toast('JSON okunamadı: ' + e.message); } }; r.readAsText(f); $('fImport').value = ''; };
@@ -234,6 +245,19 @@ function renderEditor() {
   for (const s of ['kod', 'mekanik', 'devre']) $('sec' + s[0].toUpperCase() + s.slice(1)).style.display = s === seg ? '' : 'none';
   if (seg === 'kod') renderKod(p); if (seg === 'mekanik') renderMekanik(p); if (seg === 'devre') renderDevre(p);
 }
+// ---------- Kod düzenleyici (satır numaralı) ----------
+function makeEditor(ta) {
+  const gut = h('pre', { class: 'gutter', 'aria-hidden': 'true' }); const el = h('div', { class: 'editor' }, gut, ta); let marked = null;
+  const upd = () => { const n = ta.value.split('\n').length; let s = ''; for (let k = 1; k <= n; k++) s += (k === marked ? '▶' : '') + k + '\n'; gut.textContent = s; gut.scrollTop = ta.scrollTop; };
+  ta.addEventListener('input', upd); ta.addEventListener('scroll', () => { gut.scrollTop = ta.scrollTop; }); setTimeout(upd, 0);
+  return { el, mark(ln) { marked = ln; upd(); if (ln) { const pos = ta.value.split('\n').slice(0, ln - 1).join('\n').length + 1; ta.focus(); ta.setSelectionRange(pos, pos + (ta.value.split('\n')[ln - 1] || '').length); const lh = 19.5; ta.scrollTop = Math.max(0, (ln - 5) * lh); } } };
+}
+// Söz dizimi hatasının satırını bul (kodu çalıştırmadan, tarayıcının ayrıştırıcısıyla)
+function syntaxLine(js) {
+  let line = null; const onErr = (ev) => { line = ev.lineno; ev.preventDefault(); };
+  try { window.addEventListener('error', onErr); const sc = document.createElement('script'); sc.textContent = 'function __mebKontrol(){with({}){\n' + js + '\n}}'; document.head.appendChild(sc); sc.remove(); } catch (e) { } finally { window.removeEventListener('error', onErr); }
+  return line ? Math.max(1, line - 1) : null;
+}
 // ---------- KOD ----------
 function renderKod(p) {
   const root = $('secKod'); root.innerHTML = ''; p.kartlar = p.kartlar && p.kartlar.length ? p.kartlar : [{ id: 'ana', tip: 'Uno', kod: '' }];
@@ -241,13 +265,15 @@ function renderKod(p) {
     const msg = h('div', { class: 'msg' }); const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off' }); ta.value = b.kod || '';
     ta.oninput = () => { b.kod = ta.value; saveProfiles(); }; ta.onkeydown = (e) => { if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); b.kod = ta.value; } };
     const file = h('input', { type: 'file', accept: '.ino,.cpp,.c,.h,.txt', hidden: true }); file.onchange = () => { const f = file.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { ta.value = b.kod = String(r.result); saveProfiles(); toast(f.name + ' yüklendi'); }; r.readAsText(f); };
-    const check = () => { try { const fakeM = { robots: [], eggs: [], time: 0, zoneOf: () => null }; const rb = new SIM.Robot(p, 'red', fakeM); rb.reset({ x: 1, y: 1, th: 0 }); const rt = new SIM.Runtime(fakeM, rb, i); SIM.compile(b.kod, rt.api()); msg.className = 'msg ok'; msg.textContent = 'Derlendi ✓ (söz dizimi doğru)'; } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; } };
+    const ed = makeEditor(ta);
+    const check = () => { try { const fakeM = { robots: [], eggs: [], time: 0, zoneOf: () => null }; const rb = new SIM.Robot(p, 'red', fakeM); rb.reset({ x: 1, y: 1, th: 0 }); const rt = new SIM.Runtime(fakeM, rb, i); SIM.compile(b.kod, rt.api()); const lw = SIM.lint(b.kod); if (lw.length) { msg.className = 'msg err'; msg.textContent = lw.slice(0, 6).map(l => `Satır ${l.line}: ${l.msg}`).join('\n') + '\n(Arduino IDE bu hatalarla derlemez; simülatör yine de çalıştırabilir.)'; ed.mark(lw[0].line); } else { msg.className = 'msg ok'; msg.textContent = 'Derlendi ✓ (söz dizimi doğru)'; ed.mark(null); } }
+      catch (e) { const ln = e.js ? syntaxLine(e.js) : null; msg.className = 'msg err'; msg.textContent = e.message + (ln ? `\n→ yaklaşık satır ${ln}` : ''); ed.mark(ln); } };
     root.append(card(null,
       h('div', { class: 'row', style: 'margin-top:0' }, h('strong', {}, p.kartlar.length > 1 ? `Kart ${i + 1}` : 'Arduino kodu'),
         fld(b, 'id', 'Kart adı', { type: 'text', w: '110px' }), fld(b, 'tip', 'Kart', { type: 'select', options: Object.fromEntries(Object.entries(BOARDS).map(([k, v]) => [k, v.ad])) }),
         h('label', { class: 'btn sm' }, '.ino aç', file), h('button', { class: 'btn sm', on: { click: check } }, 'Derle'),
         p.kartlar.length > 1 ? h('button', { class: 'btn sm danger', on: { click: () => { p.kartlar.splice(i, 1); saveProfiles(); renderKod(p); } } }, 'Kartı kaldır') : null),
-      msg, ta));
+      msg, ed.el));
   });
   const links = h('textarea', { class: 'short', placeholder: 'mega:A0 - nano:A0' }); links.value = (p.kart_baglantilari || []).map(x => Array.isArray(x) ? x.join(' - ') : x).join('\n');
   links.onchange = () => { p.kart_baglantilari = links.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.split(/\s*(?:<->|↔|-|,)\s*/)); saveProfiles(); };

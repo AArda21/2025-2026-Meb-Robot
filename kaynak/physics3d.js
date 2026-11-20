@@ -86,7 +86,7 @@ function makeMatch3D(R) {
         for (const side of ['L', 'R']) {
           const { V, mode, duty } = rb.sideVoltage(side); const wh = rb.wheels[side];
           let target = 0, damp = M.tFric * 2;
-          if (mode === 'drive' && duty > 0) { target = (V / (M.vNom * duty)) * M.w0; damp = k * duty; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
+          if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
         }
       }
@@ -98,7 +98,7 @@ function makeMatch3D(R) {
     }
     syncRobot(rb) {
       const c = rb.body, s = rb.state; const t = c.translation(), q = c.rotation(), lv = c.linvel(), av = c.angvel();
-      s.x = t.x; s.y = t.y; s.z = t.z; s.th = yawOf(q); s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
+      s.x = t.x; s.y = t.y; s.z = t.z; { const yw = yawOf(q); s.th = s.th == null ? yw : s.th + Math.atan2(Math.sin(yw - s.th), Math.cos(yw - s.th)); } s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
       s.tilt = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.y * q.y)))) * 180 / Math.PI;
       const axle = qRot(q, [0, 1, 0]), fwd = qRot(q, [1, 0, 0]);
       for (const side of ['L', 'R']) {

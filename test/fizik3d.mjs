@@ -23,7 +23,7 @@ for (const cls of [SIM.Match, M3]) {
   drive(cls, MOT + 'void loop(){m(-200,-200);}', 1.0, 'GERI_1sn');
   drive(cls, MOT + 'void loop(){m(-180,180);}', 1.0, 'SOLA_DON_1sn');
   drive(cls, MOT + 'void loop(){m(255,255);}', 0.25, 'KALKIS_0.25sn');
-  drive(cls, MOT + 'void loop(){m(30,30);}', 1.0, 'DUSUK_PWM_30');
+  for (const pw of [30, 60, 100, 150, 255]) drive(cls, MOT + `void loop(){m(${pw},${pw});}`, 1.5, 'PWM_' + pw);
   drive(cls, MOT + 'void loop(){m(255,255); delay(600); m(0,0); digitalWrite(IN1,HIGH);digitalWrite(IN2,HIGH);digitalWrite(IN3,HIGH);digitalWrite(IN4,HIGH);analogWrite(ENA,255);analogWrite(ENB,255); delay(5000);}', 1.2, 'FREN');
 }
 // Tam maçlar (3B)

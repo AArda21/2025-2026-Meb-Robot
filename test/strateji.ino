@@ -40,6 +40,9 @@ int hedef = 0;          // EVE durumunda hedef zemin: 1 kırmızı, 2 mavi, 3 ye
 unsigned long durumZamani = 0;
 unsigned long sonYazdirma = 0;
 bool duvarBulundu = false;
+long sonMesafe = 0;
+unsigned long sonKontrol = 0;
+int ayniSayac = 0;
 
 void motorlar(int sol, int sag) {
   digitalWrite(IN1, sol >= 0 ? HIGH : LOW);
@@ -199,7 +202,25 @@ void eve() {
   }
 }
 
+// Sıkışma kontrolü: ileri giderken mesafe 1.5 sn boyunca değişmiyorsa geri çık
+void sikismaKontrol() {
+  if (millis() - sonKontrol < 500) return;
+  sonKontrol = millis();
+  long d = mesafeCm();
+  if (abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;
+  sonMesafe = d;
+  if (ayniSayac >= 3) {
+    Serial.println("Sikisma! geri cikiliyor");
+    motorlar(-200, -200);
+    delay(450);
+    donSaga(random(250, 550));
+    ayniSayac = 0;
+    if (durum == 1) duvarBulundu = false;
+  }
+}
+
 void loop() {
+  sikismaKontrol();
   if (durum == 0) ara(); else eve();
   if (millis() - sonYazdirma > 500) {
     sonYazdirma = millis();
