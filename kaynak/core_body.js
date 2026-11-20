@@ -162,7 +162,7 @@ class Robot {
     this.boards = boards; const pin = (r) => resolvePin(r, boards);
     const M = Pf.mekanik || {}, D = Pf.devre || {}, T = M.tekerlek || {}, C = M.sarhos_teker || {}, Mo = M.motor || {};
     const tire = TIRES[T.lastik] && T.lastik !== 'ozel' ? TIRES[T.lastik] : { muS: T.mu_statik ?? 0.9, muK: T.mu_kinetik ?? 0.75, crr: T.yuvarlanma ?? 0.015 };
-    const mot = MOTORS[Mo.model] && Mo.model !== 'ozel' ? MOTORS[Mo.model] : { volt: Mo.volt || 6, rpm: Mo.rpm || 200, tork: Mo.tork_kgcm || 0.8, surt: Mo.surtunme_kgcm ?? 0.04 };
+    const mot = MOTORS[Mo.model] && Mo.model !== 'ozel' ? MOTORS[Mo.model] : { volt: Mo.volt || 6, rpm: Mo.rpm || 200, tork: Mo.tork_kgcm || 0.8, surt: Mo.surtunme_kgcm ?? 0.04, akim: Mo.akim_a || 1.5 };
     const dkey = Object.keys(DRIVERS).find(k => k.toUpperCase() === String((D.surucu || {}).tip || 'L298N').toUpperCase()) || 'L298N';
     const Dr = D.surucu || {};
     this.mass = +M.kutle_kg || 1.0;
@@ -174,9 +174,10 @@ class Robot {
     this.comX = com.x_cm != null && com.x_cm !== '' ? cm(com.x_cm) : cx + 0.8 * (this.wheelX - cx);
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
-    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm };
+    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
+    this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
     const side = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pin(v); return r; };
-    this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
+    this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, maxA: DRIVERS[dkey].maxA, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
     this.parts = (M.parcalar || []).map(p => ({
       name: p.ad || 'parça', x: cm(p.x), y: cm(p.y), hx: cm(p.uzunluk) / 2, hy: cm(p.genislik ?? p.uzunluk) / 2,
       z0: cm(p.z0 ?? 0), z1: cm(p.z1 ?? 5), ang: (p.aci || 0) * Math.PI / 180, color: p.renk || '#6b7280', shape: p.sekil || 'kutu',
@@ -212,7 +213,7 @@ class Robot {
     this.state = { x: pose.x, y: pose.y, th: pose.th, vx: 0, vy: 0, w: 0, z: this.wheelR, tilt: 0 };
     this.trail = []; this.servoAng = {}; this.servoVel = {}; for (const s of this.servos) this.servoAng[s.pin] = s.angle;
     this.wheelInfo = { L: { V: 0, F: 0, slip: false, rpm: 0, spin: 0 }, R: { V: 0, F: 0, slip: false, rpm: 0, spin: 0 } };
-    this.serial = []; this.warnings = []; this.rts = []; this.stats = { slipT: 0, driveT: 0, stuckT: 0, wallHits: 0, maxTilt: 0 };
+    this.serial = []; this.warnings = []; this.rts = []; this.stats = { slipT: 0, driveT: 0, stuckT: 0, wallHits: 0, maxTilt: 0, amp: 0, ampT: 0, ampPeak: 0, mAh: 0 };
   }
   compile() {
     const errs = [];

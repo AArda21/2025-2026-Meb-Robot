@@ -30,6 +30,9 @@ function staticChecks(profile) {
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
   if (Vs > M.vNom * 1.5) add('Mekanik', 'warn', `Motorlara ${Vs.toFixed(1)} V gidiyor, motor ${M.vNom} V'luk: çok aşırı gerilim, motor ısınır/ömrü kısalır.`);
   else if (Vs < M.vNom * 0.6) add('Mekanik', 'warn', `Motorlara sadece ${Vs.toFixed(1)} V gidiyor (motor ${M.vNom} V): robot yavaş ve güçsüz olur.`);
+  const iSt = M.iStall * (Vs / M.vNom);
+  if (iSt > D.maxA) add('Mekanik', 'warn', `Motor kilitlenince (duvara dayanınca) her motor ≈ ${iSt.toFixed(1)} A çeker; ${D.type} kanal başına ≈ ${D.maxA} A taşır. Sürücü ısınıp kapanabilir — uzun süre sıkışmaktan kaçın ya da daha güçlü sürücü kullan.`);
+  else add('Mekanik', 'ok', `Motor kilitlenme akımı (≈ ${iSt.toFixed(1)} A) ${D.type} sınırının (${D.maxA} A) altında.`);
   if (Fmotor > Ftr) add('Mekanik', 'info', `Tam güçte kalkışta tekerler patinaj yapabilir (motor itişi ${Fmotor.toFixed(1)} N > tutunma ${Ftr.toFixed(1)} N). Lastik: ${rb.tire.ad || 'özel'}.`);
   const pwmMin = Math.ceil(((rb.crr * Nw * rb.wheelR + M.tFric) / (M.tStall * Vs / M.vNom)) * 255);
   add('Mekanik', pwmMin > 120 ? 'warn' : 'info', `Robot yaklaşık PWM ${Math.min(255, pwmMin)} altındaki değerlerde yerinden kıpırdamaz (sürtünme + motor iç direnci).`);
@@ -68,6 +71,14 @@ function staticChecks(profile) {
       const fake = { robots: [rb], eggs: [], zoneOf: () => null }; const w = rb.sensorWorld(s); const r = Sensors.ray(fake, rb, w.x, w.y, w.a, w.z, 0.3, { self: true, wallTol: -1, eggTol: -1 });
       if (r.hit && r.hit.self) add('Mekanik', 'warn', `'${s.name}' sensörünün önünü kendi parçası '${r.hit.self.name}' ${cmS(r.d)} mesafede kapatıyor.`);
     }
+  }
+  for (const s of rb.sensors.filter(x => x.type === 'TCS3200')) {
+    const keys = ['kirmizi', 'mavi', 'yesil', 'beyaz', 'bos'], names = { kirmizi: 'kırmızı', mavi: 'mavi', yesil: 'yeşil', beyaz: 'beyaz', bos: 'boş' }; const surfOf = { kirmizi: SURF.red, mavi: SURF.blue, yesil: SURF.green, beyaz: SURF.white, bos: SURF.none };
+    const vec = {}; for (const k of keys) { const cal = Sensors.calTCS(s, names[k] === 'yeşil' ? 'yeşil' : names[k]); vec[k] = cal || Sensors.tcsModel(s, surfOf[k]); }
+    const usedCal = ['kirmizi', 'mavi', 'yesil'].some(k => Sensors.calTCS(s, { kirmizi: 'kırmızı', mavi: 'mavi', yesil: 'yeşil' }[k])); const close = [];
+    if (s.formul) { try { const fn = new Function('r', 'g', 'b', 'c', 'return (' + s.formul + ');'); add('Devre', 'info', `'${s.name}' formülü (${s.formul}) → ` + ['kirmizi', 'mavi', 'yesil', 'beyaz', 'bos'].map(k => `${names[k]} ${(+fn(...vec[k])).toFixed(1)}`).join(', ') + (usedCal ? '' : ' (model değerleriyle; gerçek ölçümlerini girersen daha doğru olur)')); } catch (e) { add('Devre', 'warn', `'${s.name}' formülü hatalı: ${e.message}`); } }
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < keys.length; j++) { const a = vec[keys[i]], b = vec[keys[j]]; const d = Math.max(...[0, 1, 2].map(k => Math.abs(a[k] - b[k]) / Math.max(a[k], b[k]))); if (d < 0.12) close.push(`${names[keys[i]]}–${names[keys[j]]}`); }
+    add('Devre', close.length ? 'warn' : 'ok', close.length ? `'${s.name}' ${usedCal ? 'senin ölçümlerinde' : 'modelde'} şu renkleri zor ayırt eder: ${close.join(', ')} (fark %12'den az).` : `'${s.name}' kırmızı, mavi ve yeşil yumurtayı ${usedCal ? 'senin ölçümlerine göre' : 'modele göre'} net ayırt edebiliyor.`);
   }
   // --- Devre ---
   const hw = rb.hardwarePins(); const byKey = new Map();
@@ -126,6 +137,8 @@ function runTrial(profile, MatchClass, opts = {}) {
       if (st.wallHits) add('Hareket', st.wallHits > 4 ? 'warn' : 'info', `Duvara ${st.wallHits} kez çarptı.`);
       if (st.maxTilt > 25) add('Hareket', 'err', `Robot ${st.maxTilt.toFixed(0)}° eğildi — devrilme!`); else if (st.maxTilt > 8) add('Hareket', 'warn', `Robot hareket ederken ${st.maxTilt.toFixed(0)}° eğiliyor.`);
       const moved = m.eggs.filter((e, i) => e.gone || Math.hypot(e.x - eggs0[i][0], e.y - eggs0[i][1]) > 0.03).length; add('Hareket', 'info', `${moved} yumurtaya dokunup yerinden oynattı. Puan: ${m.score()[team]}.`);
+      { const st2 = rb.stats; const avgI = st2.ampT ? st2.amp / st2.ampT : 0; const per2 = avgI * 120 / 3.6; const cap = rb.battery.mAh;
+        add('Mekanik', per2 * 3 > cap ? 'warn' : 'info', `Akım: ortalama ≈ ${avgI.toFixed(2)} A, en yüksek ≈ ${st2.ampPeak.toFixed(1)} A. 2 dakikalık maç ≈ ${per2.toFixed(0)} mAh harcar; ${cap} mAh pil ≈ ${Math.floor(cap / Math.max(per2, 1))} maç dayanır (yaklaşık).`); }
       const led = rb.ledColor(), tn = team === 'red' ? 'Kırmızı' : 'Mavi'; const cn = { red: 'KIRMIZI', blue: 'MAVİ', mor: 'MOR' };
       add('Kurallar', led === team ? 'ok' : 'err', led === team ? `${tn} köşede LED doğru renkte yandı.` : `${tn} köşede LED ${led ? cn[led] + ' yandı' : 'hiç yanmadı'} — kural ihlali (köşe renginde yanmalı).`);
       // kod ↔ devre uyumu (çalışırken gerçekten kullanılan pinler)
@@ -246,6 +259,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

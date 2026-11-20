@@ -335,6 +335,29 @@ function applyModel(p, makeBoxes) {
     M.parcalar = govde.map(o => { const s = S(o.bbox), c = C(o.bbox); return { ad: o.name, x: r1(c[0]), y: r1(c[1]), uzunluk: r1(s[0]), genislik: r1(s[1]), z0: r1(o.bbox[2]), z1: r1(o.bbox[5]), renk: o.color || '#94a3b8' }; }).concat(keep); md.kutulari_gizle = true; n += govde.length; } }
   return n;
 }
+function calEditor(s, t) {
+  const surf = { kirmizi: SIM.SURF.red, mavi: SIM.SURF.blue, yesil: SIM.SURF.green, beyaz: SIM.SURF.white, bos: SIM.SURF.none };
+  s.kalibrasyon = s.kalibrasyon || {}; const K = s.kalibrasyon; const box = h('details', {}, h('summary', {}, 'Kalibrasyon — gerçek ölçümlerini gir'));
+  if (t === 'TCS3200') {
+    box.append(h('p', { class: 'hint' }, 'Gerçek robotta her rengi sensörün önüne koyup pulseIn(OUT, LOW) değerlerini yaz (kırmızı filtre S2=LOW S3=LOW, yeşil HIGH HIGH, mavi LOW HIGH). Girdiğin değerler simülasyonda modelin yerine kullanılır. Boş kutuda gri değer modelin tahmini.'));
+    const formula = h('input', { type: 'text', placeholder: 'ör. b / r / g * 10000', style: 'width:200px' }); formula.value = s.formul || '';
+    const out = h('div', { class: 'hint' });
+    const calc = () => { s.formul = formula.value; saveProfiles(); if (!formula.value.trim()) { out.textContent = ''; return; } try { const fn = new Function('r', 'g', 'b', 'c', 'return (' + formula.value + ');');
+      out.innerHTML = SIM.CAL_COLORS.map(([k, lab]) => { const a = (K[k] && K[k].slice(0, 3).every(v => v !== '' && v != null) ? K[k].map(Number) : SIM.Sensors.tcsModel(s, surf[k])); const v = fn(a[0], a[1], a[2], a[3] || 0); return `${lab}: <b>${isFinite(v) ? (+v).toFixed(1) : '—'}</b>`; }).join(' · '); } catch (e) { out.textContent = 'Formül hatası: ' + e.message; } };
+    formula.oninput = calc;
+    const tb = h('tbody'); for (const [k, lab] of SIM.CAL_COLORS) { const model = SIM.Sensors.tcsModel(s, surf[k]); K[k] = K[k] || ['', '', '', ''];
+      tb.append(h('tr', {}, h('td', {}, lab), ...[0, 1, 2, 3].map(i => { const inp = h('input', { type: 'number', step: 'any', placeholder: String(model[i]) }); inp.value = K[k][i] ?? ''; inp.onchange = () => { K[k][i] = inp.value === '' ? '' : +inp.value; saveProfiles(); calc(); }; return h('td', {}, inp); }))); }
+    box.append(h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Renk'), h('th', {}, 'Kırmızı (R)'), h('th', {}, 'Yeşil (G)'), h('th', {}, 'Mavi (B)'), h('th', {}, 'Filtresiz (C)'))), tb)),
+      h('div', { class: 'row' }, h('label', { class: 'f' }, 'Kodundaki renk formülünü dene (r, g, b, c)', formula)), out,
+      h('button', { class: 'btn sm danger', on: { click: () => { delete s.kalibrasyon; saveProfiles(); renderDevre(curProfile()); } } }, 'Ölçümleri temizle'));
+    setTimeout(calc, 0);
+  } else {
+    box.append(h('p', { class: 'hint' }, 'analogRead değerlerini her yüzey için yaz; simülasyon bunları kullanır.'));
+    const row = h('div', { class: 'fields' }); for (const [k, lab] of [['beyaz', 'Beyaz zemin'], ['kirmizi', 'Kırmızı'], ['mavi', 'Mavi'], ['yesil', 'Yeşil']]) row.append(fld(K, k, lab, { ph: String(surf[k].ir) }));
+    box.append(row);
+  }
+  return box;
+}
 // ---------- DEVRE ----------
 function renderDevre(p) {
   const root = $('secDevre'); root.innerHTML = ''; const D = p.devre = p.devre || {}; const rerender = () => renderDevre(p);
@@ -357,9 +380,10 @@ function renderDevre(p) {
     if (t === 'TCRT5000') extra.push(fld(s, 'esik', 'Dijital eşik'));
     if (t === 'TCS3200') extra.push(fld(s, 'bakis', 'Bakış', { type: 'select', options: { asagi: 'Aşağı (zemin)', ileri: 'İleri (yumurta)' } }), fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'olcek', 'Ölçek % (S0/S1 yoksa)'));
     if (t === 'BUTON') extra.push(fld(s, 'deger', 'Değer', { type: 'select', options: { HIGH: 'Hep HIGH', LOW: 'Hep LOW', KIRMIZIDA_HIGH: 'Kırmızı köşede HIGH', MAVIDE_HIGH: 'Mavi köşede HIGH' } }));
+    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? calEditor(s, t) : null;
     list.append(h('div', { class: 'item' }, h('div', { class: 'top' }, fld(s, 'tip', 'Tip', { type: 'select', options: Object.fromEntries(Object.entries(SENSOR_TYPES).map(([k, v]) => [k, v.ad])), after: rerender }), fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }),
       h('button', { class: 'btn sm danger', style: 'margin-left:auto', on: { click: () => { D.sensorler.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')),
-      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra)));
+      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), calBox));
   });
   const addSel = h('select', {}, ...Object.entries(SENSOR_TYPES).map(([k, v]) => h('option', { value: k }, v.ad)));
   root.append(card('Sensörler', h('p', { class: 'hint' }, 'Konum robot merkezine göre cm (x ileri, y sola). Açı: 0 = ileri, + = sola.'), list, h('div', { class: 'row' }, addSel, h('button', { class: 'btn sm', on: { click: () => { D.sensorler.push({ tip: addSel.value, ad: SENSOR_TYPES[addSel.value].ad, x: 8, y: 0, z: 2, aci: 0 }); saveProfiles(); rerender(); } } }, '+ Sensör ekle'))));

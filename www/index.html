@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.2</title>
+<title>MEB Robot V3.3</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -64,6 +64,7 @@ textarea.short{min-height:90px}
 table{border-collapse:collapse;width:100%;font-size:13px}
 td,th{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left;vertical-align:middle}
 th{color:var(--mute);font-weight:600;font-size:12px}
+input::placeholder{color:#b3bac6}
 td input{width:100%;min-height:32px;padding:4px 6px;font-size:13px}
 .scroll>table{min-width:620px}
 #plot{width:100%;height:220px;display:block;background:#fbfcfd;border:1px solid var(--line);border-radius:8px}
@@ -86,7 +87,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.2</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.3</span></h1>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -248,23 +249,23 @@ const TIRES = {
   ozel: { ad: 'Özel (kendim gireceğim)' },
 };
 const MOTORS = {
-  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.04 },
-  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.06 },
-  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.015 },
-  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.03 },
-  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.15 },
-  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.25 },
-  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 0.35 },
+  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.04, akim: 1.5 },
+  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.06, akim: 1.5 },
+  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.015, akim: 0.7 },
+  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.03, akim: 0.7 },
+  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.15, akim: 2.2 },
+  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.25, akim: 2.2 },
+  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 0.35, akim: 3.2 },
   'ozel': { ad: 'Özel (kendim gireceğim)' },
 };
 const DRIVERS = {
-  L298N: { ad: 'L298N', dusum: 1.9, pins: ['en', 'in1', 'in2'] },
-  L293D: { ad: 'L293D', dusum: 2.0, pins: ['en', 'in1', 'in2'] },
-  TB6612: { ad: 'TB6612FNG', dusum: 0.2, pins: ['pwm', 'in1', 'in2'], stby: true },
-  BTS7960: { ad: 'BTS7960 (IBT-2)', dusum: 0.1, pins: ['en', 'rpwm', 'lpwm'] },
-  L9110: { ad: 'L9110S', dusum: 0.4, pins: ['ia', 'ib'] },
-  DRV8833: { ad: 'DRV8833', dusum: 0.2, pins: ['ia', 'ib'] },
-  MX1508: { ad: 'MX1508', dusum: 0.3, pins: ['ia', 'ib'] },
+  L298N: { ad: 'L298N', dusum: 1.9, maxA: 2, pins: ['en', 'in1', 'in2'] },
+  L293D: { ad: 'L293D', dusum: 2.0, maxA: 0.6, pins: ['en', 'in1', 'in2'] },
+  TB6612: { ad: 'TB6612FNG', dusum: 0.2, maxA: 1.2, pins: ['pwm', 'in1', 'in2'], stby: true },
+  BTS7960: { ad: 'BTS7960 (IBT-2)', dusum: 0.1, maxA: 30, pins: ['en', 'rpwm', 'lpwm'] },
+  L9110: { ad: 'L9110S', dusum: 0.4, maxA: 0.8, pins: ['ia', 'ib'] },
+  DRV8833: { ad: 'DRV8833', dusum: 0.2, maxA: 1.2, pins: ['ia', 'ib'] },
+  MX1508: { ad: 'MX1508', dusum: 0.3, maxA: 1.5, pins: ['ia', 'ib'] },
 };
 const SENSOR_TYPES = {
   'HC-SR04': { ad: 'HC-SR04 ultrasonik', pins: ['trig', 'echo'], ip: 'ultrasonik mesafe' },
@@ -631,7 +632,7 @@ class Robot {
     this.boards = boards; const pin = (r) => resolvePin(r, boards);
     const M = Pf.mekanik || {}, D = Pf.devre || {}, T = M.tekerlek || {}, C = M.sarhos_teker || {}, Mo = M.motor || {};
     const tire = TIRES[T.lastik] && T.lastik !== 'ozel' ? TIRES[T.lastik] : { muS: T.mu_statik ?? 0.9, muK: T.mu_kinetik ?? 0.75, crr: T.yuvarlanma ?? 0.015 };
-    const mot = MOTORS[Mo.model] && Mo.model !== 'ozel' ? MOTORS[Mo.model] : { volt: Mo.volt || 6, rpm: Mo.rpm || 200, tork: Mo.tork_kgcm || 0.8, surt: Mo.surtunme_kgcm ?? 0.04 };
+    const mot = MOTORS[Mo.model] && Mo.model !== 'ozel' ? MOTORS[Mo.model] : { volt: Mo.volt || 6, rpm: Mo.rpm || 200, tork: Mo.tork_kgcm || 0.8, surt: Mo.surtunme_kgcm ?? 0.04, akim: Mo.akim_a || 1.5 };
     const dkey = Object.keys(DRIVERS).find(k => k.toUpperCase() === String((D.surucu || {}).tip || 'L298N').toUpperCase()) || 'L298N';
     const Dr = D.surucu || {};
     this.mass = +M.kutle_kg || 1.0;
@@ -643,9 +644,10 @@ class Robot {
     this.comX = com.x_cm != null && com.x_cm !== '' ? cm(com.x_cm) : cx + 0.8 * (this.wheelX - cx);
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
-    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm };
+    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
+    this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
     const side = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pin(v); return r; };
-    this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
+    this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, maxA: DRIVERS[dkey].maxA, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
     this.parts = (M.parcalar || []).map(p => ({
       name: p.ad || 'parça', x: cm(p.x), y: cm(p.y), hx: cm(p.uzunluk) / 2, hy: cm(p.genislik ?? p.uzunluk) / 2,
       z0: cm(p.z0 ?? 0), z1: cm(p.z1 ?? 5), ang: (p.aci || 0) * Math.PI / 180, color: p.renk || '#6b7280', shape: p.sekil || 'kutu',
@@ -681,7 +683,7 @@ class Robot {
     this.state = { x: pose.x, y: pose.y, th: pose.th, vx: 0, vy: 0, w: 0, z: this.wheelR, tilt: 0 };
     this.trail = []; this.servoAng = {}; this.servoVel = {}; for (const s of this.servos) this.servoAng[s.pin] = s.angle;
     this.wheelInfo = { L: { V: 0, F: 0, slip: false, rpm: 0, spin: 0 }, R: { V: 0, F: 0, slip: false, rpm: 0, spin: 0 } };
-    this.serial = []; this.warnings = []; this.rts = []; this.stats = { slipT: 0, driveT: 0, stuckT: 0, wallHits: 0, maxTilt: 0 };
+    this.serial = []; this.warnings = []; this.rts = []; this.stats = { slipT: 0, driveT: 0, stuckT: 0, wallHits: 0, maxTilt: 0, amp: 0, ampT: 0, ampPeak: 0, mAh: 0 };
   }
   compile() {
     const errs = [];
@@ -782,7 +784,16 @@ function rayOBB(ox, oy, dx, dy, wp) { // ışın - döndürülmüş dikdörtgen
   }
   return t1 < 0 ? null : Math.max(0, t0);
 }
+const CALKEY = { 'kırmızı': 'kirmizi', 'mavi': 'mavi', 'yeşil': 'yesil', 'beyaz': 'beyaz', 'boş': 'bos', 'robot': 'bos' };
+const CAL_COLORS = [['kirmizi', 'Kırmızı yumurta'], ['mavi', 'Mavi yumurta'], ['yesil', 'Yeşil yumurta'], ['beyaz', 'Beyaz zemin / duvar'], ['bos', 'Önü boş']];
 const Sensors = {
+  calTCS(s, name) {
+    const K = s.kalibrasyon; if (!K) return null; const get = (k) => { const a = K[k]; return Array.isArray(a) && a.slice(0, 3).every(v => v !== '' && v != null && isFinite(+v) && +v > 0) ? a.map(Number) : null; };
+    let a = name === 'ceza' ? (get('kirmizi') && get('mavi') ? get('kirmizi').map((v, i) => (v + get('mavi')[i]) / 2) : null) : get(CALKEY[name]); if (!a) return null;
+    return [a[0], a[1], a[2], a[3] > 0 ? a[3] : Math.min(a[0], a[1], a[2]) * 0.6];
+  },
+  // modelin bir yüzey için verdiği TCS3200 periyotları [R, G, B, C] (µs)
+  tcsModel(s, surf) { const sc = (s.s0 == null && s.s1 == null) ? (s.olcek ?? 20) / 100 : 0.2; const per = (r) => 1e6 / (2 * 60000 * sc * (0.25 + 0.75 * r)); const [R, G, B] = surf.rgb; return [per(R), per(G), per(B), per((R + G + B) / 3 * 1.6)].map(v => Math.round(v)); },
   ray(m, rb, x, y, a, z, maxD, opts = {}) {
     if (m.rayCast3D) { const r = m.rayCast3D(rb, x, y, z, a, maxD); if (r) return r; }
     const F = RULES.FIELD, dx = Math.cos(a), dy = Math.sin(a); let best = maxD, hit = null;
@@ -815,7 +826,7 @@ const Sensors = {
     const ang = Math.atan2(y - e.y, x - e.x) - e.phi; if (Math.hypot(x - e.x, y - e.y) < 0.004) return { ir: (SURF.red.ir + SURF.blue.ir) / 2, rgb: SURF.red.rgb.map((v, i) => (v + SURF.blue.rgb[i]) / 2), name: 'ceza' };
     return Math.sin(ang) >= 0 ? SURF.red : SURF.blue;
   },
-  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
+  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (Math.random() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
   colorTarget(m, rb, s) {
     const w = rb.sensorWorld(s); if ((s.bakis || 'asagi') === 'asagi') return Sensors.surfaceAt(m, w.x, w.y);
     const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, s.range, { wallTol: 0 }); if (!r.hit) return SURF.none; if (r.hit === 'duvar') return SURF.white; if (r.hit.robot) return SURF.robot;
@@ -825,7 +836,10 @@ const Sensors = {
     const g = (k, def) => k == null ? def : (rb.duty(k) > 0.5 ? 1 : 0);
     let sc; if (s.s0 == null && s.s1 == null) sc = (s.olcek ?? 20) / 100; else { const S0 = g(s.s0, 1), S1 = g(s.s1, 0); sc = (!S0 && !S1) ? 0 : (!S0 && S1) ? 0.02 : (S0 && !S1) ? 0.2 : 1; }
     if (sc === 0) return null;
-    const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const [R, G, B] = Sensors.colorTarget(m, rb, s).rgb;
+    const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const tgt = Sensors.colorTarget(m, rb, s);
+    const fi = (!S2 && !S3) ? 0 : (!S2 && S3) ? 2 : (S2 && !S3) ? 3 : 1;
+    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (Math.random() - 0.5) * 0.04);
+    const [R, G, B] = tgt.rgb;
     let refl = (!S2 && !S3) ? R : (!S2 && S3) ? B : (S2 && !S3) ? (R + G + B) / 3 * 1.6 : G; refl = 0.25 + 0.75 * refl;
     return 1e6 / (2 * 60000 * sc * refl * (1 + (Math.random() - 0.5) * 0.04));
   },
@@ -927,6 +941,9 @@ class Match {
     const st = rb.stats, wi = rb.wheelInfo; const driving = Math.abs(wi.L.V) > 1 || Math.abs(wi.R.V) > 1;
     if (driving) { st.driveT += dt; if (wi.L.slip || wi.R.slip) st.slipT += dt; const sp = Math.hypot(rb.state.vx, rb.state.vy), w = Math.abs(rb.state.w); if (sp < 0.01 && w < 0.1) st.stuckT += dt; }
     st.maxTilt = Math.max(st.maxTilt, rb.state.tilt || 0);
+    const M = rb.motor; let I = 0.12; for (const k of ['L', 'R']) { const w = wi[k]; if (w.mode === 'drive' || w.mode === 'brake') { const tau = Math.abs(w.F || 0) * rb.wheelR; I += 0.08 + M.iStall * Math.min(1.5, tau / M.tStall); } }
+    I += 0.15 * Object.values(rb.servoVel || {}).filter(v => Math.abs(v) > 1).length;
+    st.amp += I * dt; st.ampT += dt; st.ampPeak = Math.max(st.ampPeak, I); st.mAh += I * dt / 3.6;
   }
   step(dt) {
     for (const rb of this.robots) rb.runPrograms(this.time);
@@ -1103,6 +1120,9 @@ function staticChecks(profile) {
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
   if (Vs > M.vNom * 1.5) add('Mekanik', 'warn', `Motorlara ${Vs.toFixed(1)} V gidiyor, motor ${M.vNom} V'luk: çok aşırı gerilim, motor ısınır/ömrü kısalır.`);
   else if (Vs < M.vNom * 0.6) add('Mekanik', 'warn', `Motorlara sadece ${Vs.toFixed(1)} V gidiyor (motor ${M.vNom} V): robot yavaş ve güçsüz olur.`);
+  const iSt = M.iStall * (Vs / M.vNom);
+  if (iSt > D.maxA) add('Mekanik', 'warn', `Motor kilitlenince (duvara dayanınca) her motor ≈ ${iSt.toFixed(1)} A çeker; ${D.type} kanal başına ≈ ${D.maxA} A taşır. Sürücü ısınıp kapanabilir — uzun süre sıkışmaktan kaçın ya da daha güçlü sürücü kullan.`);
+  else add('Mekanik', 'ok', `Motor kilitlenme akımı (≈ ${iSt.toFixed(1)} A) ${D.type} sınırının (${D.maxA} A) altında.`);
   if (Fmotor > Ftr) add('Mekanik', 'info', `Tam güçte kalkışta tekerler patinaj yapabilir (motor itişi ${Fmotor.toFixed(1)} N > tutunma ${Ftr.toFixed(1)} N). Lastik: ${rb.tire.ad || 'özel'}.`);
   const pwmMin = Math.ceil(((rb.crr * Nw * rb.wheelR + M.tFric) / (M.tStall * Vs / M.vNom)) * 255);
   add('Mekanik', pwmMin > 120 ? 'warn' : 'info', `Robot yaklaşık PWM ${Math.min(255, pwmMin)} altındaki değerlerde yerinden kıpırdamaz (sürtünme + motor iç direnci).`);
@@ -1141,6 +1161,14 @@ function staticChecks(profile) {
       const fake = { robots: [rb], eggs: [], zoneOf: () => null }; const w = rb.sensorWorld(s); const r = Sensors.ray(fake, rb, w.x, w.y, w.a, w.z, 0.3, { self: true, wallTol: -1, eggTol: -1 });
       if (r.hit && r.hit.self) add('Mekanik', 'warn', `'${s.name}' sensörünün önünü kendi parçası '${r.hit.self.name}' ${cmS(r.d)} mesafede kapatıyor.`);
     }
+  }
+  for (const s of rb.sensors.filter(x => x.type === 'TCS3200')) {
+    const keys = ['kirmizi', 'mavi', 'yesil', 'beyaz', 'bos'], names = { kirmizi: 'kırmızı', mavi: 'mavi', yesil: 'yeşil', beyaz: 'beyaz', bos: 'boş' }; const surfOf = { kirmizi: SURF.red, mavi: SURF.blue, yesil: SURF.green, beyaz: SURF.white, bos: SURF.none };
+    const vec = {}; for (const k of keys) { const cal = Sensors.calTCS(s, names[k] === 'yeşil' ? 'yeşil' : names[k]); vec[k] = cal || Sensors.tcsModel(s, surfOf[k]); }
+    const usedCal = ['kirmizi', 'mavi', 'yesil'].some(k => Sensors.calTCS(s, { kirmizi: 'kırmızı', mavi: 'mavi', yesil: 'yeşil' }[k])); const close = [];
+    if (s.formul) { try { const fn = new Function('r', 'g', 'b', 'c', 'return (' + s.formul + ');'); add('Devre', 'info', `'${s.name}' formülü (${s.formul}) → ` + ['kirmizi', 'mavi', 'yesil', 'beyaz', 'bos'].map(k => `${names[k]} ${(+fn(...vec[k])).toFixed(1)}`).join(', ') + (usedCal ? '' : ' (model değerleriyle; gerçek ölçümlerini girersen daha doğru olur)')); } catch (e) { add('Devre', 'warn', `'${s.name}' formülü hatalı: ${e.message}`); } }
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < keys.length; j++) { const a = vec[keys[i]], b = vec[keys[j]]; const d = Math.max(...[0, 1, 2].map(k => Math.abs(a[k] - b[k]) / Math.max(a[k], b[k]))); if (d < 0.12) close.push(`${names[keys[i]]}–${names[keys[j]]}`); }
+    add('Devre', close.length ? 'warn' : 'ok', close.length ? `'${s.name}' ${usedCal ? 'senin ölçümlerinde' : 'modelde'} şu renkleri zor ayırt eder: ${close.join(', ')} (fark %12'den az).` : `'${s.name}' kırmızı, mavi ve yeşil yumurtayı ${usedCal ? 'senin ölçümlerine göre' : 'modele göre'} net ayırt edebiliyor.`);
   }
   // --- Devre ---
   const hw = rb.hardwarePins(); const byKey = new Map();
@@ -1199,6 +1227,8 @@ function runTrial(profile, MatchClass, opts = {}) {
       if (st.wallHits) add('Hareket', st.wallHits > 4 ? 'warn' : 'info', `Duvara ${st.wallHits} kez çarptı.`);
       if (st.maxTilt > 25) add('Hareket', 'err', `Robot ${st.maxTilt.toFixed(0)}° eğildi — devrilme!`); else if (st.maxTilt > 8) add('Hareket', 'warn', `Robot hareket ederken ${st.maxTilt.toFixed(0)}° eğiliyor.`);
       const moved = m.eggs.filter((e, i) => e.gone || Math.hypot(e.x - eggs0[i][0], e.y - eggs0[i][1]) > 0.03).length; add('Hareket', 'info', `${moved} yumurtaya dokunup yerinden oynattı. Puan: ${m.score()[team]}.`);
+      { const st2 = rb.stats; const avgI = st2.ampT ? st2.amp / st2.ampT : 0; const per2 = avgI * 120 / 3.6; const cap = rb.battery.mAh;
+        add('Mekanik', per2 * 3 > cap ? 'warn' : 'info', `Akım: ortalama ≈ ${avgI.toFixed(2)} A, en yüksek ≈ ${st2.ampPeak.toFixed(1)} A. 2 dakikalık maç ≈ ${per2.toFixed(0)} mAh harcar; ${cap} mAh pil ≈ ${Math.floor(cap / Math.max(per2, 1))} maç dayanır (yaklaşık).`); }
       const led = rb.ledColor(), tn = team === 'red' ? 'Kırmızı' : 'Mavi'; const cn = { red: 'KIRMIZI', blue: 'MAVİ', mor: 'MOR' };
       add('Kurallar', led === team ? 'ok' : 'err', led === team ? `${tn} köşede LED doğru renkte yandı.` : `${tn} köşede LED ${led ? cn[led] + ' yandı' : 'hiç yanmadı'} — kural ihlali (köşe renginde yanmalı).`);
       // kod ↔ devre uyumu (çalışırken gerçekten kullanılan pinler)
@@ -1319,7 +1349,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -2719,6 +2749,29 @@ function applyModel(p, makeBoxes) {
     M.parcalar = govde.map(o => { const s = S(o.bbox), c = C(o.bbox); return { ad: o.name, x: r1(c[0]), y: r1(c[1]), uzunluk: r1(s[0]), genislik: r1(s[1]), z0: r1(o.bbox[2]), z1: r1(o.bbox[5]), renk: o.color || '#94a3b8' }; }).concat(keep); md.kutulari_gizle = true; n += govde.length; } }
   return n;
 }
+function calEditor(s, t) {
+  const surf = { kirmizi: SIM.SURF.red, mavi: SIM.SURF.blue, yesil: SIM.SURF.green, beyaz: SIM.SURF.white, bos: SIM.SURF.none };
+  s.kalibrasyon = s.kalibrasyon || {}; const K = s.kalibrasyon; const box = h('details', {}, h('summary', {}, 'Kalibrasyon — gerçek ölçümlerini gir'));
+  if (t === 'TCS3200') {
+    box.append(h('p', { class: 'hint' }, 'Gerçek robotta her rengi sensörün önüne koyup pulseIn(OUT, LOW) değerlerini yaz (kırmızı filtre S2=LOW S3=LOW, yeşil HIGH HIGH, mavi LOW HIGH). Girdiğin değerler simülasyonda modelin yerine kullanılır. Boş kutuda gri değer modelin tahmini.'));
+    const formula = h('input', { type: 'text', placeholder: 'ör. b / r / g * 10000', style: 'width:200px' }); formula.value = s.formul || '';
+    const out = h('div', { class: 'hint' });
+    const calc = () => { s.formul = formula.value; saveProfiles(); if (!formula.value.trim()) { out.textContent = ''; return; } try { const fn = new Function('r', 'g', 'b', 'c', 'return (' + formula.value + ');');
+      out.innerHTML = SIM.CAL_COLORS.map(([k, lab]) => { const a = (K[k] && K[k].slice(0, 3).every(v => v !== '' && v != null) ? K[k].map(Number) : SIM.Sensors.tcsModel(s, surf[k])); const v = fn(a[0], a[1], a[2], a[3] || 0); return `${lab}: <b>${isFinite(v) ? (+v).toFixed(1) : '—'}</b>`; }).join(' · '); } catch (e) { out.textContent = 'Formül hatası: ' + e.message; } };
+    formula.oninput = calc;
+    const tb = h('tbody'); for (const [k, lab] of SIM.CAL_COLORS) { const model = SIM.Sensors.tcsModel(s, surf[k]); K[k] = K[k] || ['', '', '', ''];
+      tb.append(h('tr', {}, h('td', {}, lab), ...[0, 1, 2, 3].map(i => { const inp = h('input', { type: 'number', step: 'any', placeholder: String(model[i]) }); inp.value = K[k][i] ?? ''; inp.onchange = () => { K[k][i] = inp.value === '' ? '' : +inp.value; saveProfiles(); calc(); }; return h('td', {}, inp); }))); }
+    box.append(h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Renk'), h('th', {}, 'Kırmızı (R)'), h('th', {}, 'Yeşil (G)'), h('th', {}, 'Mavi (B)'), h('th', {}, 'Filtresiz (C)'))), tb)),
+      h('div', { class: 'row' }, h('label', { class: 'f' }, 'Kodundaki renk formülünü dene (r, g, b, c)', formula)), out,
+      h('button', { class: 'btn sm danger', on: { click: () => { delete s.kalibrasyon; saveProfiles(); renderDevre(curProfile()); } } }, 'Ölçümleri temizle'));
+    setTimeout(calc, 0);
+  } else {
+    box.append(h('p', { class: 'hint' }, 'analogRead değerlerini her yüzey için yaz; simülasyon bunları kullanır.'));
+    const row = h('div', { class: 'fields' }); for (const [k, lab] of [['beyaz', 'Beyaz zemin'], ['kirmizi', 'Kırmızı'], ['mavi', 'Mavi'], ['yesil', 'Yeşil']]) row.append(fld(K, k, lab, { ph: String(surf[k].ir) }));
+    box.append(row);
+  }
+  return box;
+}
 // ---------- DEVRE ----------
 function renderDevre(p) {
   const root = $('secDevre'); root.innerHTML = ''; const D = p.devre = p.devre || {}; const rerender = () => renderDevre(p);
@@ -2741,9 +2794,10 @@ function renderDevre(p) {
     if (t === 'TCRT5000') extra.push(fld(s, 'esik', 'Dijital eşik'));
     if (t === 'TCS3200') extra.push(fld(s, 'bakis', 'Bakış', { type: 'select', options: { asagi: 'Aşağı (zemin)', ileri: 'İleri (yumurta)' } }), fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'olcek', 'Ölçek % (S0/S1 yoksa)'));
     if (t === 'BUTON') extra.push(fld(s, 'deger', 'Değer', { type: 'select', options: { HIGH: 'Hep HIGH', LOW: 'Hep LOW', KIRMIZIDA_HIGH: 'Kırmızı köşede HIGH', MAVIDE_HIGH: 'Mavi köşede HIGH' } }));
+    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? calEditor(s, t) : null;
     list.append(h('div', { class: 'item' }, h('div', { class: 'top' }, fld(s, 'tip', 'Tip', { type: 'select', options: Object.fromEntries(Object.entries(SENSOR_TYPES).map(([k, v]) => [k, v.ad])), after: rerender }), fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }),
       h('button', { class: 'btn sm danger', style: 'margin-left:auto', on: { click: () => { D.sensorler.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')),
-      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra)));
+      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), calBox));
   });
   const addSel = h('select', {}, ...Object.entries(SENSOR_TYPES).map(([k, v]) => h('option', { value: k }, v.ad)));
   root.append(card('Sensörler', h('p', { class: 'hint' }, 'Konum robot merkezine göre cm (x ileri, y sola). Açı: 0 = ileri, + = sola.'), list, h('div', { class: 'row' }, addSel, h('button', { class: 'btn sm', on: { click: () => { D.sensorler.push({ tip: addSel.value, ad: SENSOR_TYPES[addSel.value].ad, x: 8, y: 0, z: 2, aci: 0 }); saveProfiles(); rerender(); } } }, '+ Sensör ekle'))));

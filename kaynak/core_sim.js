@@ -12,7 +12,16 @@ function rayOBB(ox, oy, dx, dy, wp) { // ışın - döndürülmüş dikdörtgen
   }
   return t1 < 0 ? null : Math.max(0, t0);
 }
+const CALKEY = { 'kırmızı': 'kirmizi', 'mavi': 'mavi', 'yeşil': 'yesil', 'beyaz': 'beyaz', 'boş': 'bos', 'robot': 'bos' };
+const CAL_COLORS = [['kirmizi', 'Kırmızı yumurta'], ['mavi', 'Mavi yumurta'], ['yesil', 'Yeşil yumurta'], ['beyaz', 'Beyaz zemin / duvar'], ['bos', 'Önü boş']];
 const Sensors = {
+  calTCS(s, name) {
+    const K = s.kalibrasyon; if (!K) return null; const get = (k) => { const a = K[k]; return Array.isArray(a) && a.slice(0, 3).every(v => v !== '' && v != null && isFinite(+v) && +v > 0) ? a.map(Number) : null; };
+    let a = name === 'ceza' ? (get('kirmizi') && get('mavi') ? get('kirmizi').map((v, i) => (v + get('mavi')[i]) / 2) : null) : get(CALKEY[name]); if (!a) return null;
+    return [a[0], a[1], a[2], a[3] > 0 ? a[3] : Math.min(a[0], a[1], a[2]) * 0.6];
+  },
+  // modelin bir yüzey için verdiği TCS3200 periyotları [R, G, B, C] (µs)
+  tcsModel(s, surf) { const sc = (s.s0 == null && s.s1 == null) ? (s.olcek ?? 20) / 100 : 0.2; const per = (r) => 1e6 / (2 * 60000 * sc * (0.25 + 0.75 * r)); const [R, G, B] = surf.rgb; return [per(R), per(G), per(B), per((R + G + B) / 3 * 1.6)].map(v => Math.round(v)); },
   ray(m, rb, x, y, a, z, maxD, opts = {}) {
     if (m.rayCast3D) { const r = m.rayCast3D(rb, x, y, z, a, maxD); if (r) return r; }
     const F = RULES.FIELD, dx = Math.cos(a), dy = Math.sin(a); let best = maxD, hit = null;
@@ -45,7 +54,7 @@ const Sensors = {
     const ang = Math.atan2(y - e.y, x - e.x) - e.phi; if (Math.hypot(x - e.x, y - e.y) < 0.004) return { ir: (SURF.red.ir + SURF.blue.ir) / 2, rgb: SURF.red.rgb.map((v, i) => (v + SURF.blue.rgb[i]) / 2), name: 'ceza' };
     return Math.sin(ang) >= 0 ? SURF.red : SURF.blue;
   },
-  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
+  tcrt(m, rb, s) { const w = rb.sensorWorld(s); const sf = Sensors.surfaceAt(m, w.x, w.y); let v = sf.ir; const ck = s.kalibrasyon && s.kalibrasyon[CALKEY[sf.name]]; if (ck != null && ck !== '') return clamp(Math.round(+ck + (Math.random() - 0.5) * 16), 0, 1023); if (w.z > 0.03) v = v + (1010 - v) * Math.min(1, (w.z - 0.03) / 0.03); return clamp(Math.round(v + (Math.random() - 0.5) * 16), 0, 1023); },
   colorTarget(m, rb, s) {
     const w = rb.sensorWorld(s); if ((s.bakis || 'asagi') === 'asagi') return Sensors.surfaceAt(m, w.x, w.y);
     const r = Sensors.ray(m, rb, w.x, w.y, w.a, w.z, s.range, { wallTol: 0 }); if (!r.hit) return SURF.none; if (r.hit === 'duvar') return SURF.white; if (r.hit.robot) return SURF.robot;
@@ -55,7 +64,10 @@ const Sensors = {
     const g = (k, def) => k == null ? def : (rb.duty(k) > 0.5 ? 1 : 0);
     let sc; if (s.s0 == null && s.s1 == null) sc = (s.olcek ?? 20) / 100; else { const S0 = g(s.s0, 1), S1 = g(s.s1, 0); sc = (!S0 && !S1) ? 0 : (!S0 && S1) ? 0.02 : (S0 && !S1) ? 0.2 : 1; }
     if (sc === 0) return null;
-    const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const [R, G, B] = Sensors.colorTarget(m, rb, s).rgb;
+    const S2 = g(s.s2, 0), S3 = g(s.s3, 0); const tgt = Sensors.colorTarget(m, rb, s);
+    const fi = (!S2 && !S3) ? 0 : (!S2 && S3) ? 2 : (S2 && !S3) ? 3 : 1;
+    const cal = Sensors.calTCS(s, tgt.name); if (cal) return cal[fi] * (1 + (Math.random() - 0.5) * 0.04);
+    const [R, G, B] = tgt.rgb;
     let refl = (!S2 && !S3) ? R : (!S2 && S3) ? B : (S2 && !S3) ? (R + G + B) / 3 * 1.6 : G; refl = 0.25 + 0.75 * refl;
     return 1e6 / (2 * 60000 * sc * refl * (1 + (Math.random() - 0.5) * 0.04));
   },
@@ -157,6 +169,9 @@ class Match {
     const st = rb.stats, wi = rb.wheelInfo; const driving = Math.abs(wi.L.V) > 1 || Math.abs(wi.R.V) > 1;
     if (driving) { st.driveT += dt; if (wi.L.slip || wi.R.slip) st.slipT += dt; const sp = Math.hypot(rb.state.vx, rb.state.vy), w = Math.abs(rb.state.w); if (sp < 0.01 && w < 0.1) st.stuckT += dt; }
     st.maxTilt = Math.max(st.maxTilt, rb.state.tilt || 0);
+    const M = rb.motor; let I = 0.12; for (const k of ['L', 'R']) { const w = wi[k]; if (w.mode === 'drive' || w.mode === 'brake') { const tau = Math.abs(w.F || 0) * rb.wheelR; I += 0.08 + M.iStall * Math.min(1.5, tau / M.tStall); } }
+    I += 0.15 * Object.values(rb.servoVel || {}).filter(v => Math.abs(v) > 1).length;
+    st.amp += I * dt; st.ampT += dt; st.ampPeak = Math.max(st.ampPeak, I); st.mAh += I * dt / 3.6;
   }
   step(dt) {
     for (const rb of this.robots) rb.runPrograms(this.time);

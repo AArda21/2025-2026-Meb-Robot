@@ -59,23 +59,23 @@ const TIRES = {
   ozel: { ad: 'Özel (kendim gireceğim)' },
 };
 const MOTORS = {
-  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.04 },
-  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.06 },
-  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.015 },
-  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.03 },
-  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.15 },
-  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.25 },
-  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 0.35 },
+  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.04, akim: 1.5 },
+  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.06, akim: 1.5 },
+  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.015, akim: 0.7 },
+  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.03, akim: 0.7 },
+  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.15, akim: 2.2 },
+  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.25, akim: 2.2 },
+  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 0.35, akim: 3.2 },
   'ozel': { ad: 'Özel (kendim gireceğim)' },
 };
 const DRIVERS = {
-  L298N: { ad: 'L298N', dusum: 1.9, pins: ['en', 'in1', 'in2'] },
-  L293D: { ad: 'L293D', dusum: 2.0, pins: ['en', 'in1', 'in2'] },
-  TB6612: { ad: 'TB6612FNG', dusum: 0.2, pins: ['pwm', 'in1', 'in2'], stby: true },
-  BTS7960: { ad: 'BTS7960 (IBT-2)', dusum: 0.1, pins: ['en', 'rpwm', 'lpwm'] },
-  L9110: { ad: 'L9110S', dusum: 0.4, pins: ['ia', 'ib'] },
-  DRV8833: { ad: 'DRV8833', dusum: 0.2, pins: ['ia', 'ib'] },
-  MX1508: { ad: 'MX1508', dusum: 0.3, pins: ['ia', 'ib'] },
+  L298N: { ad: 'L298N', dusum: 1.9, maxA: 2, pins: ['en', 'in1', 'in2'] },
+  L293D: { ad: 'L293D', dusum: 2.0, maxA: 0.6, pins: ['en', 'in1', 'in2'] },
+  TB6612: { ad: 'TB6612FNG', dusum: 0.2, maxA: 1.2, pins: ['pwm', 'in1', 'in2'], stby: true },
+  BTS7960: { ad: 'BTS7960 (IBT-2)', dusum: 0.1, maxA: 30, pins: ['en', 'rpwm', 'lpwm'] },
+  L9110: { ad: 'L9110S', dusum: 0.4, maxA: 0.8, pins: ['ia', 'ib'] },
+  DRV8833: { ad: 'DRV8833', dusum: 0.2, maxA: 1.2, pins: ['ia', 'ib'] },
+  MX1508: { ad: 'MX1508', dusum: 0.3, maxA: 1.5, pins: ['ia', 'ib'] },
 };
 const SENSOR_TYPES = {
   'HC-SR04': { ad: 'HC-SR04 ultrasonik', pins: ['trig', 'echo'], ip: 'ultrasonik mesafe' },
