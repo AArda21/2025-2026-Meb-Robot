@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.6</title>
+<title>MEB Robot V3.8</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -93,7 +93,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.6</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.8</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -720,7 +720,7 @@ class Robot {
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
     this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
-    { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) && dn > 0 ? dn : 0 }; }
+    { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) ? Math.max(-4, Math.min(4, dn)) : 0 }; }
     this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
     const side = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pin(v); return r; };
     this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, maxA: DRIVERS[dkey].maxA, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
@@ -973,6 +973,13 @@ const Sensors = {
 // =====================================================================================
 //                                  MAÇ (2B fizik motoru)
 // =====================================================================================
+// Kalibrasyon: dönüş direnci (>0 yavaşlatır) ya da dönüş kolaylığı (<0, tekerlerin izin verdiği hızı geçmez). Açısal hız değişimini döndürür.
+function calibYaw(rb, w, dt) {
+  const c = rb.calib.donus, a = c * rb.mass * RULES.G * rb.track / 2 * dt / rb.inertia;
+  if (c > 0) return Math.abs(w) < 1e-6 ? 0 : -Math.sign(w) * Math.min(Math.abs(w), a);
+  const v = (sd) => ((rb.wheelInfo[sd] || {}).rpm || 0) * 2 * Math.PI / 60 * rb.wheelR; const wk = (v('R') - v('L')) / rb.track;
+  if (Math.abs(wk) < 0.05 || Math.sign(wk) * w >= Math.abs(wk)) return 0; return Math.sign(wk) * Math.min(-a, Math.abs(wk - w));
+}
 class Match {
   constructor(opts) {
     this.opts = opts || {}; const S = this.opts.saha || {};
@@ -1062,7 +1069,7 @@ class Match {
       const wi = rb.wheelInfo[side]; wi.V = V; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = mode; wi.spin = (wi.spin || 0) + rpm * 2 * Math.PI / 60 * dt;
     }
     if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
-    if (rb.calib && rb.calib.donus > 0 && s.w) { const tq = rb.calib.donus * rb.mass * g * rb.track / 2; const dw = Math.min(Math.abs(s.w), tq * dt / rb.inertia); s.w -= Math.sign(s.w) * dw; }
+    if (rb.calib && rb.calib.donus) s.w += calibYaw(rb, s.w, dt);
     for (let it = 0; it < 4; it++) for (const sy of [1, -1]) {
       const rx = c * rb.wheelX - n * sy * rb.track / 2, ry = n * rb.wheelX + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
       const j = clamp(-vl / rb.invMass(rx, ry, lx, ly), -rb.muLat * Nw * dt, rb.muLat * Nw * dt); rb.applyImp(rx, ry, j * lx, j * ly);
@@ -1303,9 +1310,9 @@ function autoCalibrate(profile, MatchClass, real) {
   }
   if (real.don && real.don.olcum > 0) {
     const f = (d) => Math.abs(measureMotion(profile, MatchClass, { tip: 'don', pwm: real.don.pwm, sure: real.don.sure }, { hiz_carpani: out.hiz_carpani, donus_direnci: d }).aci_der);
-    const a0 = f(0), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = 0; if (real.don.olcum > a0 * 1.1) out.notlar.push(`Gerçek robot simülasyondan hızlı dönüyor (${Math.round(a0)}° yerine ${real.don.olcum}°). İz genişliğini (iki teker arası) ve sarhoş teker yerini kontrol et.`); }
+    const a0 = f(-4), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = -4; if (real.don.olcum > a0 * 1.08) out.notlar.push(`Gerçek robot, tekerleklerin hızının izin verdiğinden bile hızlı dönüyor (en fazla ${Math.round(a0)}°, ölçülen ${real.don.olcum}°). İz genişliğini (iki teker arası), teker çapını ve motor devrini kontrol et.`); }
     else if (real.don.olcum <= a1) { out.donus_direnci = 4; out.notlar.push('Gerçek robot çok zor dönüyor: tekerlek kayıyor ya da sarhoş teker sıkışıyor olabilir.'); }
-    else out.donus_direnci = +bis(0, 4, f, real.don.olcum, false).toFixed(3);
+    else out.donus_direnci = +bis(-4, 4, f, real.don.olcum, false).toFixed(3);
   }
   return out;
 }
@@ -1513,7 +1520,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -2295,7 +2302,7 @@ function makeMatch3D(R) {
       for (const [side, sy] of [['L', 1], ['R', -1]]) {
         const lp = [rb.wheelX, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
         const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false));
-        addCol(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr).setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0), body);
+        addCol(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr)  /* not: bombeli (roundCylinder) lastik denendi; robot duvar dibinde takla atıyordu */.setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0), body);
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
         rb.wheels[side] = { body, j, spin: 0 };
@@ -2325,7 +2332,7 @@ function makeMatch3D(R) {
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
           const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
-        if (rb.calib && rb.calib.donus > 0) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; if (Math.abs(wu) > 1e-4) { const tq = rb.calib.donus * rb.mass * 9.81 * rb.track / 2; const j = -Math.sign(wu) * Math.min(tq * dt, Math.abs(wu) * rb.inertia); rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
+        if (rb.calib && rb.calib.donus) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; const dw = SIM.calibYaw(rb, wu, dt); if (dw) { const j = dw * rb.inertia; rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
       }
       this.world.step();
       for (const rb of this.robots) this.syncRobot(rb);

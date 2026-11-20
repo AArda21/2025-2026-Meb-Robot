@@ -128,9 +128,9 @@ function autoCalibrate(profile, MatchClass, real) {
   }
   if (real.don && real.don.olcum > 0) {
     const f = (d) => Math.abs(measureMotion(profile, MatchClass, { tip: 'don', pwm: real.don.pwm, sure: real.don.sure }, { hiz_carpani: out.hiz_carpani, donus_direnci: d }).aci_der);
-    const a0 = f(0), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = 0; if (real.don.olcum > a0 * 1.1) out.notlar.push(`Gerçek robot simülasyondan hızlı dönüyor (${Math.round(a0)}° yerine ${real.don.olcum}°). İz genişliğini (iki teker arası) ve sarhoş teker yerini kontrol et.`); }
+    const a0 = f(-4), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = -4; if (real.don.olcum > a0 * 1.08) out.notlar.push(`Gerçek robot, tekerleklerin hızının izin verdiğinden bile hızlı dönüyor (en fazla ${Math.round(a0)}°, ölçülen ${real.don.olcum}°). İz genişliğini (iki teker arası), teker çapını ve motor devrini kontrol et.`); }
     else if (real.don.olcum <= a1) { out.donus_direnci = 4; out.notlar.push('Gerçek robot çok zor dönüyor: tekerlek kayıyor ya da sarhoş teker sıkışıyor olabilir.'); }
-    else out.donus_direnci = +bis(0, 4, f, real.don.olcum, false).toFixed(3);
+    else out.donus_direnci = +bis(-4, 4, f, real.don.olcum, false).toFixed(3);
   }
   return out;
 }
@@ -338,6 +338,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
