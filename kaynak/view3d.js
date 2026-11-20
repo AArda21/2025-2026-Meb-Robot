@@ -1,0 +1,202 @@
+// ===================== 3B GÖRÜNÜM (three.js) =====================
+function makeView3D(THREE, host) {
+  const { RULES, Sensors } = SIM;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none';
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe9edf2); scene.fog = new THREE.Fog(0xe9edf2, 6, 14);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.005, 40); camera.up.set(0, 0, 1);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 1.1));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(0.6, -0.4, 3.2); sun.target.position.set(1.25, 1.25, 0);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 6 }); sun.shadow.bias = -0.0004;
+  scene.add(sun, sun.target);
+  const F = RULES.FIELD;
+  const std = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0.05 }, o));
+
+  // ---- Saha ----
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), std(0xd5dae1, { roughness: 1 })); ground.position.set(F / 2, F / 2, -0.001); ground.receiveShadow = true; scene.add(ground);
+  const fieldCanvas = document.createElement('canvas'); fieldCanvas.width = fieldCanvas.height = 1024;
+  const fieldTex = new THREE.CanvasTexture(fieldCanvas); if ('colorSpace' in fieldTex) fieldTex.colorSpace = THREE.SRGBColorSpace; fieldTex.anisotropy = 4;
+  const field = new THREE.Mesh(new THREE.PlaneGeometry(F, F), std(0xffffff, { map: fieldTex, roughness: 0.9 })); field.position.set(F / 2, F / 2, 0); field.receiveShadow = true; scene.add(field);
+  const wallMat = std(0xf4f4f1, { roughness: 0.6 });
+  for (const [cx, cy, sx, sy] of [[-0.01, F / 2, 0.02, F + 0.04], [F + 0.01, F / 2, 0.02, F + 0.04], [F / 2, -0.01, F, 0.02], [F / 2, F + 0.01, F, 0.02]]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, RULES.WALL_H), wallMat); m.position.set(cx, cy, RULES.WALL_H / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
+  }
+  let fieldColorsKey = '';
+  function paintField(col) {
+    const key = JSON.stringify(col); if (key === fieldColorsKey) return; fieldColorsKey = key;
+    const g = fieldCanvas.getContext('2d'), S = 1024, Z = S * RULES.ZONE / F;
+    g.fillStyle = col.zemin; g.fillRect(0, 0, S, S);
+    g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2; for (let i = 1; i < 10; i++) { const v = i * S / 10; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, S); g.moveTo(0, v); g.lineTo(S, v); g.stroke(); }
+    g.fillStyle = col.kirmizi; g.fillRect(0, S - Z, Z, Z); g.fillStyle = col.mavi; g.fillRect(S - Z, 0, Z, Z);
+    fieldTex.needsUpdate = true;
+  }
+
+  // ---- Yumurtalar ----
+  const eggGeo = new THREE.CylinderGeometry(RULES.EGG_R, RULES.EGG_R, RULES.EGG_H, 36);
+  const penCanvas = document.createElement('canvas'); penCanvas.width = penCanvas.height = 128;
+  const penTex = new THREE.CanvasTexture(penCanvas); if ('colorSpace' in penTex) penTex.colorSpace = THREE.SRGBColorSpace;
+  let eggMeshes = [], eggMats = null;
+  function buildEggs(sim) {
+    for (const m of eggMeshes) scene.remove(m); eggMeshes = [];
+    const col = sim.field.colors; const g = penCanvas.getContext('2d');
+    g.fillStyle = col.kirmizi; g.fillRect(0, 0, 128, 64); g.fillStyle = col.mavi; g.fillRect(0, 64, 128, 64); penTex.needsUpdate = true;
+    eggMats = { red: std(col.kirmizi, { roughness: 0.45 }), blue: std(col.mavi, { roughness: 0.45 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
+    for (const e of sim.eggs) {
+      const m = new THREE.Mesh(eggGeo, e.kind === 'penalty' ? eggMats.pen : eggMats[e.kind]); m.castShadow = m.receiveShadow = true; scene.add(m); eggMeshes.push(m);
+    }
+  }
+  const qx90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+  const tmpQ = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
+
+  // ---- Robotlar ----
+  const robotViews = new Map();
+  const labelTex = (txt, bg) => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, 256, 128); g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 6; g.strokeRect(3, 3, 250, 122);
+    g.fillStyle = '#fff'; g.font = '600 34px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const words = txt.split(' '); if (words.length > 1 && txt.length > 10) { g.fillText(words.slice(0, Math.ceil(words.length / 2)).join(' '), 128, 44); g.fillText(words.slice(Math.ceil(words.length / 2)).join(' '), 128, 86); } else g.fillText(txt, 128, 64);
+    const t = new THREE.CanvasTexture(c); if ('colorSpace' in t) t.colorSpace = THREE.SRGBColorSpace; return t;
+  };
+  function buildRobot(rb) {
+    const v = { group: new THREE.Group(), parts: [], wheels: {}, wires: [], led: null, ledLight: null, stl: null };
+    const robot = v.group; scene.add(robot); const wr = rb.wheelR;
+    const hideBoxes = rb.model3d && rb.model3d.kutulari_gizle;
+    for (const p of rb.parts) {
+      if (p.auto) continue;
+      const h = Math.max(0.002, p.z1 - p.z0); let geo;
+      if (p.shape === 'silindir') { geo = new THREE.CylinderGeometry(p.hx, p.hx, h, 28); geo.rotateX(Math.PI / 2); } else geo = new THREE.BoxGeometry(p.hx * 2, p.hy * 2, h);
+      const transparent = /şeffaf|seffaf|pleksi|akrilik/i.test(p.name);
+      const m = new THREE.Mesh(geo, std(p.color, transparent ? { transparent: true, opacity: 0.55, roughness: 0.2 } : (p.solid ? {} : { transparent: true, opacity: 0.85 })));
+      m.castShadow = m.receiveShadow = true; m.userData = { p, zc: (p.z0 + p.z1) / 2 - wr }; m.visible = !hideBoxes || p.servoPin != null; robot.add(m); v.parts.push(m);
+    }
+    if (rb.model3d && rb.model3d.pos) {
+      const g = new THREE.BufferGeometry(); const pos = rb.model3d.pos.slice(); for (let i = 2; i < pos.length; i += 3) pos[i] -= wr;
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals();
+      const m = new THREE.Mesh(g, std(rb.model3d.renk || '#9aa5b1', { roughness: 0.55, metalness: 0.05, transparent: !!rb.model3d.seffaf, opacity: rb.model3d.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
+      m.castShadow = m.receiveShadow = true; robot.add(m); v.stl = m;
+    }
+    for (const side of ['L', 'R']) {
+      const g = new THREE.Group();
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 40), std(0x15171b, { roughness: 0.95 })); tire.castShadow = true;
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
+      g.add(tire, hub); robot.add(g); v.wheels[side] = g;
+    }
+    if (rb.caster) { const c = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.004, rb.caster.r), 20, 14), std(0xc0c4cc, { metalness: 0.8, roughness: 0.25 })); c.position.set(rb.caster.x, rb.caster.y, Math.max(0.004, rb.caster.r) - wr); c.castShadow = true; robot.add(c); }
+    for (const c of rb.circuit) {
+      const mats = Array.from({ length: 6 }, () => std(c.color, { roughness: 0.6 })); mats[4] = std(0xffffff, { map: labelTex(c.name, c.color), roughness: 0.6 });
+      const m = new THREE.Mesh(new THREE.BoxGeometry(c.hx * 2, c.hy * 2, c.h), mats); m.position.set(c.x, c.y, c.z + c.h / 2 - wr); m.castShadow = true; robot.add(m);
+      c._top = [c.x, c.y, c.z + c.h - wr];
+    }
+    for (const s of rb.sensors) {
+      if (s.type === 'BUTON') continue;
+      const g = new THREE.Group(); g.position.set(s.x, s.y, s.z - wr); g.rotation.z = s.ang;
+      if (s.type === 'HC-SR04') { const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.02), std(0x1d4ed8)); b.position.x = -0.006; g.add(b);
+        for (const yy of [-0.013, 0.013]) { const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 20), std(0xd1d5db, { metalness: 0.7, roughness: 0.3 })); eye.rotation.z = Math.PI / 2; eye.position.set(0.005, yy, 0); g.add(eye); } }
+      else if (s.type === 'TCS3200') { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.028, 0.028), std(0x1e3a8a))); const led = new THREE.Mesh(new THREE.BoxGeometry(0.002, 0.01, 0.01), std(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.8 })); led.position.x = 0.003; g.add(led); }
+      else { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.014, 0.006), std(s.type === 'TCRT5000' ? 0x6d28d9 : 0x0f766e))); const ir = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.006, 12), std(0x111111)); ir.rotation.z = Math.PI / 2; ir.position.x = 0.006; g.add(ir); }
+      g.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(g);
+    }
+    if (rb.stop) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
+    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.6); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
+    const ard = rb.circuit.find(c => /arduino|uno|nano|mega/i.test(c.name)) || rb.circuit[0];
+    const drv = rb.circuit.find(c => /l298|l293|tb6612|l9110|drv|bts|sürücü|surucu|driver/i.test(c.name));
+    if (ard) {
+      const add = (to, pin) => { const from = ard._top; const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, Math.max(from[2], to[2]) + 0.025];
+        const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...from), new THREE.Vector3(...mid), new THREE.Vector3(...to));
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(14)), new THREE.LineBasicMaterial({ color: 0x94a3b8 })); line.userData.pin = pin; robot.add(line); v.wires.push(line); };
+      for (const s of rb.sensors) for (const k of ['pin', 'dpin', 'trig', 'echo', 's0', 's1', 's2', 's3', 'out']) if (s[k] != null) add([s.x, s.y, s.z - wr + 0.01], s[k]);
+      for (const p of rb.parts) if (p.servoPin != null && p.pivot) add([p.pivot[0], p.pivot[1], p.z1 - wr], p.servoPin);
+      if (rb.led) for (const k of ['r', 'b', 'pin']) if (rb.led[k] != null) add([rb.led.x, rb.led.y, rb.led.z - wr], rb.led[k]);
+      if (drv) for (const k of ['L', 'R']) for (const val of Object.values(rb.driver[k])) if (val != null) add(drv._top, val);
+    }
+    robotViews.set(rb, v);
+  }
+  function clearRobots() { for (const v of robotViews.values()) { scene.remove(v.group); v.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } robotViews.clear(); }
+
+  // ---- Işınlar ve iz ----
+  const rayGeo = new THREE.BufferGeometry(); rayGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(600), 3)); rayGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(600), 3));
+  const rays = new THREE.LineSegments(rayGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 })); rays.frustumCulled = false; scene.add(rays);
+  const trails = [0xf08c00, 0x2563eb].map(c => { const g = new THREE.BufferGeometry(); const buf = new Float32Array(4100 * 3); g.setAttribute('position', new THREE.BufferAttribute(buf, 3)); const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.7 })); l.frustumCulled = false; scene.add(l); return { g, buf, l }; });
+
+  // ---- Kamera kontrolü (dokunmatik + fare) ----
+  const cam = { target: new THREE.Vector3(F / 2, F / 2, 0), dist: 3.3, az: -Math.PI / 2, pol: 0.75, mode: 'serbest' };
+  const ptrs = new Map(); let last = null;
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', e => { if (view.onPick && view.onPick(e)) return; el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button }); last = null; });
+  el.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointermove', e => {
+    if (view.onDrag && view.onDrag(e)) return;
+    if (!ptrs.has(e.pointerId)) return; const p = ptrs.get(e.pointerId); const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 1) {
+      if (p.b === 2 || e.shiftKey) pan(dx, dy); else { cam.az -= dx * 0.008; cam.pol = Math.min(1.5, Math.max(0.02, cam.pol - dy * 0.006)); }
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      if (last) { cam.dist = Math.min(8, Math.max(0.12, cam.dist * last.d / d)); pan(cx - last.cx, cy - last.cy); } last = { d, cx, cy };
+    }
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.min(8, Math.max(0.12, cam.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  function pan(dx, dy) {
+    if (cam.mode === 'takip') return; const k = cam.dist * 0.0012;
+    const rx = Math.cos(cam.az + Math.PI / 2), ry = Math.sin(cam.az + Math.PI / 2); const fx = Math.cos(cam.az), fy = Math.sin(cam.az);
+    cam.target.x += (-dx * rx + dy * -fx) * k * -1; cam.target.y += (-dx * ry + dy * -fy) * k * -1;
+  }
+
+  let curSim = null; const colTmp = new THREE.Color();
+  const view = {
+    renderer, camera, cam, onPick: null, onDrag: null,
+    setSim(sim) { curSim = sim; paintField(sim.field.colors); buildEggs(sim); clearRobots(); for (const rb of sim.robots) buildRobot(rb); },
+    focus: null,
+    setMode(m) {
+      cam.mode = m;
+      if (m === 'ustten') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.4; cam.pol = 0.02; cam.az = -Math.PI / 2; }
+      if (m === 'serbest') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.3; cam.pol = 0.75; cam.az = -Math.PI / 2; }
+      if (m === 'takip') { cam.dist = 0.75; cam.pol = 1.05; }
+    },
+    resize() { const r = host.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); },
+    // ekran → saha düzlemi (z=0)
+    pick(e) {
+      const r = el.getBoundingClientRect(); const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera); const t = -rc.ray.origin.z / rc.ray.direction.z; if (!(t > 0)) return null;
+      return [rc.ray.origin.x + rc.ray.direction.x * t, rc.ray.origin.y + rc.ray.direction.y * t];
+    },
+    render(opts) {
+      const sim = curSim; if (!sim) return; const pos = rayGeo.attributes.position.array, col = rayGeo.attributes.color.array; let n = 0;
+      const seg = (x1, y1, z1, x2, y2, z2, c) => { if (n >= 198) return; colTmp.setHex(c); pos.set([x1, y1, z1, x2, y2, z2], n * 6); col.set([colTmp.r, colTmp.g, colTmp.b, colTmp.r, colTmp.g, colTmp.b], n * 6); n++; };
+      sim.robots.forEach((rb, ri) => {
+        const v = robotViews.get(rb); if (!v) return; const robot = v.group; const s = rb.state;
+        robot.position.set(s.x, s.y, s.z ?? rb.wheelR);
+        if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
+        for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
+        for (const [side, sy] of [['L', 1], ['R', -1]]) { const g = v.wheels[side], wi = rb.wheelInfo[side]; g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
+        if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.25 : 0; }
+        for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
+        if (opts.rays) for (const s2 of rb.sensors) {
+          const w = rb.sensorWorld(s2);
+          if (s2.type === 'HC-SR04') { const d = Sensors.ultrasonic(sim, rb, s2); const L = d == null ? 1.2 : d; for (const da of [-0.26, 0, 0.26]) seg(w.x, w.y, w.z, w.x + Math.cos(w.a + da) * L, w.y + Math.sin(w.a + da) * L, w.z, d == null ? 0x4c7dff : 0x16a34a); }
+          else if (s2.type === 'IR_ENGEL' || s2.type === 'MZ80' || s2.type === 'SHARP_IR') { const hit = s2.type !== 'SHARP_IR' && Sensors.irObstacle(sim, rb, s2); const L = s2.type !== 'SHARP_IR' ? s2.range : 0.8; seg(w.x, w.y, w.z, w.x + Math.cos(w.a) * L, w.y + Math.sin(w.a) * L, w.z, hit ? 0xff3b3b : 0xf3a3a3); }
+        }
+        const T = trails[ri] || trails[0]; const tr = rb.trail; const mm = Math.min(tr.length, 4000); T.l.visible = opts.trail && mm > 1; T.l.material.color.set(rb.team === 'red' ? 0xf08c00 : 0x2563eb);
+        for (let i = 0; i < mm; i++) { const p = tr[tr.length - mm + i]; T.buf[i * 3] = p[0]; T.buf[i * 3 + 1] = p[1]; T.buf[i * 3 + 2] = 0.002; }
+        T.g.setDrawRange(0, mm); T.g.attributes.position.needsUpdate = true;
+      });
+      for (let i = sim.robots.length; i < trails.length; i++) trails[i].l.visible = false;
+      rayGeo.setDrawRange(0, n * 2); rayGeo.attributes.position.needsUpdate = true; rayGeo.attributes.color.needsUpdate = true;
+      sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; m.visible = !e.gone; if (e.gone) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
+        if (e.q) m.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w); else { tmpQ.setFromAxisAngle(zAxis, e.phi); m.quaternion.copy(tmpQ).multiply(qx90); } });
+      const fr = view.focus || sim.robots[0]; const pose = fr ? { p: [fr.state.x, fr.state.y], yaw: fr.state.th } : { p: [F / 2, F / 2], yaw: 0 };
+      // kamera
+      if (cam.mode === 'takip') { cam.target.set(pose.p[0], pose.p[1], 0.04); cam.az = pose.yaw + Math.PI; }
+      const sp = Math.sin(cam.pol), cp = Math.cos(cam.pol);
+      camera.position.set(cam.target.x + cam.dist * sp * Math.cos(cam.az), cam.target.y + cam.dist * sp * Math.sin(cam.az), cam.target.z + cam.dist * cp);
+      camera.lookAt(cam.target);
+      renderer.render(scene, camera);
+    },
+  };
+  return view;
+}

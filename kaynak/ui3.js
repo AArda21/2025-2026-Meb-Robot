@@ -1,0 +1,367 @@
+(() => {
+const $ = (id) => document.getElementById(id);
+const { RULES, Match, Sensors, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, BOARDS, keyLabel, deepCopy } = SIM;
+const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('on'), 2800); }
+function h(tag, attrs = {}, ...kids) { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'on') for (const [ev, fn] of Object.entries(v)) e.addEventListener(ev, fn); else if (k === 'html') e.innerHTML = v; else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c)); return e; }
+
+// ---------------- IndexedDB (STL dosyaları) ----------------
+const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promise((res, rej) => { try { const r = indexedDB.open('mebsim', 1); r.onupgradeneeded = () => r.result.createObjectStore('stl'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }));
+  const mem = new Map();
+  return { async put(k, v) { mem.set(k, v); try { const db = await open(); await new Promise((res, rej) => { const t = db.transaction('stl', 'readwrite'); t.objectStore('stl').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch (e) { } },
+    async get(k) { if (mem.has(k)) return mem.get(k); try { const db = await open(); return await new Promise((res) => { const r = db.transaction('stl').objectStore('stl').get(k); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }); } catch (e) { return null; } },
+    async del(k) { mem.delete(k); try { const db = await open(); db.transaction('stl', 'readwrite').objectStore('stl').delete(k); } catch (e) { } } }; })();
+
+// ---------------- Profiller ----------------
+let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
+if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
+let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
+const byId = (id) => profiles.find(p => p.id === id);
+const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
+async function attachSTL(p) {
+  const cfg = (p.mekanik || {}).model3d; if (!cfg || !cfg.var) { Object.defineProperty(p, '_stl', { value: null, writable: true, configurable: true, enumerable: false }); return; }
+  const raw = await idb.get(p.id); if (!raw) { Object.defineProperty(p, '_stl', { value: null, writable: true, configurable: true, enumerable: false }); return; }
+  try { const tr = SIM.transformSTL(SIM.parseSTL(raw), cfg); Object.defineProperty(p, '_stl', { value: tr, writable: true, configurable: true, enumerable: false }); } catch (e) { toast('STL okunamadı: ' + e.message); }
+}
+
+// ---------------- Sekmeler ----------------
+let tab = 'saha';
+function setTab(t) { tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === t)); if (t === 'robotlar') renderEditor(); if (t === 'monitor') serialDirty = true; if (t === 'saha' && view3d) setTimeout(() => view3d.resize(), 30); }
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.t));
+
+// =====================================================================================
+//                                  SAHA
+// =====================================================================================
+let MatchClass = Match, Match3D = null, view3d = null, use3d = false, libs = null;
+let match = null, running = false, ended = false, dirty = false, seed = +(LS.get('mebsim3_tohum') || 2026);
+const startPoses = {};
+function fillProfileSelects() {
+  const opts = (sel, withNone) => { const cur = sel.value; sel.innerHTML = (withNone ? '<option value="">— Robot yok —</option>' : '') + profiles.map(p => `<option value="${p.id}">${esc(p.ad)}</option>`).join(''); if ([...sel.options].some(o => o.value === cur)) sel.value = cur; };
+  opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck'));
+  if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'yumyum'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
+}
+async function buildMatch() {
+  const red = byId($('selRed').value), blue = byId($('selBlue').value);
+  for (const p of [red, blue]) if (p && p._stl === undefined) await attachSTL(p);
+  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses });
+  match.onSerial = () => { serialDirty = true; };
+  if (use3d && view3d) view3d.setSim(match);
+  dirty = false; ended = false; $('result').classList.remove('on'); fillFocus(); serialDirty = true;
+}
+function fillFocus() {
+  const cur = $('selFocus').value; const opts = match ? match.robots.map((r, i) => `<option value="${i}">${esc(r.name)} (${r.team === 'red' ? 'kırmızı' : 'mavi'})</option>`).join('') : '';
+  $('selFocus').innerHTML = opts; $('selMon').innerHTML = opts; if (cur && $('selFocus').querySelector(`option[value="${cur}"]`)) $('selFocus').value = cur;
+}
+const focusRobot = () => match && match.robots[+$('selFocus').value || 0];
+function showStartMsg(txt, ok) { const el = $('startMsg'); el.className = 'msg ' + (txt ? (ok ? 'ok' : 'err') : ''); el.textContent = txt || ''; }
+async function startRun() {
+  await buildMatch();
+  if (!match.robots.length) { showStartMsg('Önce en az bir köşeye robot seç.', false); return; }
+  const errs = match.compileAll();
+  if (errs.length) { showStartMsg(errs.map(e => `${e.robot} [${e.board}]: ${e.msg}`).join('\n'), false); toast('Kodda hata var — ayrıntı aşağıda'); }
+  else showStartMsg('');
+  running = true; ended = false; $('bPause').textContent = '⏸ Duraklat';
+}
+$('bStart').onclick = startRun;
+$('bPause').onclick = () => { if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
+$('bReset').onclick = async () => { running = false; $('bPause').textContent = '▶ Devam'; showStartMsg(''); await buildMatch(); };
+$('selRed').onchange = $('selBlue').onchange = async () => { LS.set('mebsim3_red', $('selRed').value); LS.set('mebsim3_blue', $('selBlue').value); running = false; await buildMatch(); };
+$('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS.set('mebsim3_tohum', seed); running = false; await buildMatch(); toast('Yeni yumurta dizilimi'); };
+$('bRotL').onclick = () => rot(15); $('bRotR').onclick = () => rot(-15);
+async function rot(d) { if (running || !match) return; const rb = focusRobot(); if (!rb) return; const s = rb.state; startPoses[rb.team] = { x: s.x, y: s.y, th: s.th + d * Math.PI / 180 }; await buildMatch(); }
+$('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
+$('selFocus').onchange = () => { if (view3d) view3d.focus = focusRobot(); };
+
+// ---------- 2B çizim ----------
+const cv = $('cv'), ctx = cv.getContext('2d'); let W = 0, H = 0, SC = 1, OX = 0, OY = 0; const MRG = 0.05;
+function resize2d() { const r = $('view').getBoundingClientRect(); const dpr = window.devicePixelRatio || 1; cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); W = cv.width; H = cv.height; SC = Math.min(W, H) / (RULES.FIELD + 2 * MRG); OX = (W - RULES.FIELD * SC) / 2; OY = (H - RULES.FIELD * SC) / 2; }
+new ResizeObserver(() => { resize2d(); if (view3d) view3d.resize(); }).observe($('view'));
+const X = (x) => OX + x * SC, Y = (y) => OY + (RULES.FIELD - y) * SC;
+function poly(pts) { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath(); }
+function draw2d() {
+  const F = RULES.FIELD, Z = RULES.ZONE, col = match.field.colors;
+  ctx.fillStyle = '#e3e8ee'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#d4d9df'; ctx.fillRect(X(-0.03), Y(F + 0.03), (F + 0.06) * SC, (F + 0.06) * SC);
+  ctx.fillStyle = col.zemin; ctx.fillRect(X(0), Y(F), F * SC, F * SC);
+  ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 1; for (let v = 0.25; v < F; v += 0.25) { ctx.beginPath(); ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(F)); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(F), Y(v)); ctx.stroke(); }
+  ctx.fillStyle = col.kirmizi; ctx.fillRect(X(0), Y(Z), Z * SC, Z * SC); ctx.fillStyle = col.mavi; ctx.fillRect(X(F - Z), Y(F), Z * SC, Z * SC);
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = `600 ${Math.max(10, SC * 0.035)}px system-ui`; ctx.textAlign = 'center';
+  ctx.fillText(`${match.banked.red.length} toplandı`, X(Z / 2), Y(Z / 2)); ctx.fillText(`${match.banked.blue.length} toplandı`, X(F - Z / 2), Y(F - Z / 2));
+  for (const rb of match.robots) if ($('cTrail').checked && rb.trail.length > 1) { ctx.strokeStyle = rb.team === 'red' ? 'rgba(230,126,0,.6)' : 'rgba(37,99,235,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); rb.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
+  const r = RULES.EGG_R * SC;
+  for (const e of match.eggs) { if (e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
+    if (e.kind === 'penalty') { ctx.rotate(-e.phi); ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 2 * Math.PI); ctx.fillStyle = col.kirmizi; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.fillStyle = col.mavi; ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : col.mavi; ctx.fill(); }
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); ctx.restore(); }
+  for (const rb of match.robots) {
+    for (const wp of rb.worldParts()) { poly(wp.corners); let fill = wp.p.color; if (wp.p.auto === 'wheel') fill = rb.wheelInfo[wp.p.name.startsWith('Sol') ? 'L' : 'R'].slip ? '#b91c1c' : '#1f2937'; ctx.globalAlpha = wp.p.solid ? 0.95 : 0.6; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke(); }
+    if ($('cCirc').checked) for (const c of rb.circuit) { const th = rb.state.th, cc = Math.cos(th), ss = Math.sin(th); const [wx, wy] = rb.toWorld(c.x, c.y); poly([[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + cc * u * c.hx - ss * v * c.hy, wy + ss * u * c.hx + cc * v * c.hy])); ctx.globalAlpha = 0.85; ctx.fillStyle = c.color; ctx.fill(); ctx.globalAlpha = 1; }
+    if ($('cRays').checked) for (const s of rb.sensors) { const w = rb.sensorWorld(s);
+      if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(match, rb, s); const L = d == null ? 1.5 : d; ctx.fillStyle = d == null ? 'rgba(76,125,255,.08)' : 'rgba(22,163,74,.16)'; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a - 0.26) * L), Y(w.y + Math.sin(w.a - 0.26) * L)); ctx.lineTo(X(w.x + Math.cos(w.a + 0.26) * L), Y(w.y + Math.sin(w.a + 0.26) * L)); ctx.closePath(); ctx.fill(); }
+      else if (s.type === 'IR_ENGEL' || s.type === 'MZ80') { const hit = Sensors.irObstacle(match, rb, s); ctx.strokeStyle = hit ? '#dc2626' : 'rgba(220,38,38,.3)'; ctx.lineWidth = hit ? 2.5 : 1.2; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a) * s.range), Y(w.y + Math.sin(w.a) * s.range)); ctx.stroke(); } }
+    if (rb.led) { const [lx, ly] = rb.toWorld(rb.led.x, rb.led.y); const c = rb.ledColor(); ctx.beginPath(); ctx.arc(X(lx), Y(ly), Math.max(4, SC * 0.012), 0, 7); ctx.fillStyle = c === 'red' ? '#ff3b3b' : c === 'blue' ? '#3b7bff' : c === 'mor' ? '#b84bff' : '#444'; ctx.fill(); }
+  }
+}
+
+// ---------- Sürükle (başlangıç konumu) ----------
+function pickRobot(p) { if (running || !match || !p) return null; let best = null, bd = 0.17; for (const rb of match.robots) { const d = Math.hypot(p[0] - rb.state.x, p[1] - rb.state.y); if (d < bd) { bd = d; best = rb; } } return best; }
+let drag = null;
+const screenToField = (e) => { const r = cv.getBoundingClientRect(), dpr = cv.width / r.width; return [((e.clientX - r.left) * dpr - OX) / SC, RULES.FIELD - ((e.clientY - r.top) * dpr - OY) / SC]; };
+function dragMove(p) { if (!drag || !p) return; const s = drag.rb.state; s.x = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[0] + drag.dx)); s.y = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[1] + drag.dy)); startPoses[drag.rb.team] = { x: s.x, y: s.y, th: s.th }; }
+cv.addEventListener('pointerdown', e => { const p = screenToField(e); const rb = pickRobot(p); if (rb) { drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; cv.setPointerCapture(e.pointerId); } });
+cv.addEventListener('pointermove', e => dragMove(screenToField(e)));
+cv.addEventListener('pointerup', () => { drag = null; });
+
+// ---------- Göstergeler ----------
+const fmtT = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(1).padStart(4, '0')}`; };
+let serialDirty = true, lastUi = 0;
+function updateUi() {
+  if (!match) return; const sc = match.score();
+  $('hTime').textContent = fmtT(match.time); $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
+  const rb = focusRobot();
+  $('ovl').textContent = `${match.engineName} · ${running ? '● ' + realF.toFixed(1) + '×' : ended ? 'bitti' : 'durdu'}` + (rb ? ` · ${(Math.hypot(rb.state.vx, rb.state.vy) * 100).toFixed(0)} cm/s` : '');
+  if (rb) {
+    const wi = rb.wheelInfo, cards = [];
+    for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) cards.push([lab, `<span class="${wi[k].slip ? 'bad' : ''}">${wi[k].V.toFixed(1)} V · ${wi[k].rpm.toFixed(0)} rpm${wi[k].slip ? ' · PATİNAJ' : ''}</span>`]);
+    const led = rb.ledColor(); cards.push(['Üst LED', led ? ({ red: 'kırmızı', blue: 'mavi', mor: 'mor' }[led] + (led === rb.team ? ' ✓' : ' <span class="bad">⚠ yanlış renk</span>')) : '<span class="bad">sönük</span>']);
+    if (rb.state.tilt > 3) cards.push(['Eğim', rb.state.tilt.toFixed(0) + '°']);
+    for (const r of Sensors.readouts(match, rb)) cards.push([r.name, esc(r.val)]);
+    for (const rt of rb.rts) if (rt.error || rt.compileError) cards.push([`Kod (${rt.board.id})`, '<span class="bad">hata — Monitör</span>']);
+    $('stats').innerHTML = cards.map(([k, v]) => `<div class="stat"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('');
+  } else $('stats').innerHTML = '<p class="hint">Sahada robot yok.</p>';
+  if (tab === 'monitor') updateMonitor();
+}
+function updateMonitor() {
+  const rb = match && match.robots[+$('selMon').value || 0];
+  if (serialDirty) { serialDirty = false; const el = $('serial'); if (!rb) { el.textContent = ''; } else { const multi = rb.boards.length > 1; el.innerHTML = rb.serial.slice(-500).map(l => `<span class="t">${l.t.toFixed(3).padStart(8)} ${multi ? '[' + esc(l.b) + '] ' : ''}</span>${esc(l.txt)}`).join('\n') || '<span class="t">Henüz çıktı yok. Sahada ▶ Başlat\'a bas.</span>'; if ($('cAuto').checked) el.scrollTop = el.scrollHeight; } }
+  if (!rb) return; const rows = new Map(); for (const hp of rb.hardwarePins()) rows.set(hp.key, (rows.get(hp.key) ? rows.get(hp.key) + ', ' : '') + hp.role);
+  for (const rt of rb.rts) for (const k of Object.keys(rt.pins)) if (!rows.has(+k)) rows.set(+k, '');
+  $('pinTbl').querySelector('tbody').innerHTML = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([k, role]) => {
+    const rt = rb.rtOf(k), st = rt && rt.pins[k]; let mode = st ? (st.mode === 1 ? 'OUTPUT' : st.pull ? 'INPUT_PULLUP' : 'INPUT') : '—', val = '—', cls = 'lo';
+    if (st && st.pwm != null) { val = 'PWM ' + st.raw; cls = 'pwm'; } else if (st && st.mode === 1) { val = st.v ? 'HIGH' : 'LOW'; cls = st.v ? 'hi' : 'lo'; }
+    const sv = rb.servoTarget(k); if (sv != null) { mode = 'SERVO'; val = `${sv.toFixed(0)}° (şu an ${(rb.servoAng[k] ?? 0).toFixed(0)}°)`; cls = 'pwm'; }
+    return `<tr><td>${esc(keyLabel(k, rb.boards))}</td><td>${esc(role)}</td><td>${mode}</td><td class="${cls}">${val}</td></tr>`;
+  }).join('');
+}
+$('selMon').onchange = () => { serialDirty = true; }; $('bClr').onclick = () => { const rb = match && match.robots[+$('selMon').value || 0]; if (rb) rb.serial.length = 0; serialDirty = true; };
+function endMatch() {
+  ended = true; running = false; $('bPause').textContent = '▶ Devam'; const sc = match.score();
+  const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — kendi rengi ${d.own}, yanlış renk ${d.wrong}, ceza ${d.pen}${d.own ? '' : ' · <span class="bad">kendi rengi hiç yok → kaybeder</span>'}</div>`; };
+  $('result').innerHTML = `<b>Maç bitti (3:00)</b>${line('red')}${line('blue')}`; $('result').classList.add('on');
+}
+
+// ---------- Ana döngü ----------
+let acc = 0, realF = 1, lastF = 0;
+function frame(ts) {
+  const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
+  if (running && match) {
+    const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
+    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= RULES.MATCH_TIME) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
+    realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
+  }
+  if (match) { if (use3d && view3d) view3d.render({ rays: $('cRays').checked, circuit: $('cCirc').checked, trail: $('cTrail').checked }); else draw2d(); if (ts - lastUi > 150) { lastUi = ts; updateUi(); } }
+  requestAnimationFrame(frame);
+}
+
+// =====================================================================================
+//                                  ROBOT DÜZENLEYİCİ
+// =====================================================================================
+let seg = 'kod';
+const curProfile = () => byId($('selProfile').value) || profiles[0];
+document.querySelectorAll('#seg button').forEach(b => b.onclick = () => { seg = b.dataset.s; document.querySelectorAll('#seg button').forEach(x => x.classList.toggle('on', x === b)); renderEditor(); });
+$('selProfile').onchange = renderEditor;
+$('pName').oninput = () => { curProfile().ad = $('pName').value; saveProfiles(); fillProfileSelects(); };
+$('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfiles(); };
+$('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
+$('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
+$('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
+$('bExport').onclick = () => { const txt = JSON.stringify(curProfile(), null, 1); try { navigator.clipboard.writeText(txt).then(() => toast('Profil JSON panoya kopyalandı'), () => toast('Kopyalanamadı')); } catch (e) { toast('Kopyalanamadı'); } };
+$('fImport').onchange = () => { const f = $('fImport').files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const p = JSON.parse(SIM.stripJsonComments(String(r.result))); p.id = newId(); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast((p.ad || 'Profil') + ' içe aktarıldı'); } catch (e) { toast('JSON okunamadı: ' + e.message); } }; r.readAsText(f); $('fImport').value = ''; };
+
+// küçük form yardımcıları
+const num = (v) => v === '' || v == null ? null : +String(v).replace(',', '.');
+function fld(obj, key, label, opt = {}) {
+  const type = opt.type || 'number'; let inp;
+  if (type === 'select') { inp = h('select', {}, ...Object.entries(opt.options).map(([v, t]) => h('option', { value: v }, t))); inp.value = obj[key] ?? opt.def ?? ''; }
+  else if (type === 'check') { inp = h('input', { type: 'checkbox' }); inp.checked = !!obj[key]; const l = h('label', { class: 'chk' }, inp, label); inp.onchange = () => { obj[key] = inp.checked; saveProfiles(); opt.after && opt.after(); }; return l; }
+  else { inp = h('input', { type: type === 'number' ? 'number' : 'text', step: opt.step || 'any', placeholder: opt.ph || '' }); inp.value = obj[key] ?? ''; if (opt.w) inp.style.width = opt.w; }
+  inp.onchange = () => { obj[key] = type === 'number' ? num(inp.value) : (opt.pin ? (inp.value.trim() === '' ? null : (/^\d+$/.test(inp.value.trim()) ? +inp.value.trim() : inp.value.trim())) : inp.value); saveProfiles(); opt.after && opt.after(); };
+  return h('label', { class: 'f' }, label, inp);
+}
+const pinFld = (obj, key, label) => fld(obj, key, label, { type: 'text', pin: true, w: '86px', ph: 'ör. 7, A0' });
+const card = (title, ...kids) => h('div', { class: 'card' }, title ? h('h2', {}, title) : null, ...kids);
+
+function renderEditor() {
+  if (tab !== 'robotlar') return; const p = curProfile(); if (!p) return;
+  $('pName').value = p.ad || ''; $('pDesc').value = p.aciklama || '';
+  for (const s of ['kod', 'mekanik', 'devre']) $('sec' + s[0].toUpperCase() + s.slice(1)).style.display = s === seg ? '' : 'none';
+  if (seg === 'kod') renderKod(p); if (seg === 'mekanik') renderMekanik(p); if (seg === 'devre') renderDevre(p);
+}
+// ---------- KOD ----------
+function renderKod(p) {
+  const root = $('secKod'); root.innerHTML = ''; p.kartlar = p.kartlar && p.kartlar.length ? p.kartlar : [{ id: 'ana', tip: 'Uno', kod: '' }];
+  p.kartlar.forEach((b, i) => {
+    const msg = h('div', { class: 'msg' }); const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off' }); ta.value = b.kod || '';
+    ta.oninput = () => { b.kod = ta.value; saveProfiles(); }; ta.onkeydown = (e) => { if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); b.kod = ta.value; } };
+    const file = h('input', { type: 'file', accept: '.ino,.cpp,.c,.h,.txt', hidden: true }); file.onchange = () => { const f = file.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { ta.value = b.kod = String(r.result); saveProfiles(); toast(f.name + ' yüklendi'); }; r.readAsText(f); };
+    const check = () => { try { const fakeM = { robots: [], eggs: [], time: 0, zoneOf: () => null }; const rb = new SIM.Robot(p, 'red', fakeM); rb.reset({ x: 1, y: 1, th: 0 }); const rt = new SIM.Runtime(fakeM, rb, i); SIM.compile(b.kod, rt.api()); msg.className = 'msg ok'; msg.textContent = 'Derlendi ✓ (söz dizimi doğru)'; } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; } };
+    root.append(card(null,
+      h('div', { class: 'row', style: 'margin-top:0' }, h('strong', {}, p.kartlar.length > 1 ? `Kart ${i + 1}` : 'Arduino kodu'),
+        fld(b, 'id', 'Kart adı', { type: 'text', w: '110px' }), fld(b, 'tip', 'Kart', { type: 'select', options: Object.fromEntries(Object.entries(BOARDS).map(([k, v]) => [k, v.ad])) }),
+        h('label', { class: 'btn sm' }, '.ino aç', file), h('button', { class: 'btn sm', on: { click: check } }, 'Derle'),
+        p.kartlar.length > 1 ? h('button', { class: 'btn sm danger', on: { click: () => { p.kartlar.splice(i, 1); saveProfiles(); renderKod(p); } } }, 'Kartı kaldır') : null),
+      msg, ta));
+  });
+  const links = h('textarea', { class: 'short', placeholder: 'mega:A0 - nano:A0' }); links.value = (p.kart_baglantilari || []).map(x => Array.isArray(x) ? x.join(' - ') : x).join('\n');
+  links.onchange = () => { p.kart_baglantilari = links.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.split(/\s*(?:<->|↔|-|,)\s*/)); saveProfiles(); };
+  root.append(card('Kartlar', h('div', { class: 'row' }, h('button', { class: 'btn sm', on: { click: () => { p.kartlar.push({ id: 'kart' + (p.kartlar.length + 1), tip: 'Nano', kod: 'void setup() {\n}\n\nvoid loop() {\n}\n' }); saveProfiles(); renderKod(p); } } }, '+ Kart ekle (iki Arduino)')),
+    p.kartlar.length > 1 ? h('div', {}, h('p', { class: 'hint' }, 'Kartlar arası teller (her satıra bir tel): kartAdı:pin - kartAdı:pin'), links) : h('p', { class: 'hint' }, 'Robotta iki Arduino varsa (ör. Mega + Nano) ikinci kartı ekle; aralarındaki telleri burada tanımlarsın, kartlar birbirinin pinini okuyabilir.')));
+}
+// ---------- MEKANİK ----------
+function renderMekanik(p) {
+  const root = $('secMekanik'); root.innerHTML = ''; const M = p.mekanik = p.mekanik || {};
+  M.tekerlek = M.tekerlek || {}; M.motor = M.motor || {}; M.pil = M.pil || {}; M.agirlik_merkezi = M.agirlik_merkezi || {}; M.acil_stop = M.acil_stop || null;
+  const T = M.tekerlek, Mo = M.motor;
+  const rerender = () => renderMekanik(p);
+  root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
+  const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', 'Teker ekseni x (cm)')));
+  if (T.lastik === 'ozel') tc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(T, 'mu_statik', 'Statik sürtünme μs'), fld(T, 'mu_kinetik', 'Kayma sürtünmesi μk'), fld(T, 'yuvarlanma', 'Yuvarlanma direnci')));
+  else { const t = TIRES[T.lastik || 'kaucuk']; if (t) tc.append(h('p', { class: 'hint' }, `Sunta zeminde: μs ≈ ${t.muS}, μk ≈ ${t.muK}, yuvarlanma ≈ ${t.crr}`)); }
+  root.append(tc);
+  const hasCaster = M.sarhos_teker !== null; M.sarhos_teker = M.sarhos_teker === null ? null : (M.sarhos_teker || {});
+  const cc = card('Sarhoş teker', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: hasCaster, onchange: (e) => { M.sarhos_teker = e.target.checked ? { x_cm: -8, y_cm: 0, cap_cm: 1.6 } : null; saveProfiles(); rerender(); } }), 'Sarhoş teker var'));
+  if (hasCaster) cc.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.sarhos_teker, 'x_cm', 'x (cm)'), fld(M.sarhos_teker, 'y_cm', 'y (cm)'), fld(M.sarhos_teker, 'cap_cm', 'Bilye çapı (cm)')));
+  root.append(cc);
+  const mc = card('Motorlar ve pil', h('div', { class: 'fields' }, fld(Mo, 'model', 'Motor', { type: 'select', options: Object.fromEntries(Object.entries(MOTORS).map(([k, v]) => [k, v.ad])), def: 'TT 1:48 6V', after: rerender }), fld(M.pil, 'volt', 'Pil gerilimi (V)')));
+  if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
+  else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
+  root.append(mc);
+  const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
+  if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
+  root.append(st);
+  // 3D model
+  M.model3d = M.model3d || null; const md = M.model3d;
+  const stlFile = h('input', { type: 'file', accept: '.stl', hidden: true });
+  stlFile.onchange = async () => { const f = stlFile.files[0]; if (!f) return; const buf = await f.arrayBuffer(); try { const raw = SIM.parseSTL(buf); if (!raw.length) throw new Error('üçgen yok'); await idb.put(p.id, buf); M.model3d = Object.assign({ var: true, dosya: f.name, olcek_mm: 1, dx: 0, dy: 0, dz: 0, x_cm: 0, y_cm: 0, z_cm: 0, carpisma: false, kutulari_gizle: false, renk: '#9aa5b1' }, M.model3d || {}, { var: true, dosya: f.name }); saveProfiles(); await attachSTL(p); toast(`${f.name}: ${(raw.length / 9) | 0} üçgen`); rerender(); } catch (e) { toast('STL okunamadı: ' + e.message); } };
+  const mc3 = card('3D iskelet (STL)', h('p', { class: 'hint' }, 'Tinkercad, Fusion 360 veya SolidWorks\'ten STL olarak dışa aktar. Robotun önü +x, solu +y olacak şekilde döndür. Boyut kontrolü bu modelle de yapılır.'), h('div', { class: 'row' }, h('label', { class: 'btn sm' }, md && md.var ? 'STL değiştir' : 'STL yükle', stlFile), md && md.var ? h('span', { class: 'hint' }, md.dosya) : null, md && md.var ? h('button', { class: 'btn sm danger', on: { click: async () => { M.model3d = null; await idb.del(p.id); p._stl = null; saveProfiles(); rerender(); } } }, 'Kaldır') : null));
+  if (md && md.var) {
+    const after = async () => { await attachSTL(p); rerender(); };
+    mc3.append(h('div', { class: 'fields' }, fld(md, 'olcek_mm', 'Birim (1 = mm, 10 = cm)', { after }), fld(md, 'dx', 'Döndür X°', { after }), fld(md, 'dy', 'Döndür Y°', { after }), fld(md, 'dz', 'Döndür Z°', { after }), fld(md, 'x_cm', 'Kaydır x (cm)', { after }), fld(md, 'y_cm', 'Kaydır y (cm)', { after }), fld(md, 'z_cm', 'Taban yüksekliği (cm)', { after }), fld(md, 'renk', 'Renk', { type: 'text', w: '90px' })),
+      h('div', { class: 'row' }, fld(md, 'carpisma', 'Çarpışmada kullan (dış kabuk, 3B)', { type: 'check' }), fld(md, 'kutulari_gizle', 'Parça kutularını gizle', { type: 'check' }), fld(md, 'seffaf', 'Yarı saydam', { type: 'check' })));
+    if (p._stl) { const b = p._stl.bbox; mc3.append(h('p', { class: 'hint' }, `Model boyutu: ${((b[3] - b[0]) * 100).toFixed(1)} × ${((b[4] - b[1]) * 100).toFixed(1)} × ${((b[5] - b[2]) * 100).toFixed(1)} cm`)); }
+  }
+  root.append(mc3);
+  // Parçalar
+  M.parcalar = M.parcalar || [];
+  const cols = [['ad', 'Ad', 'text'], ['x', 'x'], ['y', 'y'], ['uzunluk', 'Uzunluk'], ['genislik', 'Genişlik'], ['z0', 'Alt z'], ['z1', 'Üst z'], ['renk', 'Renk', 'text']];
+  const tb = h('tbody'); M.parcalar.forEach((pt, i) => tb.append(h('tr', {}, ...cols.map(([k, , t]) => { const inp = h('input', { type: t === 'text' ? 'text' : 'number', step: 'any' }); inp.value = pt[k] ?? ''; inp.onchange = () => { pt[k] = t === 'text' ? inp.value : num(inp.value); saveProfiles(); }; return h('td', {}, inp); }),
+    h('td', {}, pt.servo_pin != null ? h('span', { class: 'hint', title: 'Servo ile döner' }, '⟳') : null, h('button', { class: 'btn sm danger', on: { click: () => { M.parcalar.splice(i, 1); saveProfiles(); rerender(); } } }, '×')))));
+  const json = h('textarea', { class: 'short' }); json.value = JSON.stringify(M.parcalar, null, 1);
+  root.append(card('Gövde parçaları (çarpışma kutuları, cm)', h('p', { class: 'hint' }, 'x = ileri, y = sola, merkez = robot ortası. Alt z ≥ 2 cm olan parçanın altından yumurta geçer, ≥ 8 cm olan duvarın üstünden geçer.'),
+    h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ...cols.map(c => h('th', {}, c[1])), h('th'))), tb)),
+    h('div', { class: 'row' }, h('button', { class: 'btn sm', on: { click: () => { M.parcalar.push({ ad: 'Yeni parça', x: 0, y: 0, uzunluk: 5, genislik: 5, z0: 3, z1: 6, renk: '#94a3b8' }); saveProfiles(); rerender(); } } }, '+ Parça ekle')),
+    h('details', {}, h('summary', {}, 'Gelişmiş: parçaları JSON olarak düzenle (servo ile dönen kapak vb.)'), h('p', { class: 'hint' }, 'Servo ile dönen parça: "servo_pin": 3, "pivot": [x, y], "aci_ofset": derece, "yon": 1 veya -1. "kati": false → sadece görsel. "sekil": "silindir".'), json,
+      h('button', { class: 'btn sm', on: { click: () => { try { M.parcalar = JSON.parse(json.value); saveProfiles(); rerender(); toast('Parçalar güncellendi'); } catch (e) { toast('JSON hatası: ' + e.message); } } } }, 'Uygula'))));
+}
+// ---------- DEVRE ----------
+function renderDevre(p) {
+  const root = $('secDevre'); root.innerHTML = ''; const D = p.devre = p.devre || {}; const rerender = () => renderDevre(p);
+  D.surucu = D.surucu || { tip: 'L298N', sol: {}, sag: {} }; const S = D.surucu; S.sol = S.sol || {}; S.sag = S.sag || {};
+  const tipKey = Object.keys(DRIVERS).find(k => k.toUpperCase() === String(S.tip || '').toUpperCase()) || 'L298N'; S.tip = tipKey; const dp = DRIVERS[tipKey].pins;
+  const boardsHint = (p.kartlar || []).length > 1 ? `İki kart varsa pini "kartAdı:pin" yaz (ör. ${p.kartlar[0].id}:7).` : 'Pin: 7, A0 gibi.';
+  root.append(card('Motor sürücüsü', h('div', { class: 'fields' }, fld(S, 'tip', 'Sürücü', { type: 'select', options: Object.fromEntries(Object.entries(DRIVERS).map(([k, v]) => [k, v.ad])), after: rerender }), DRIVERS[tipKey].stby ? pinFld(S, 'stby', 'STBY') : null),
+    h('h3', {}, 'Sol motor'), h('div', { class: 'fields' }, ...dp.map(k => pinFld(S.sol, k, k.toUpperCase())), fld(S, 'sol_ters', 'Yönü ters', { type: 'check' })),
+    h('h3', {}, 'Sağ motor'), h('div', { class: 'fields' }, ...dp.map(k => pinFld(S.sag, k, k.toUpperCase())), fld(S, 'sag_ters', 'Yönü ters', { type: 'check' })),
+    h('p', { class: 'hint' }, boardsHint + (tipKey === 'L298N' || tipKey === 'L293D' ? ' EN boş bırakılırsa jumper takılı (tam hız) sayılır.' : ''))));
+  D.led = D.led || { tip: 'iki_pin' }; const L = D.led;
+  root.append(card('Köşe rengi LED\'i', h('div', { class: 'fields' }, fld(L, 'tip', 'Tip', { type: 'select', options: { iki_pin: 'Kırmızı + mavi LED (2 pin)', NeoPixel: 'NeoPixel şerit (1 pin)' }, after: rerender }),
+    ...(L.tip === 'NeoPixel' ? [pinFld(L, 'pin', 'Veri pini')] : [pinFld(L, 'kirmizi_pin', 'Kırmızı pin'), pinFld(L, 'mavi_pin', 'Mavi pin')]), fld(L, 'x', 'x (cm)'), fld(L, 'y', 'y (cm)'), fld(L, 'z', 'z (cm)'))));
+  // sensörler
+  D.sensorler = D.sensorler || []; const list = h('div', { class: 'list' });
+  D.sensorler.forEach((s, i) => {
+    const t = String(s.tip || '').toUpperCase(); const def = SENSOR_TYPES[t] || SENSOR_TYPES.IR_ENGEL;
+    const extra = [];
+    if (t === 'IR_ENGEL') { extra.push(fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'ters', 'Algılayınca HIGH', { type: 'check' })); }
+    if (t === 'TCRT5000') extra.push(fld(s, 'esik', 'Dijital eşik'));
+    if (t === 'TCS3200') extra.push(fld(s, 'bakis', 'Bakış', { type: 'select', options: { asagi: 'Aşağı (zemin)', ileri: 'İleri (yumurta)' } }), fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'olcek', 'Ölçek % (S0/S1 yoksa)'));
+    if (t === 'BUTON') extra.push(fld(s, 'deger', 'Değer', { type: 'select', options: { HIGH: 'Hep HIGH', LOW: 'Hep LOW', KIRMIZIDA_HIGH: 'Kırmızı köşede HIGH', MAVIDE_HIGH: 'Mavi köşede HIGH' } }));
+    list.append(h('div', { class: 'item' }, h('div', { class: 'top' }, fld(s, 'tip', 'Tip', { type: 'select', options: Object.fromEntries(Object.entries(SENSOR_TYPES).map(([k, v]) => [k, v.ad])), after: rerender }), fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }),
+      h('button', { class: 'btn sm danger', style: 'margin-left:auto', on: { click: () => { D.sensorler.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')),
+      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra)));
+  });
+  const addSel = h('select', {}, ...Object.entries(SENSOR_TYPES).map(([k, v]) => h('option', { value: k }, v.ad)));
+  root.append(card('Sensörler', h('p', { class: 'hint' }, 'Konum robot merkezine göre cm (x ileri, y sola). Açı: 0 = ileri, + = sola.'), list, h('div', { class: 'row' }, addSel, h('button', { class: 'btn sm', on: { click: () => { D.sensorler.push({ tip: addSel.value, ad: SENSOR_TYPES[addSel.value].ad, x: 8, y: 0, z: 2, aci: 0 }); saveProfiles(); rerender(); } } }, '+ Sensör ekle'))));
+  // servolar
+  D.servolar = D.servolar || []; const sl = h('div', { class: 'list' });
+  D.servolar.forEach((s, i) => sl.append(h('div', { class: 'item' }, h('div', { class: 'fields' }, fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }), pinFld(s, 'pin', 'Pin'), fld(s, 'baslangic_aci', 'Başlangıç açısı°'), fld(s, 'hiz_derece_s', 'Hız (°/sn)', { ph: '450' }), h('button', { class: 'btn sm danger', on: { click: () => { D.servolar.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')))));
+  root.append(card('Servolar', sl, h('p', { class: 'hint' }, 'Servonun döndürdüğü parçayı Mekanik → Gelişmiş JSON\'da "servo_pin" ile bağla.'), h('button', { class: 'btn sm', on: { click: () => { D.servolar.push({ ad: 'Servo', pin: null, baslangic_aci: 90, hiz_derece_s: 450 }); saveProfiles(); rerender(); } } }, '+ Servo ekle')));
+  // kart yerleşimi
+  D.yerlesim = D.yerlesim || []; const ycols = [['ad', 'Kart', 'text'], ['x', 'x'], ['y', 'y'], ['z', 'z'], ['uzunluk', 'Uzunluk'], ['genislik', 'Genişlik'], ['kalinlik', 'Kalınlık'], ['renk', 'Renk', 'text']];
+  const ytb = h('tbody'); D.yerlesim.forEach((c, i) => ytb.append(h('tr', {}, ...ycols.map(([k, , t]) => { const inp = h('input', { type: t === 'text' ? 'text' : 'number', step: 'any' }); inp.value = c[k] ?? ''; inp.onchange = () => { c[k] = t === 'text' ? inp.value : num(inp.value); saveProfiles(); }; return h('td', {}, inp); }), h('td', {}, h('button', { class: 'btn sm danger', on: { click: () => { D.yerlesim.splice(i, 1); saveProfiles(); rerender(); } } }, '×')))));
+  root.append(card('Kartların iskelet üzerindeki yeri', h('p', { class: 'hint' }, 'Arduino, sürücü, pil gibi kartlar 3B iskelette bu konumlarda durur; kablolar bunlardan çizilir ve çakışma kontrolü yapılır.'), h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ...ycols.map(c => h('th', {}, c[1])), h('th'))), ytb)),
+    h('button', { class: 'btn sm', on: { click: () => { D.yerlesim.push({ ad: 'Yeni kart', x: 0, y: 0, z: 8, uzunluk: 5, genislik: 4, kalinlik: 1.2, renk: '#0e7490' }); saveProfiles(); rerender(); } } }, '+ Kart ekle')));
+  // Fritzing
+  const nf = h('input', { type: 'file', accept: '.xml,.txt', hidden: true });
+  nf.onchange = () => { const f = nf.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { D.netlist = SIM.parseNetlist(String(r.result)); D.netlist.dosya = f.name; saveProfiles(); rerender(); toast(`${D.netlist.baglantilar.length} Arduino pini okundu`); } catch (e) { toast('Netlist okunamadı: ' + e.message); } }; r.readAsText(f); };
+  const nc = card('Fritzing şeması', h('p', { class: 'hint' }, 'Fritzing\'de: Dosya → Dışa Aktar → XML Netlist. O dosyayı buraya yükle; Kontrol sekmesi şemayı bu sayfadaki pinlerle karşılaştırır (yanlış/eksik kablo).'), h('div', { class: 'row' }, h('label', { class: 'btn sm' }, D.netlist ? 'Yeniden yükle' : 'XML Netlist yükle', nf), D.netlist ? h('span', { class: 'hint' }, D.netlist.dosya || '') : null, D.netlist ? h('button', { class: 'btn sm danger', on: { click: () => { delete D.netlist; saveProfiles(); rerender(); } } }, 'Kaldır') : null));
+  if (D.netlist) nc.append(h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Arduino pini'), h('th', {}, 'Şemada bağlı olan'))), h('tbody', {}, ...D.netlist.baglantilar.map(c => h('tr', {}, h('td', {}, c.pin), h('td', {}, c.parcalar.join(', ') || '—')))))));
+  root.append(nc);
+}
+
+// =====================================================================================
+//                                  KONTROL
+// =====================================================================================
+$('bCheck').onclick = async () => {
+  const p = byId($('selCheck').value); if (!p) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
+  $('bCheck').disabled = true; $('prog').style.display = ''; const bar = $('prog').firstElementChild; bar.style.width = '0';
+  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
+  $('bCheck').disabled = false; $('prog').style.display = 'none';
+  const all = st.items.concat(tr.items); const order = ['Kod', 'Kod-Devre', 'Hareket', 'Kurallar', 'Mekanik', 'Devre'];
+  const titles = { Kod: 'Kod', 'Kod-Devre': 'Kod ↔ devre uyumu', Hareket: '15 saniyelik deneme', Kurallar: 'Yarışma kuralları', Mekanik: 'Mekanik', Devre: 'Devre' };
+  const sym = { ok: '✓', warn: '!', err: '✕', info: 'i' }; const rank = { err: 0, warn: 1, info: 2, ok: 3 };
+  const nErr = all.filter(x => x.level === 'err').length, nWarn = all.filter(x => x.level === 'warn').length;
+  let html = `<div class="card"><h2>${esc(p.ad)} — ${nErr ? `<span class="bad">${nErr} hata</span>` : 'hata yok'}, ${nWarn} uyarı</h2><p class="hint">Hatalar gerçek robotta büyük ihtimalle sorun çıkarır; uyarılar kontrol edilmeli; i = bilgi.</p></div>`;
+  for (const cat of order) { const items = all.filter(x => x.cat === cat).sort((a, b) => rank[a.level] - rank[b.level]); if (!items.length) continue;
+    html += `<div class="card report"><h2>${titles[cat]}</h2>`; if (cat === 'Hareket' && tr.path.length > 1) html += pathSvg(tr);
+    html += `<ul>${items.map(i => `<li><span class="ic ${i.level}">${sym[i.level]}</span><span>${esc(i.txt)}</span></li>`).join('')}</ul></div>`; }
+  html += `<div class="card"><button class="btn pri" id="bWatch">Sahada izle</button> <span class="hint">Bu robotu ${team === 'red' ? 'kırmızı' : 'mavi'} köşeye koyup maçı başlatır.</span></div>`;
+  $('report').innerHTML = html;
+  $('bWatch').onclick = () => { $(team === 'red' ? 'selRed' : 'selBlue').value = p.id; setTab('saha'); startRun(); };
+};
+function pathSvg(tr) {
+  const F = RULES.FIELD, Z = RULES.ZONE, col = tr.match.field.colors; const pts = tr.path.map(([x, y]) => `${(x * 100).toFixed(1)},${((F - y) * 100).toFixed(1)}`).join(' ');
+  const eggs = tr.match.eggs.map(e => e.gone ? '' : `<circle cx="${(e.x * 100).toFixed(1)}" cy="${((F - e.y) * 100).toFixed(1)}" r="2.4" fill="${e.kind === 'red' ? col.kirmizi : e.kind === 'blue' ? col.mavi : '#7a3a6a'}"/>`).join('');
+  const s = tr.path[0], e = tr.path[tr.path.length - 1];
+  return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/><rect x="0" y="${(F - Z) * 100}" width="50" height="50" fill="${col.kirmizi}"/><rect x="200" y="0" width="50" height="50" fill="${col.mavi}"/>${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
+}
+
+// =====================================================================================
+//                                  BAŞLANGIÇ
+// =====================================================================================
+function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('zaman aşımı')), ms))]); }
+async function tryImport(urls) { let err; for (const u of urls) { try { return await withTimeout(import(u), 15000); } catch (e) { err = e; } } throw err; }
+async function loadLibs() {
+  const THREE = await tryImport(['./lib/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js', 'https://unpkg.com/three@0.160.0/build/three.module.js']);
+  const Rm = await tryImport(['./lib/rapier.es.js', 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/rapier.es.js', 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.12.0/+esm']);
+  const RAPIER = Rm.default && Rm.default.init ? Rm.default : Rm; await RAPIER.init(); return { THREE, RAPIER };
+}
+async function setEngine(mode) {
+  running = false; $('bPause').textContent = '▶ Başlat'; use3d = mode === '3d' && !!libs; $('sEngine').value = use3d ? '3d' : '2d'; LS.set('mebsim3_motor', $('sEngine').value);
+  MatchClass = use3d ? Match3D : Match; $('v3').style.display = use3d ? 'block' : 'none'; cv.style.display = use3d ? 'none' : 'block'; $('camWrap').style.display = use3d ? '' : 'none';
+  await buildMatch(); if (use3d) { view3d.resize(); view3d.setMode($('sCam').value); view3d.focus = focusRobot(); }
+}
+$('sEngine').onchange = () => { if ($('sEngine').value === '3d' && !libs) { toast('3B motor yüklenemedi'); $('sEngine').value = '2d'; return; } setEngine($('sEngine').value); };
+setInterval(() => { if (dirty && !running && match && tab !== 'robotlar') buildMatch(); }, 800);
+(async () => {
+  fillProfileSelects(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
+  $('ovl').textContent = '3B fizik motoru yükleniyor…';
+  try {
+    libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3'));
+    view3d.onPick = (e) => { const p = view3d.pick(e); const rb = pickRobot(p); if (!rb) return false; drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; e.target.setPointerCapture(e.pointerId); return true; };
+    view3d.onDrag = (e) => { if (!drag) return false; dragMove(view3d.pick(e)); return true; };
+    view3d.renderer.domElement.addEventListener('pointerup', () => { if (drag) { drag = null; buildMatch(); } });
+    await setEngine(LS.get('mebsim3_motor') || '3d');
+  } catch (err) { console.warn(err); $('sEngine').querySelector('option[value="3d"]').textContent = '3B (yüklenemedi)'; $('sEngine').value = '2d'; toast('3B motor yüklenemedi, 2B ile devam'); }
+})();
+})();
