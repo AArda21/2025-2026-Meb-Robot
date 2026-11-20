@@ -32,7 +32,7 @@ class Runtime {
     this.board = robot.boards[bi]; this.B = boardOf(this.board.tip);
     this.t = 0; this.pins = {}; this.servoT = {}; this.gen = null; this.phase = 'setup'; this.error = null;
     this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi);
-    this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {};
+    this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {}; this.loopStats = { n: 0, sum: 0, max: 0, last: 0, setup: 0 };
   }
   track(key, op) { let s = this.ops.get(key); if (!s) this.ops.set(key, s = new Set()); s.add(op); }
   warnOnce(code, msg) { if (this.warned.has(code)) return; this.warned.add(code); this.robot.warnings.push({ board: this.board.id, msg }); this.out('⚠ ' + msg); }
@@ -42,9 +42,9 @@ class Runtime {
     if (!this.prog || this.error) return; let guard = 0;
     try {
       while (this.t <= simTime && guard++ < 200000) {
-        if (!this.gen) { this.gen = this.phase === 'setup' ? this.prog.setup() : this.prog.loop(); this.phase = 'loop'; this.t += 3e-6; }
+        if (!this.gen) { this.inSetup = this.phase === 'setup'; this.gen = this.inSetup ? this.prog.setup() : this.prog.loop(); this.phase = 'loop'; this.loopStart = this.t; this.t += 3e-6; }
         const r = this.gen.next();
-        if (r.done) { this.gen = null; continue; }
+        if (r.done) { this.gen = null; const dur = this.t - this.loopStart; const L = this.loopStats; if (this.inSetup) L.setup = dur; else { L.n++; L.sum += dur; L.max = Math.max(L.max, dur); L.last = dur; } continue; }
         if (typeof r.value === 'number' && r.value > 0) this.t += r.value;
       }
     } catch (e) { this.error = e; const ln = errLine(e); this.out(`✖ Çalışma hatası${ln ? ' (satır ~' + ln + ')' : ''}: ${trError(e.message)}`); }
@@ -125,7 +125,7 @@ class Runtime {
       },
       millis() { return Math.floor(rt.t * 1000); }, micros() { return Math.floor(rt.t * 1e6); },
       *delay(ms) { yield Math.max(0, +ms || 0) / 1000; }, *delayMicroseconds(us) { yield Math.max(0, +us || 0) / 1e6; },
-      *pulseIn(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
+      *pulseIn(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); if (timeout >= 1000000 && rb.sensors.some(s => s.type === 'HC-SR04' && s.echo === k)) rt.warnOnce('pto' + k, `pulseIn(${keyLabel(k, rb.boards)}) için zaman aşımı verilmemiş: yankı gelmezse kod 1 saniye bekler. pulseIn(ECHO, HIGH, 30000) yaz.`); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
       *pulseInLong(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
       map(x, a, b, c, d) { return Math.trunc((x - a) * (d - c) / (b - a) + c); },
       constrain: clamp, abs: Math.abs, min: Math.min, max: Math.max, sq: x => x * x, sqrt: Math.sqrt, pow: Math.pow,
@@ -228,9 +228,10 @@ class Robot {
     return errs;
   }
   rtOf(key) { return this.rts[Math.floor(key / 100)] || null; }
-  duty(key) { if (key == null) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
+  duty(key) { if (key == null) return 0; if (this.cut && this.cut.has(key)) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
   servoTarget(key) { const rt = this.rtOf(key); return rt && key in rt.servoT ? rt.servoT[key] : null; }
   readDigital(k, rt) {
+    if (this.cut && this.cut.has(k)) return Math.random() < 0.5 ? 1 : 0;
     const r = Sensors.digital(this.match, this, k, rt); if (r != null) return r;
     const g = this.links.get(k); if (g) for (const o of g) { if (o === k) continue; const ort = this.rtOf(o); const os = ort && ort.pins[o]; if (os && (os.mode === 1 || os.pwm != null)) return os.pwm != null ? (os.pwm > 0.5 ? 1 : 0) : os.v; }
     const s = rt.pins[k]; if (s && s.mode === 1) return s.v; if (s && s.pull) return 1; return 0;
@@ -269,7 +270,7 @@ class Robot {
   sideVoltage(side) {
     const D = this.driver, pins = side === 'L' ? D.L : D.R;
     const dig = (k) => k == null ? 0 : (this.duty(k) > 0.5 ? 1 : 0);
-    const Vs = Math.max(0, D.vBat - D.drop); let V = 0, mode = 'coast', d = 0;
+    const Vs = Math.max(0, D.vBat * (this.batFactor || 1) - D.drop); let V = 0, mode = 'coast', d = 0;
     if (D.stby != null && !dig(D.stby)) return { V: 0, mode: 'coast', duty: 0 };
     const t = D.type;
     if (t === 'L9110' || t === 'DRV8833' || t === 'MX1508') {
@@ -283,6 +284,7 @@ class Robot {
       if (en <= 0) mode = 'coast'; else if (i1 === i2) mode = 'brake'; else { mode = 'drive'; V = (i1 ? 1 : -1) * Vs * en; }
     }
     if (side === 'L' ? D.invL : D.invR) V = -V;
+    if (this.gain) V *= this.gain[side];
     return { V, mode, duty: d };
   }
   ledColor() {

@@ -53,10 +53,11 @@ function fillProfileSelects() {
   opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck')); opts($('selBatchA')); opts($('selBatchB')); if (!$('selBatchA').dataset.init) { $('selBatchA').dataset.init = 1; if (byId('yumyum')) $('selBatchA').value = 'yumyum'; if (byId('rakip')) $('selBatchB').value = 'rakip'; }
   if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'yumyum'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
 }
+const gercek = () => ({ motor_farki: +$('nFark').value || 0, pil: $('nPil').value === '' ? 100 : +$('nPil').value });
 async function buildMatch() {
   const red = byId($('selRed').value), blue = byId($('selBlue').value);
   for (const p of [red, blue]) if (p && p._stl === undefined) await attachSTL(p);
-  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value });
+  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek() });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
   dirty = false; ended = false; rec = []; exitReplay(true); $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
@@ -83,6 +84,8 @@ $('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS
 $('bRotL').onclick = () => rot(15); $('bRotR').onclick = () => rot(-15);
 async function rot(d) { if (running || !match) return; const rb = focusRobot(); if (!rb) return; const s = rb.state; startPoses[rb.team] = { x: s.x, y: s.y, th: s.th + d * Math.PI / 180 }; await buildMatch(); }
 $('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
+$('nFark').value = LS.get('mebsim3_fark') ?? 3; $('nPil').value = LS.get('mebsim3_pil') ?? 100;
+$('nFark').onchange = $('nPil').onchange = async () => { LS.set('mebsim3_fark', $('nFark').value); LS.set('mebsim3_pil', $('nPil').value); running = false; await buildMatch(); };
 $('sKural').value = LS.get('mebsim3_kural') || '2026'; $('sYesil').value = LS.get('mebsim3_yesil') || 'sag_alt';
 const syncKural = () => { $('yesilWrap').style.display = $('sKural').value === '2026' ? '' : 'none'; };
 syncKural();
@@ -165,6 +168,9 @@ function updateMonitor() {
   drawPlot(match && match.robots[+$('selMon').value || 0]);
   const rb = match && match.robots[+$('selMon').value || 0];
   if (serialDirty) { serialDirty = false; const el = $('serial'); if (!rb) { el.textContent = ''; } else { const multi = rb.boards.length > 1; el.innerHTML = rb.serial.slice(-500).map(l => `<span class="t">${l.t.toFixed(3).padStart(8)} ${multi ? '[' + esc(l.b) + '] ' : ''}</span>${esc(l.txt)}`).join('\n') || '<span class="t">Henüz çıktı yok. Sahada ▶ Başlat\'a bas.</span>'; if ($('cAuto').checked) el.scrollTop = el.scrollHeight; } }
+  if (rb) { const vrows = []; const li = []; for (const rt of rb.rts) { if (rt.prog && rt.prog.vars) { let v = {}; try { v = rt.prog.vars(); } catch (e) { } for (const [k, val] of Object.entries(v)) if (['number', 'boolean', 'string'].includes(typeof val)) vrows.push(`<tr><td>${esc(rt.board.id)}</td><td>${esc(k)}</td><td><b>${esc(typeof val === 'number' && !Number.isInteger(val) ? val.toFixed(3) : String(val))}</b></td></tr>`); }
+      const L = rt.loopStats; if (L && L.n) li.push(`${rb.boards.length > 1 ? rt.board.id + ': ' : ''}loop ort. ${(L.sum / L.n * 1000).toFixed(1)} ms, en uzun ${(L.max * 1000).toFixed(0)} ms`); }
+    $('varTbl').querySelector('tbody').innerHTML = vrows.join('') || '<tr><td colspan="3" class="hint">Maç başlayınca kodundaki değişkenler burada canlı görünür.</td></tr>'; $('loopInfo').textContent = li.join(' · '); }
   if (!rb) return; const rows = new Map(); for (const hp of rb.hardwarePins()) rows.set(hp.key, (rows.get(hp.key) ? rows.get(hp.key) + ', ' : '') + hp.role);
   for (const rt of rb.rts) for (const k of Object.keys(rt.pins)) if (!rows.has(+k)) rows.set(+k, '');
   $('pinTbl').querySelector('tbody').innerHTML = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([k, role]) => {
@@ -436,7 +442,7 @@ function renderDevre(p) {
 $('bCheck').onclick = async () => {
   const p = byId($('selCheck').value); if (!p) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
   $('bCheck').disabled = true; $('prog').style.display = ''; const bar = $('prog').firstElementChild; bar.style.width = '0';
-  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value, onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
+  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek(), onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
   $('bCheck').disabled = false; $('prog').style.display = 'none';
   const all = st.items.concat(tr.items); const order = ['Kod', 'Kod-Devre', 'Hareket', 'Kurallar', 'Mekanik', 'Devre'];
   const titles = { Kod: 'Kod', 'Kod-Devre': 'Kod ↔ devre uyumu', Hareket: '15 saniyelik deneme', Kurallar: 'Yarışma kuralları', Mekanik: 'Mekanik', Devre: 'Devre' };
@@ -457,6 +463,21 @@ function pathSvg(tr) {
   return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/>${tr.match.zones.map(z => `<rect x="${z.x0 * 100}" y="${(F - z.y1) * 100}" width="${(z.x1 - z.x0) * 100}" height="${(z.y1 - z.y0) * 100}" fill="${z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil}"/>`).join('')}${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
 }
 
+// ---------- Arıza testi ----------
+function fillCut() { const p = byId($('selCheck').value); if (!p) return; let rb; try { rb = new SIM.Robot(p, 'red', { robots: [], eggs: [], zoneOf: () => null }); } catch (e) { return; } const seen = new Set();
+  $('selCut').innerHTML = rb.hardwarePins().filter(h => h.kind !== 'link' && !seen.has(h.key) && seen.add(h.key)).map(h => `<option value="${h.key}">${esc(h.role)} — ${esc(keyLabel(h.key, rb.boards))}</option>`).join(''); }
+$('selCheck').addEventListener('change', fillCut);
+$('bCut').onclick = async () => {
+  const p = byId($('selCheck').value); const key = +$('selCut').value; if (!p || isNaN(key)) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
+  $('bCut').disabled = true; $('cutOut').innerHTML = '<p class="hint">Çalışıyor…</p>';
+  const base = { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value };
+  const a = await SIM.runTrial(p, MatchClass, Object.assign({ gercek: gercek() }, base));
+  const g = gercek(); g.kesik = { [team]: [key] }; const b = await SIM.runTrial(p, MatchClass, Object.assign({ gercek: g }, base));
+  $('bCut').disabled = false; const pick = (r) => r.items.filter(i => i.cat === 'Hareket').map(i => i.txt);
+  const dist = (r) => { let d = 0; for (let i = 1; i < r.path.length; i++) d += Math.hypot(r.path[i][0] - r.path[i - 1][0], r.path[i][1] - r.path[i - 1][1]); return d; };
+  const da = dist(a), db = dist(b); const verdict = db < da * 0.3 ? 'Robot bu kablo kopunca neredeyse duruyor.' : Math.abs(db - da) / Math.max(da, 0.01) < 0.15 ? 'Hareket mesafesi pek değişmiyor; ama davranış farklı olabilir, aşağıya bak.' : 'Robotun hareketi belirgin şekilde değişiyor.';
+  $('cutOut').innerHTML = `<p><b>${esc($('selCut').selectedOptions[0].textContent)}</b> kopukken: ${verdict}</p><div class="fields" style="align-items:flex-start"><div style="flex:1 1 260px"><h3>Normal</h3>${pathSvg(a)}<ul>${pick(a).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div><div style="flex:1 1 260px"><h3>Kablo kopuk</h3>${pathSvg(b)}<ul>${pick(b).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+};
 // ---------- Toplu maç ----------
 let batchStop = false;
 $('bBatch').onclick = async () => {
@@ -467,7 +488,7 @@ $('bBatch').onclick = async () => {
   const rows = []; const kural = $('sKural').value, yk = $('sYesil').value;
   for (let i = 0; i < N && !batchStop; i++) {
     const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
-    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk }); const errs = m.compileAll();
+    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk, gercek: gercek() }); const errs = m.compileAll();
     await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
     const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
     rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
@@ -502,7 +523,7 @@ async function setEngine(mode) {
 $('sEngine').onchange = () => { if ($('sEngine').value === '3d' && !libs) { toast('3B motor yüklenemedi'); $('sEngine').value = '2d'; return; } setEngine($('sEngine').value); };
 setInterval(() => { if (dirty && !running && match && tab !== 'robotlar') buildMatch(); }, 800);
 (async () => {
-  fillProfileSelects(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
+  fillProfileSelects(); fillCut(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
   $('ovl').textContent = '3B fizik motoru yükleniyor…';
   try {
     libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3'));

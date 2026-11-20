@@ -107,7 +107,7 @@ function runTrial(profile, MatchClass, opts = {}) {
   const T = opts.sure || 15;
   return new Promise((resolve) => {
     const team = opts.team || 'red';
-    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose });
+    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose, gercek: opts.gercek });
     const rb = m.robots[0]; const errs = m.compileAll(); const items = []; const add = (cat, level, txt) => items.push({ cat, level, txt });
     for (const e of errs) add('Kod', 'err', `[${e.board}] ${e.msg}`);
     for (const b of rb.boards) for (const l of lint(b.kod).slice(0, 5)) add('Kod', 'err', `[${b.id}] Satır ${l.line}: ${l.msg} — Arduino IDE bu kodu derlemez.`);
@@ -154,6 +154,8 @@ function runTrial(profile, MatchClass, opts = {}) {
       const hwKeys = new Set(hw.map(h => h.key));
       for (const [k, ops] of opsAll) if (!hwKeys.has(k) && [...ops].some(o => o !== 'pinMode:INPUT')) add('Kod-Devre', 'warn', `Kod ${keyLabel(k, rb.boards)} pinini kullanıyor (${[...ops].join(', ')}) ama devrede bu pine bağlı bir şey yok.`);
       for (const w of rb.warnings) add('Kod-Devre', 'warn', `[${w.board}] ${w.msg}`);
+      for (const rt of rb.rts) { const L = rt.loopStats; if (!L || !L.n) continue; const avg = L.sum / L.n * 1000, mx = L.max * 1000;
+        add('Kod', mx > 150 ? 'warn' : 'info', `[${rt.board.id}] loop() ortalama ${avg.toFixed(1)} ms, en uzun ${mx.toFixed(0)} ms sürdü (${L.n} tur).` + (mx > 150 ? ' Bu sürede robot sensörlere bakmıyor; uzun delay() ve zaman aşımı olmayan pulseIn() en sık nedenler.' : '')); if (L.setup > 2) add('Kod', 'info', `[${rt.board.id}] setup() ${L.setup.toFixed(1)} sn sürdü; robot bu süre boyunca maça başlamaz.`); }
       if (!items.some(x => x.cat === 'Kod-Devre')) add('Kod-Devre', 'ok', 'Koddaki pinler devreyle uyumlu.');
       if (!items.some(x => x.cat === 'Kod')) add('Kod', 'ok', `Kod derlendi ve ${T} sn hatasız çalıştı (${rb.serial.length} seri satır).`);
       resolve({ items, path, robot: rb, match: m, eggs0 });

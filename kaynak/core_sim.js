@@ -83,6 +83,7 @@ const Sensors = {
     return null;
   },
   analog(m, rb, k) {
+    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (Math.random() - 0.5) * 400);
     for (const s of rb.sensors) {
       if (s.type === 'TCRT5000' && s.pin === k) return Sensors.tcrt(m, rb, s);
       if ((s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') && s.pin === k) return Sensors.sharp(m, rb, s);
@@ -144,7 +145,9 @@ class Match {
     this.time = 0; this.ended = false; this.banked = { red: [], blue: [], green: [] }; this.firstDrop = null; this.events = [];
     this.placeEggs();
     this.robots = [];
-    for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team)); this.robots.push(rb); }
+    for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team));
+      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark }; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.batFactor = 0.86 + 0.22 * lvl; rb.cut = new Set(G.kesik && G.kesik[team] || []);
+      this.robots.push(rb); }
     if (this.afterReset) this.afterReset();
   }
   placeEggs() {

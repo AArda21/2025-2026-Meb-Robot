@@ -181,7 +181,10 @@ function transpile(src) {
   t = t.replace(/__S(\d+)__/g, (a, n) => lits[+n]);
   for (const [name, ns] of Object.entries(overloads)) t += `\nfunction* ${name}(...__a){ switch(__a.length){ ${ns.map(n => `case ${n}: return yield* ${name}__a${n}(...__a);`).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`;
   const prefix = statics.join(' ');
-  return { js: t, prefix, funcs, warnings };
+  // izlenecek global değişkenler (izleme paneli için)
+  const globals = statics.map(s => (s.match(/^let\s+(\w+)/) || [])[1]).filter(Boolean);
+  { let d = 0; const re = /[{}]|\blet\s+([^;]+);/g; let m; while ((m = re.exec(t))) { if (m[0] === '{') d++; else if (m[0] === '}') d--; else if (d === 0) for (const part of splitTop(m[1])) { const nm = (part.trim().match(/^(\w+)/) || [])[1]; if (nm && !/^__/.test(nm)) globals.push(nm); } } }
+  return { js: t, prefix, funcs, warnings, globals: [...new Set(globals)] };
 }
 
 // Arduino derleyicisinin yakalayacağı ama JS'in affettiği hatalar için basit denetim
@@ -204,7 +207,8 @@ function lint(src) {
 }
 function compile(src, api) {
   const tr = transpile(src);
-  const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null};}`;
+  const vars = tr.globals.map(n => `${JSON.stringify(n)}: (()=>{try{return ${n}}catch(e){return undefined}})()`).join(',');
+  const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null, vars: () => ({${vars}})};}`;
   let fn;
   try { fn = new Function('__api', body); }
   catch (e) { const err = new Error('Derleme hatası: ' + trError(e.message)); err.js = tr.js; err.raw = e.message; throw err; }

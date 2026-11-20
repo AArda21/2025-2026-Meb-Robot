@@ -88,6 +88,7 @@ function makeMatch3D(R) {
           let target = 0, damp = M.tFric * 2;
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
+          const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
       }
       this.world.step();

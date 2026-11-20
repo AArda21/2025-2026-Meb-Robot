@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.4</title>
+<title>MEB Robot V3.5</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -93,8 +93,8 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.4</span></h1>
-  <button class="btn sm" id="bGuide" style="margin-left:6px">Rehber</button>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.5</span></h1>
+  <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -130,6 +130,10 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
           <div class="row">
             <label class="f">Kurallar<select id="sKural"><option value="2026">2026 (Antalya): yeşil köşe, 2 dk</option><option value="2025">2025 (Kayseri): ceza yumurtası, 3 dk</option></select></label>
             <label class="f" id="yesilWrap">Yeşil köşe<select id="sYesil"><option value="sag_alt">Sağ alt (kırmızının sağı)</option><option value="sol_ust">Sol üst (kırmızının üstü)</option></select></label>
+          </div>
+          <div class="row">
+            <label class="f" title="Gerçek motorlar birebir aynı değildir; sağ motor bu kadar zayıf kabul edilir">Motor farkı (%)<input type="number" id="nFark" min="0" max="30" step="1" value="3"></label>
+            <label class="f" title="Pil boşaldıkça gerilim düşer, robot yavaşlar">Pil doluluğu (%)<input type="number" id="nPil" min="0" max="100" step="5" value="100"></label>
           </div>
           <div class="row">
             <label class="chk"><input type="checkbox" id="cRays" checked> Sensör ışınları</label>
@@ -176,6 +180,12 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
     </div>
     <div id="report"></div>
     <div class="card">
+      <h2>Arıza testi: bu kablo çıkarsa ne olur?</h2>
+      <p class="hint">Yarışmada en sık sorun gevşeyen kablodur. Bir pini seç; robot o kablo kopukken 15 sn çalıştırılır ve normal hâliyle karşılaştırılır.</p>
+      <div class="row"><label class="f" style="flex:1 1 220px">Kablo<select id="selCut"></select></label><button class="btn" id="bCut">Arıza testini çalıştır</button></div>
+      <div id="cutOut"></div>
+    </div>
+    <div class="card">
       <h2>Toplu maç simülasyonu</h2>
       <p class="hint">İki robotu farklı yumurta dizilimleriyle arka arkaya oynatır, köşeleri her maçta değiştirir; kazanma oranını ve ortalama puanı gösterir. Hız için 2B fizik kullanılır.</p>
       <div class="row"><label class="f" style="flex:1 1 160px">Robot A<select id="selBatchA"></select></label><label class="f" style="flex:1 1 160px">Robot B<select id="selBatchB"></select></label><label class="f">Maç sayısı<select id="selBatchN"><option>10</option><option selected>20</option><option>50</option></select></label><button class="btn pri" id="bBatch">Simülasyonu başlat</button></div>
@@ -191,6 +201,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
       <div id="serial"></div>
     </div>
     <div class="card"><div class="row" style="margin-top:0"><h2 style="margin:0">Seri çizici</h2><span class="hint" style="margin:0">Serial.print ile yazdırılan sayılar grafiğe döker (ör. <code>mesafe=23 renk=1</code> veya <code>23,1</code>)</span></div><canvas id="plot"></canvas><div class="row" id="plotLegend"></div></div>
+    <div class="card"><div class="row" style="margin-top:0"><h2 style="margin:0">Değişkenler</h2><span class="hint" style="margin:0" id="loopInfo"></span></div><div class="scroll"><table id="varTbl" style="min-width:0"><thead><tr><th>Kart</th><th>Değişken</th><th>Değer</th></tr></thead><tbody></tbody></table></div></div>
     <div class="card"><h2>Pinler</h2><div class="scroll"><table id="pinTbl" style="min-width:0"><thead><tr><th>Pin</th><th>Bağlı olan</th><th>Mod</th><th>Değer</th></tr></thead><tbody></tbody></table></div></div>
   </section>
 </main>
@@ -485,7 +496,10 @@ function transpile(src) {
   t = t.replace(/__S(\d+)__/g, (a, n) => lits[+n]);
   for (const [name, ns] of Object.entries(overloads)) t += `\nfunction* ${name}(...__a){ switch(__a.length){ ${ns.map(n => `case ${n}: return yield* ${name}__a${n}(...__a);`).join(' ')} default: throw new Error('${name}() için ' + __a.length + ' parametreli sürüm yok'); } }`;
   const prefix = statics.join(' ');
-  return { js: t, prefix, funcs, warnings };
+  // izlenecek global değişkenler (izleme paneli için)
+  const globals = statics.map(s => (s.match(/^let\s+(\w+)/) || [])[1]).filter(Boolean);
+  { let d = 0; const re = /[{}]|\blet\s+([^;]+);/g; let m; while ((m = re.exec(t))) { if (m[0] === '{') d++; else if (m[0] === '}') d--; else if (d === 0) for (const part of splitTop(m[1])) { const nm = (part.trim().match(/^(\w+)/) || [])[1]; if (nm && !/^__/.test(nm)) globals.push(nm); } } }
+  return { js: t, prefix, funcs, warnings, globals: [...new Set(globals)] };
 }
 
 // Arduino derleyicisinin yakalayacağı ama JS'in affettiği hatalar için basit denetim
@@ -508,7 +522,8 @@ function lint(src) {
 }
 function compile(src, api) {
   const tr = transpile(src);
-  const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null};}`;
+  const vars = tr.globals.map(n => `${JSON.stringify(n)}: (()=>{try{return ${n}}catch(e){return undefined}})()`).join(',');
+  const body = `with(__api){ ${tr.prefix} ${tr.js}\n;return {setup: typeof setup==='function'?setup:null, loop: typeof loop==='function'?loop:null, vars: () => ({${vars}})};}`;
   let fn;
   try { fn = new Function('__api', body); }
   catch (e) { const err = new Error('Derleme hatası: ' + trError(e.message)); err.js = tr.js; err.raw = e.message; throw err; }
@@ -555,7 +570,7 @@ class Runtime {
     this.board = robot.boards[bi]; this.B = boardOf(this.board.tip);
     this.t = 0; this.pins = {}; this.servoT = {}; this.gen = null; this.phase = 'setup'; this.error = null;
     this.ultraState = {}; this.serialBuf = ''; this.serialOn = false; this.rand = mulberry32(1234 + bi);
-    this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {};
+    this.ops = new Map(); this.warned = new Set(); this.servoAttached = false; this.neo = {}; this.loopStats = { n: 0, sum: 0, max: 0, last: 0, setup: 0 };
   }
   track(key, op) { let s = this.ops.get(key); if (!s) this.ops.set(key, s = new Set()); s.add(op); }
   warnOnce(code, msg) { if (this.warned.has(code)) return; this.warned.add(code); this.robot.warnings.push({ board: this.board.id, msg }); this.out('⚠ ' + msg); }
@@ -565,9 +580,9 @@ class Runtime {
     if (!this.prog || this.error) return; let guard = 0;
     try {
       while (this.t <= simTime && guard++ < 200000) {
-        if (!this.gen) { this.gen = this.phase === 'setup' ? this.prog.setup() : this.prog.loop(); this.phase = 'loop'; this.t += 3e-6; }
+        if (!this.gen) { this.inSetup = this.phase === 'setup'; this.gen = this.inSetup ? this.prog.setup() : this.prog.loop(); this.phase = 'loop'; this.loopStart = this.t; this.t += 3e-6; }
         const r = this.gen.next();
-        if (r.done) { this.gen = null; continue; }
+        if (r.done) { this.gen = null; const dur = this.t - this.loopStart; const L = this.loopStats; if (this.inSetup) L.setup = dur; else { L.n++; L.sum += dur; L.max = Math.max(L.max, dur); L.last = dur; } continue; }
         if (typeof r.value === 'number' && r.value > 0) this.t += r.value;
       }
     } catch (e) { this.error = e; const ln = errLine(e); this.out(`✖ Çalışma hatası${ln ? ' (satır ~' + ln + ')' : ''}: ${trError(e.message)}`); }
@@ -648,7 +663,7 @@ class Runtime {
       },
       millis() { return Math.floor(rt.t * 1000); }, micros() { return Math.floor(rt.t * 1e6); },
       *delay(ms) { yield Math.max(0, +ms || 0) / 1000; }, *delayMicroseconds(us) { yield Math.max(0, +us || 0) / 1e6; },
-      *pulseIn(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
+      *pulseIn(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); if (timeout >= 1000000 && rb.sensors.some(s => s.type === 'HC-SR04' && s.echo === k)) rt.warnOnce('pto' + k, `pulseIn(${keyLabel(k, rb.boards)}) için zaman aşımı verilmemiş: yankı gelmezse kod 1 saniye bekler. pulseIn(ECHO, HIGH, 30000) yaz.`); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
       *pulseInLong(p, state, timeout = 1000000) { const k = P(p); rt.track(k, 'pulseIn'); return yield* Sensors.pulseIn(m, rb, rt, k, state, timeout); },
       map(x, a, b, c, d) { return Math.trunc((x - a) * (d - c) / (b - a) + c); },
       constrain: clamp, abs: Math.abs, min: Math.min, max: Math.max, sq: x => x * x, sqrt: Math.sqrt, pow: Math.pow,
@@ -751,9 +766,10 @@ class Robot {
     return errs;
   }
   rtOf(key) { return this.rts[Math.floor(key / 100)] || null; }
-  duty(key) { if (key == null) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
+  duty(key) { if (key == null) return 0; if (this.cut && this.cut.has(key)) return 0; const rt = this.rtOf(key); if (!rt) return 0; const s = rt.pins[key]; if (!s) return 0; if (s.pwm != null) return s.pwm; return s.mode === 1 ? s.v : 0; }
   servoTarget(key) { const rt = this.rtOf(key); return rt && key in rt.servoT ? rt.servoT[key] : null; }
   readDigital(k, rt) {
+    if (this.cut && this.cut.has(k)) return Math.random() < 0.5 ? 1 : 0;
     const r = Sensors.digital(this.match, this, k, rt); if (r != null) return r;
     const g = this.links.get(k); if (g) for (const o of g) { if (o === k) continue; const ort = this.rtOf(o); const os = ort && ort.pins[o]; if (os && (os.mode === 1 || os.pwm != null)) return os.pwm != null ? (os.pwm > 0.5 ? 1 : 0) : os.v; }
     const s = rt.pins[k]; if (s && s.mode === 1) return s.v; if (s && s.pull) return 1; return 0;
@@ -792,7 +808,7 @@ class Robot {
   sideVoltage(side) {
     const D = this.driver, pins = side === 'L' ? D.L : D.R;
     const dig = (k) => k == null ? 0 : (this.duty(k) > 0.5 ? 1 : 0);
-    const Vs = Math.max(0, D.vBat - D.drop); let V = 0, mode = 'coast', d = 0;
+    const Vs = Math.max(0, D.vBat * (this.batFactor || 1) - D.drop); let V = 0, mode = 'coast', d = 0;
     if (D.stby != null && !dig(D.stby)) return { V: 0, mode: 'coast', duty: 0 };
     const t = D.type;
     if (t === 'L9110' || t === 'DRV8833' || t === 'MX1508') {
@@ -806,6 +822,7 @@ class Robot {
       if (en <= 0) mode = 'coast'; else if (i1 === i2) mode = 'brake'; else { mode = 'drive'; V = (i1 ? 1 : -1) * Vs * en; }
     }
     if (side === 'L' ? D.invL : D.invR) V = -V;
+    if (this.gain) V *= this.gain[side];
     return { V, mode, duty: d };
   }
   ledColor() {
@@ -911,6 +928,7 @@ const Sensors = {
     return null;
   },
   analog(m, rb, k) {
+    if (rb.cut && rb.cut.has(k)) return Math.round(300 + (Math.random() - 0.5) * 400);
     for (const s of rb.sensors) {
       if (s.type === 'TCRT5000' && s.pin === k) return Sensors.tcrt(m, rb, s);
       if ((s.type === 'SHARP_IR' || s.type === 'GP2Y0A21') && s.pin === k) return Sensors.sharp(m, rb, s);
@@ -972,7 +990,9 @@ class Match {
     this.time = 0; this.ended = false; this.banked = { red: [], blue: [], green: [] }; this.firstDrop = null; this.events = [];
     this.placeEggs();
     this.robots = [];
-    for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team)); this.robots.push(rb); }
+    for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team));
+      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark }; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.batFactor = 0.86 + 0.22 * lvl; rb.cut = new Set(G.kesik && G.kesik[team] || []);
+      this.robots.push(rb); }
     if (this.afterReset) this.afterReset();
   }
   placeEggs() {
@@ -1254,7 +1274,7 @@ function runTrial(profile, MatchClass, opts = {}) {
   const T = opts.sure || 15;
   return new Promise((resolve) => {
     const team = opts.team || 'red';
-    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose });
+    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose, gercek: opts.gercek });
     const rb = m.robots[0]; const errs = m.compileAll(); const items = []; const add = (cat, level, txt) => items.push({ cat, level, txt });
     for (const e of errs) add('Kod', 'err', `[${e.board}] ${e.msg}`);
     for (const b of rb.boards) for (const l of lint(b.kod).slice(0, 5)) add('Kod', 'err', `[${b.id}] Satır ${l.line}: ${l.msg} — Arduino IDE bu kodu derlemez.`);
@@ -1301,6 +1321,8 @@ function runTrial(profile, MatchClass, opts = {}) {
       const hwKeys = new Set(hw.map(h => h.key));
       for (const [k, ops] of opsAll) if (!hwKeys.has(k) && [...ops].some(o => o !== 'pinMode:INPUT')) add('Kod-Devre', 'warn', `Kod ${keyLabel(k, rb.boards)} pinini kullanıyor (${[...ops].join(', ')}) ama devrede bu pine bağlı bir şey yok.`);
       for (const w of rb.warnings) add('Kod-Devre', 'warn', `[${w.board}] ${w.msg}`);
+      for (const rt of rb.rts) { const L = rt.loopStats; if (!L || !L.n) continue; const avg = L.sum / L.n * 1000, mx = L.max * 1000;
+        add('Kod', mx > 150 ? 'warn' : 'info', `[${rt.board.id}] loop() ortalama ${avg.toFixed(1)} ms, en uzun ${mx.toFixed(0)} ms sürdü (${L.n} tur).` + (mx > 150 ? ' Bu sürede robot sensörlere bakmıyor; uzun delay() ve zaman aşımı olmayan pulseIn() en sık nedenler.' : '')); if (L.setup > 2) add('Kod', 'info', `[${rt.board.id}] setup() ${L.setup.toFixed(1)} sn sürdü; robot bu süre boyunca maça başlamaz.`); }
       if (!items.some(x => x.cat === 'Kod-Devre')) add('Kod-Devre', 'ok', 'Koddaki pinler devreyle uyumlu.');
       if (!items.some(x => x.cat === 'Kod')) add('Kod', 'ok', `Kod derlendi ve ${T} sn hatasız çalıştı (${rb.serial.length} seri satır).`);
       resolve({ items, path, robot: rb, match: m, eggs0 });
@@ -2217,6 +2239,7 @@ function makeMatch3D(R) {
           let target = 0, damp = M.tFric * 2;
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
+          const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
       }
       this.world.step();
@@ -2525,10 +2548,11 @@ function fillProfileSelects() {
   opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck')); opts($('selBatchA')); opts($('selBatchB')); if (!$('selBatchA').dataset.init) { $('selBatchA').dataset.init = 1; if (byId('yumyum')) $('selBatchA').value = 'yumyum'; if (byId('rakip')) $('selBatchB').value = 'rakip'; }
   if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'yumyum'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
 }
+const gercek = () => ({ motor_farki: +$('nFark').value || 0, pil: $('nPil').value === '' ? 100 : +$('nPil').value });
 async function buildMatch() {
   const red = byId($('selRed').value), blue = byId($('selBlue').value);
   for (const p of [red, blue]) if (p && p._stl === undefined) await attachSTL(p);
-  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value });
+  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek() });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
   dirty = false; ended = false; rec = []; exitReplay(true); $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
@@ -2555,6 +2579,8 @@ $('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS
 $('bRotL').onclick = () => rot(15); $('bRotR').onclick = () => rot(-15);
 async function rot(d) { if (running || !match) return; const rb = focusRobot(); if (!rb) return; const s = rb.state; startPoses[rb.team] = { x: s.x, y: s.y, th: s.th + d * Math.PI / 180 }; await buildMatch(); }
 $('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
+$('nFark').value = LS.get('mebsim3_fark') ?? 3; $('nPil').value = LS.get('mebsim3_pil') ?? 100;
+$('nFark').onchange = $('nPil').onchange = async () => { LS.set('mebsim3_fark', $('nFark').value); LS.set('mebsim3_pil', $('nPil').value); running = false; await buildMatch(); };
 $('sKural').value = LS.get('mebsim3_kural') || '2026'; $('sYesil').value = LS.get('mebsim3_yesil') || 'sag_alt';
 const syncKural = () => { $('yesilWrap').style.display = $('sKural').value === '2026' ? '' : 'none'; };
 syncKural();
@@ -2637,6 +2663,9 @@ function updateMonitor() {
   drawPlot(match && match.robots[+$('selMon').value || 0]);
   const rb = match && match.robots[+$('selMon').value || 0];
   if (serialDirty) { serialDirty = false; const el = $('serial'); if (!rb) { el.textContent = ''; } else { const multi = rb.boards.length > 1; el.innerHTML = rb.serial.slice(-500).map(l => `<span class="t">${l.t.toFixed(3).padStart(8)} ${multi ? '[' + esc(l.b) + '] ' : ''}</span>${esc(l.txt)}`).join('\n') || '<span class="t">Henüz çıktı yok. Sahada ▶ Başlat\'a bas.</span>'; if ($('cAuto').checked) el.scrollTop = el.scrollHeight; } }
+  if (rb) { const vrows = []; const li = []; for (const rt of rb.rts) { if (rt.prog && rt.prog.vars) { let v = {}; try { v = rt.prog.vars(); } catch (e) { } for (const [k, val] of Object.entries(v)) if (['number', 'boolean', 'string'].includes(typeof val)) vrows.push(`<tr><td>${esc(rt.board.id)}</td><td>${esc(k)}</td><td><b>${esc(typeof val === 'number' && !Number.isInteger(val) ? val.toFixed(3) : String(val))}</b></td></tr>`); }
+      const L = rt.loopStats; if (L && L.n) li.push(`${rb.boards.length > 1 ? rt.board.id + ': ' : ''}loop ort. ${(L.sum / L.n * 1000).toFixed(1)} ms, en uzun ${(L.max * 1000).toFixed(0)} ms`); }
+    $('varTbl').querySelector('tbody').innerHTML = vrows.join('') || '<tr><td colspan="3" class="hint">Maç başlayınca kodundaki değişkenler burada canlı görünür.</td></tr>'; $('loopInfo').textContent = li.join(' · '); }
   if (!rb) return; const rows = new Map(); for (const hp of rb.hardwarePins()) rows.set(hp.key, (rows.get(hp.key) ? rows.get(hp.key) + ', ' : '') + hp.role);
   for (const rt of rb.rts) for (const k of Object.keys(rt.pins)) if (!rows.has(+k)) rows.set(+k, '');
   $('pinTbl').querySelector('tbody').innerHTML = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([k, role]) => {
@@ -2908,7 +2937,7 @@ function renderDevre(p) {
 $('bCheck').onclick = async () => {
   const p = byId($('selCheck').value); if (!p) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
   $('bCheck').disabled = true; $('prog').style.display = ''; const bar = $('prog').firstElementChild; bar.style.width = '0';
-  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value, onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
+  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek(), onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
   $('bCheck').disabled = false; $('prog').style.display = 'none';
   const all = st.items.concat(tr.items); const order = ['Kod', 'Kod-Devre', 'Hareket', 'Kurallar', 'Mekanik', 'Devre'];
   const titles = { Kod: 'Kod', 'Kod-Devre': 'Kod ↔ devre uyumu', Hareket: '15 saniyelik deneme', Kurallar: 'Yarışma kuralları', Mekanik: 'Mekanik', Devre: 'Devre' };
@@ -2929,6 +2958,21 @@ function pathSvg(tr) {
   return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/>${tr.match.zones.map(z => `<rect x="${z.x0 * 100}" y="${(F - z.y1) * 100}" width="${(z.x1 - z.x0) * 100}" height="${(z.y1 - z.y0) * 100}" fill="${z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil}"/>`).join('')}${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
 }
 
+// ---------- Arıza testi ----------
+function fillCut() { const p = byId($('selCheck').value); if (!p) return; let rb; try { rb = new SIM.Robot(p, 'red', { robots: [], eggs: [], zoneOf: () => null }); } catch (e) { return; } const seen = new Set();
+  $('selCut').innerHTML = rb.hardwarePins().filter(h => h.kind !== 'link' && !seen.has(h.key) && seen.add(h.key)).map(h => `<option value="${h.key}">${esc(h.role)} — ${esc(keyLabel(h.key, rb.boards))}</option>`).join(''); }
+$('selCheck').addEventListener('change', fillCut);
+$('bCut').onclick = async () => {
+  const p = byId($('selCheck').value); const key = +$('selCut').value; if (!p || isNaN(key)) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
+  $('bCut').disabled = true; $('cutOut').innerHTML = '<p class="hint">Çalışıyor…</p>';
+  const base = { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value };
+  const a = await SIM.runTrial(p, MatchClass, Object.assign({ gercek: gercek() }, base));
+  const g = gercek(); g.kesik = { [team]: [key] }; const b = await SIM.runTrial(p, MatchClass, Object.assign({ gercek: g }, base));
+  $('bCut').disabled = false; const pick = (r) => r.items.filter(i => i.cat === 'Hareket').map(i => i.txt);
+  const dist = (r) => { let d = 0; for (let i = 1; i < r.path.length; i++) d += Math.hypot(r.path[i][0] - r.path[i - 1][0], r.path[i][1] - r.path[i - 1][1]); return d; };
+  const da = dist(a), db = dist(b); const verdict = db < da * 0.3 ? 'Robot bu kablo kopunca neredeyse duruyor.' : Math.abs(db - da) / Math.max(da, 0.01) < 0.15 ? 'Hareket mesafesi pek değişmiyor; ama davranış farklı olabilir, aşağıya bak.' : 'Robotun hareketi belirgin şekilde değişiyor.';
+  $('cutOut').innerHTML = `<p><b>${esc($('selCut').selectedOptions[0].textContent)}</b> kopukken: ${verdict}</p><div class="fields" style="align-items:flex-start"><div style="flex:1 1 260px"><h3>Normal</h3>${pathSvg(a)}<ul>${pick(a).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div><div style="flex:1 1 260px"><h3>Kablo kopuk</h3>${pathSvg(b)}<ul>${pick(b).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+};
 // ---------- Toplu maç ----------
 let batchStop = false;
 $('bBatch').onclick = async () => {
@@ -2939,7 +2983,7 @@ $('bBatch').onclick = async () => {
   const rows = []; const kural = $('sKural').value, yk = $('sYesil').value;
   for (let i = 0; i < N && !batchStop; i++) {
     const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
-    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk }); const errs = m.compileAll();
+    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk, gercek: gercek() }); const errs = m.compileAll();
     await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
     const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
     rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
@@ -2974,7 +3018,7 @@ async function setEngine(mode) {
 $('sEngine').onchange = () => { if ($('sEngine').value === '3d' && !libs) { toast('3B motor yüklenemedi'); $('sEngine').value = '2d'; return; } setEngine($('sEngine').value); };
 setInterval(() => { if (dirty && !running && match && tab !== 'robotlar') buildMatch(); }, 800);
 (async () => {
-  fillProfileSelects(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
+  fillProfileSelects(); fillCut(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
   $('ovl').textContent = '3B fizik motoru yükleniyor…';
   try {
     libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3'));
