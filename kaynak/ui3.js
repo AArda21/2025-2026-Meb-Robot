@@ -20,9 +20,11 @@ let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTime
 const byId = (id) => profiles.find(p => p.id === id);
 const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
 async function attachSTL(p) {
-  const cfg = (p.mekanik || {}).model3d; if (!cfg || !cfg.var) { Object.defineProperty(p, '_stl', { value: null, writable: true, configurable: true, enumerable: false }); return; }
-  const raw = await idb.get(p.id); if (!raw) { Object.defineProperty(p, '_stl', { value: null, writable: true, configurable: true, enumerable: false }); return; }
-  try { const tr = SIM.transformSTL(SIM.parseSTL(raw), cfg); Object.defineProperty(p, '_stl', { value: tr, writable: true, configurable: true, enumerable: false }); } catch (e) { toast('STL okunamadı: ' + e.message); }
+  const setS = (v) => Object.defineProperty(p, '_stl', { value: v, writable: true, configurable: true, enumerable: false });
+  const cfg = (p.mekanik || {}).model3d; if (!cfg || !cfg.var) { setS(null); return; }
+  let raw = await idb.get(p.id); if (!raw) { setS(null); return; }
+  const buf = raw.buf || raw, name = raw.name || cfg.dosya || 'model.stl';
+  try { const objs = SIM.parseModel(buf, name); setS(SIM.transformModel(objs, cfg)); } catch (e) { setS(null); toast('3D model okunamadı: ' + e.message); }
 }
 
 // ---------------- Sekmeler ----------------
@@ -44,10 +46,10 @@ function fillProfileSelects() {
 async function buildMatch() {
   const red = byId($('selRed').value), blue = byId($('selBlue').value);
   for (const p of [red, blue]) if (p && p._stl === undefined) await attachSTL(p);
-  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses });
+  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
-  dirty = false; ended = false; $('result').classList.remove('on'); fillFocus(); serialDirty = true;
+  dirty = false; ended = false; $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
 }
 function fillFocus() {
   const cur = $('selFocus').value; const opts = match ? match.robots.map((r, i) => `<option value="${i}">${esc(r.name)} (${r.team === 'red' ? 'kırmızı' : 'mavi'})</option>`).join('') : '';
@@ -71,6 +73,10 @@ $('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS
 $('bRotL').onclick = () => rot(15); $('bRotR').onclick = () => rot(-15);
 async function rot(d) { if (running || !match) return; const rb = focusRobot(); if (!rb) return; const s = rb.state; startPoses[rb.team] = { x: s.x, y: s.y, th: s.th + d * Math.PI / 180 }; await buildMatch(); }
 $('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
+$('sKural').value = LS.get('mebsim3_kural') || '2026'; $('sYesil').value = LS.get('mebsim3_yesil') || 'sag_alt';
+const syncKural = () => { $('yesilWrap').style.display = $('sKural').value === '2026' ? '' : 'none'; };
+syncKural();
+$('sKural').onchange = $('sYesil').onchange = async () => { LS.set('mebsim3_kural', $('sKural').value); LS.set('mebsim3_yesil', $('sYesil').value); syncKural(); running = false; await buildMatch(); toast($('sKural').value === '2026' ? '2026 kuralları: yeşil köşe, 2 dakika' : '2025 kuralları: ceza yumurtası, 3 dakika'); };
 $('selFocus').onchange = () => { if (view3d) view3d.focus = focusRobot(); };
 
 // ---------- 2B çizim ----------
@@ -85,14 +91,13 @@ function draw2d() {
   ctx.fillStyle = '#d4d9df'; ctx.fillRect(X(-0.03), Y(F + 0.03), (F + 0.06) * SC, (F + 0.06) * SC);
   ctx.fillStyle = col.zemin; ctx.fillRect(X(0), Y(F), F * SC, F * SC);
   ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 1; for (let v = 0.25; v < F; v += 0.25) { ctx.beginPath(); ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(F)); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(F), Y(v)); ctx.stroke(); }
-  ctx.fillStyle = col.kirmizi; ctx.fillRect(X(0), Y(Z), Z * SC, Z * SC); ctx.fillStyle = col.mavi; ctx.fillRect(X(F - Z), Y(F), Z * SC, Z * SC);
-  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = `600 ${Math.max(10, SC * 0.035)}px system-ui`; ctx.textAlign = 'center';
-  ctx.fillText(`${match.banked.red.length} toplandı`, X(Z / 2), Y(Z / 2)); ctx.fillText(`${match.banked.blue.length} toplandı`, X(F - Z / 2), Y(F - Z / 2));
+  ctx.font = `600 ${Math.max(10, SC * 0.035)}px system-ui`; ctx.textAlign = 'center';
+  for (const z of match.zones) { ctx.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; ctx.fillRect(X(z.x0), Y(z.y1), (z.x1 - z.x0) * SC, (z.y1 - z.y0) * SC); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(`${(match.banked[z.kind] || []).length} toplandı`, X((z.x0 + z.x1) / 2), Y((z.y0 + z.y1) / 2)); }
   for (const rb of match.robots) if ($('cTrail').checked && rb.trail.length > 1) { ctx.strokeStyle = rb.team === 'red' ? 'rgba(230,126,0,.6)' : 'rgba(37,99,235,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); rb.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
   const r = RULES.EGG_R * SC;
   for (const e of match.eggs) { if (e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
     if (e.kind === 'penalty') { ctx.rotate(-e.phi); ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 2 * Math.PI); ctx.fillStyle = col.kirmizi; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.fillStyle = col.mavi; ctx.fill(); }
-    else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : col.mavi; ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : e.kind === 'green' ? col.yesil : col.mavi; ctx.fill(); }
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); ctx.restore(); }
   for (const rb of match.robots) {
     for (const wp of rb.worldParts()) { poly(wp.corners); let fill = wp.p.color; if (wp.p.auto === 'wheel') fill = rb.wheelInfo[wp.p.name.startsWith('Sol') ? 'L' : 'R'].slip ? '#b91c1c' : '#1f2937'; ctx.globalAlpha = wp.p.solid ? 0.95 : 0.6; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke(); }
@@ -118,7 +123,7 @@ const fmtT = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}
 let serialDirty = true, lastUi = 0;
 function updateUi() {
   if (!match) return; const sc = match.score();
-  $('hTime').textContent = fmtT(match.time); $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
+  $('hTime').textContent = fmtT(Math.max(0, match.matchTime - match.time)); $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
   const rb = focusRobot();
   $('ovl').textContent = `${match.engineName} · ${running ? '● ' + realF.toFixed(1) + '×' : ended ? 'bitti' : 'durdu'}` + (rb ? ` · ${(Math.hypot(rb.state.vx, rb.state.vy) * 100).toFixed(0)} cm/s` : '');
   if (rb) {
@@ -132,7 +137,21 @@ function updateUi() {
   } else $('stats').innerHTML = '<p class="hint">Sahada robot yok.</p>';
   if (tab === 'monitor') updateMonitor();
 }
+function parseNums(txt) { const out = []; const re = /(?:([A-Za-zÇĞİÖŞÜçğıöşü_][\wÇĞİÖŞÜçğıöşü]*)\s*[=:]\s*)?(-?\d+(?:\.\d+)?)/g; let m, i = 0; while ((m = re.exec(txt))) { out.push([m[1] || ('değer' + (++i)), +m[2]]); } return out; }
+const PCOL = ['#e67e00', '#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#0891b2'];
+function drawPlot(rb) {
+  const cv2 = $('plot'), r = cv2.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; cv2.width = r.width * dpr; cv2.height = r.height * dpr; const g = cv2.getContext('2d'); g.scale(dpr, dpr); const Wp = r.width, Hp = r.height;
+  g.clearRect(0, 0, Wp, Hp); if (!rb) return; const series = new Map(); const lines = rb.serial.slice(-400);
+  lines.forEach((l, i) => { for (const [k, v] of parseNums(l.txt)) { if (!series.has(k)) series.set(k, []); series.get(k).push([l.t, v]); } });
+  const keys = [...series.keys()].slice(0, 6); if (!keys.length) { g.fillStyle = '#9aa3b2'; g.font = '13px system-ui'; g.fillText('Henüz sayısal seri çıktı yok', 12, 24); $('plotLegend').innerHTML = ''; return; }
+  let t0 = Infinity, t1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const k of keys) for (const [t, v] of series.get(k)) { t0 = Math.min(t0, t); t1 = Math.max(t1, t); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  if (v1 === v0) { v1 += 1; v0 -= 1; } if (t1 === t0) t1 += 1; const P = 30;
+  g.strokeStyle = '#e5e7eb'; g.fillStyle = '#9aa3b2'; g.font = '11px system-ui'; for (let i = 0; i <= 4; i++) { const y = P / 2 + (Hp - P) * i / 4; g.beginPath(); g.moveTo(P, y); g.lineTo(Wp - 6, y); g.stroke(); g.fillText(String(+(v1 - (v1 - v0) * i / 4).toFixed(1)), 2, y + 4); }
+  keys.forEach((k, ki) => { g.strokeStyle = PCOL[ki]; g.lineWidth = 1.6; g.beginPath(); series.get(k).forEach(([t, v], i) => { const x = P + (Wp - P - 6) * (t - t0) / (t1 - t0), y = P / 2 + (Hp - P) * (v1 - v) / (v1 - v0); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); });
+  $('plotLegend').innerHTML = keys.map((k, i) => { const s = series.get(k); return `<span style="color:${PCOL[i]};font-weight:700">● ${esc(k)}: ${s[s.length - 1][1]}</span>`; }).join(' ');
+}
 function updateMonitor() {
+  drawPlot(match && match.robots[+$('selMon').value || 0]);
   const rb = match && match.robots[+$('selMon').value || 0];
   if (serialDirty) { serialDirty = false; const el = $('serial'); if (!rb) { el.textContent = ''; } else { const multi = rb.boards.length > 1; el.innerHTML = rb.serial.slice(-500).map(l => `<span class="t">${l.t.toFixed(3).padStart(8)} ${multi ? '[' + esc(l.b) + '] ' : ''}</span>${esc(l.txt)}`).join('\n') || '<span class="t">Henüz çıktı yok. Sahada ▶ Başlat\'a bas.</span>'; if ($('cAuto').checked) el.scrollTop = el.scrollHeight; } }
   if (!rb) return; const rows = new Map(); for (const hp of rb.hardwarePins()) rows.set(hp.key, (rows.get(hp.key) ? rows.get(hp.key) + ', ' : '') + hp.role);
@@ -147,8 +166,11 @@ function updateMonitor() {
 $('selMon').onchange = () => { serialDirty = true; }; $('bClr').onclick = () => { const rb = match && match.robots[+$('selMon').value || 0]; if (rb) rb.serial.length = 0; serialDirty = true; };
 function endMatch() {
   ended = true; running = false; $('bPause').textContent = '▶ Devam'; const sc = match.score();
-  const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — kendi rengi ${d.own}, yanlış renk ${d.wrong}, ceza ${d.pen}${d.own ? '' : ' · <span class="bad">kendi rengi hiç yok → kaybeder</span>'}</div>`; };
-  $('result').innerHTML = `<b>Maç bitti (3:00)</b>${line('red')}${line('blue')}`; $('result').classList.add('on');
+  const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; const parts = [`kendi rengi ${d.own}`, `yanlış renk ${d.wrong}`]; if (match.rules.ceza) parts.push(`ceza yumurtası ${d.pen}`); if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (d.led) parts.push(`LED cezası ${d.led}×−10`);
+    return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
+  const rs = ['red', 'blue'].filter(t => match.robotByTeam(t)); let win = '';
+  if (rs.length === 2) { const ok = (t) => sc.detail[t].own > 0; const [a, b] = rs; let w = null; if (ok(a) && !ok(b)) w = a; else if (ok(b) && !ok(a)) w = b; else if (ok(a) && ok(b)) w = sc[a] > sc[b] ? a : sc[b] > sc[a] ? b : (match.firstDrop ? match.firstDrop.zone : null); win = w ? `<div>Kazanan: <b>${esc(match.robotByTeam(w).name)}</b></div>` : '<div>İki robot da kaybetti (kendi rengi yok)</div>'; }
+  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').classList.add('on');
 }
 
 // ---------- Ana döngü ----------
@@ -157,7 +179,7 @@ function frame(ts) {
   const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
   if (running && match) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
-    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= RULES.MATCH_TIME) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
+    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
   }
   if (match) { if (use3d && view3d) view3d.render({ rays: $('cRays').checked, circuit: $('cCirc').checked, trail: $('cTrail').checked }); else draw2d(); if (ts - lastUi > 150) { lastUi = ts; updateUi(); } }
@@ -242,14 +264,34 @@ function renderMekanik(p) {
   root.append(st);
   // 3D model
   M.model3d = M.model3d || null; const md = M.model3d;
-  const stlFile = h('input', { type: 'file', accept: '.stl', hidden: true });
-  stlFile.onchange = async () => { const f = stlFile.files[0]; if (!f) return; const buf = await f.arrayBuffer(); try { const raw = SIM.parseSTL(buf); if (!raw.length) throw new Error('üçgen yok'); await idb.put(p.id, buf); M.model3d = Object.assign({ var: true, dosya: f.name, olcek_mm: 1, dx: 0, dy: 0, dz: 0, x_cm: 0, y_cm: 0, z_cm: 0, carpisma: false, kutulari_gizle: false, renk: '#9aa5b1' }, M.model3d || {}, { var: true, dosya: f.name }); saveProfiles(); await attachSTL(p); toast(`${f.name}: ${(raw.length / 9) | 0} üçgen`); rerender(); } catch (e) { toast('STL okunamadı: ' + e.message); } };
-  const mc3 = card('3D iskelet (STL)', h('p', { class: 'hint' }, 'Tinkercad, Fusion 360 veya SolidWorks\'ten STL olarak dışa aktar. Robotun önü +x, solu +y olacak şekilde döndür. Boyut kontrolü bu modelle de yapılır.'), h('div', { class: 'row' }, h('label', { class: 'btn sm' }, md && md.var ? 'STL değiştir' : 'STL yükle', stlFile), md && md.var ? h('span', { class: 'hint' }, md.dosya) : null, md && md.var ? h('button', { class: 'btn sm danger', on: { click: async () => { M.model3d = null; await idb.del(p.id); p._stl = null; saveProfiles(); rerender(); } } }, 'Kaldır') : null));
+  const stlFile = h('input', { type: 'file', accept: '.stl,.obj,.glb,.gltf', hidden: true });
+  stlFile.onchange = async () => { const f = stlFile.files[0]; if (!f) return; const buf = await f.arrayBuffer();
+    try { const objs = SIM.parseModel(buf, f.name); if (!objs.length) throw new Error('modelde üçgen yok'); await idb.put(p.id, { buf, name: f.name });
+      let bb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (const o of objs) for (let i = 0; i < o.pos.length; i += 3) for (let k = 0; k < 3; k++) { bb[k] = Math.min(bb[k], o.pos[i + k]); bb[k + 3] = Math.max(bb[k + 3], o.pos[i + k]); } const ext = [bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2]]; const isY = ext[1] < ext[2] * 0.85 && ext[1] <= ext[0]; const big = Math.max(...ext); const unit = big > 80 ? 1 : big > 8 ? 10 : 1000; const roller = {}; for (const o of objs) roller[o.name] = SIM.guessRole(o.name);
+      M.model3d = Object.assign({ var: true, olcek_mm: unit, dx: isY ? 90 : 0, dy: 0, dz: 0, x_cm: 0, y_cm: 0, z_cm: 0, carpisma: false, kutulari_gizle: false, renk: '#9aa5b1' }, M.model3d || {}, { var: true, dosya: f.name, roller, dx: isY ? 90 : 0, olcek_mm: unit });
+      saveProfiles(); await attachSTL(p); toast(`${f.name}: ${objs.length} parça okundu`); rerender(); } catch (e) { toast('Model okunamadı: ' + e.message); } };
+  const mc3 = card('3D iskelet ve devre modeli', h('p', { class: 'hint' }, 'STL (tek parça), OBJ veya GLB (parça adlarıyla) yükleyebilirsin. Parça adları korunursa (ör. "Arduino Uno", "HC-SR04", "Sol teker") uygulama her parçanın ne olduğunu tahmin eder ve sensör, kart ve tekerlerin yerini modelden alır. Robotun önü +x, solu +y, yukarısı +z olmalı.'),
+    h('div', { class: 'row' }, h('label', { class: 'btn sm' }, md && md.var ? 'Modeli değiştir' : 'Model yükle (STL/OBJ/GLB)', stlFile), md && md.var ? h('span', { class: 'hint' }, md.dosya) : null, md && md.var ? h('button', { class: 'btn sm danger', on: { click: async () => { M.model3d = null; await idb.del(p.id); p._stl = null; saveProfiles(); rerender(); } } }, 'Kaldır') : null));
   if (md && md.var) {
     const after = async () => { await attachSTL(p); rerender(); };
-    mc3.append(h('div', { class: 'fields' }, fld(md, 'olcek_mm', 'Birim (1 = mm, 10 = cm)', { after }), fld(md, 'dx', 'Döndür X°', { after }), fld(md, 'dy', 'Döndür Y°', { after }), fld(md, 'dz', 'Döndür Z°', { after }), fld(md, 'x_cm', 'Kaydır x (cm)', { after }), fld(md, 'y_cm', 'Kaydır y (cm)', { after }), fld(md, 'z_cm', 'Taban yüksekliği (cm)', { after }), fld(md, 'renk', 'Renk', { type: 'text', w: '90px' })),
-      h('div', { class: 'row' }, fld(md, 'carpisma', 'Çarpışmada kullan (dış kabuk, 3B)', { type: 'check' }), fld(md, 'kutulari_gizle', 'Parça kutularını gizle', { type: 'check' }), fld(md, 'seffaf', 'Yarı saydam', { type: 'check' })));
-    if (p._stl) { const b = p._stl.bbox; mc3.append(h('p', { class: 'hint' }, `Model boyutu: ${((b[3] - b[0]) * 100).toFixed(1)} × ${((b[4] - b[1]) * 100).toFixed(1)} × ${((b[5] - b[2]) * 100).toFixed(1)} cm`)); }
+    mc3.append(h('div', { class: 'fields' }, fld(md, 'olcek_mm', 'Birim (1 = mm, 10 = cm, 1000 = m)', { after }), fld(md, 'dx', 'Döndür X°', { after }), fld(md, 'dy', 'Döndür Y°', { after }), fld(md, 'dz', 'Döndür Z°', { after }), fld(md, 'x_cm', 'Kaydır x (cm)', { after }), fld(md, 'y_cm', 'Kaydır y (cm)', { after }), fld(md, 'z_cm', 'Taban yüksekliği (cm)', { after }), fld(md, 'renk', 'Renk', { type: 'text', w: '90px' })),
+      h('div', { class: 'row' }, fld(md, 'carpisma', 'Çarpışmada dış kabuğu kullan (3B)', { type: 'check' }), fld(md, 'kutulari_gizle', 'Kutuları gizle', { type: 'check' }), fld(md, 'seffaf', 'Yarı saydam', { type: 'check' })));
+    if (p._stl) {
+      const b = p._stl.bbox; mc3.append(h('p', { class: 'hint' }, `Model boyutu: ${((b[3] - b[0]) * 100).toFixed(1)} × ${((b[4] - b[1]) * 100).toFixed(1)} × ${((b[5] - b[2]) * 100).toFixed(1)} cm (uzunluk × genişlik × yükseklik). Değerler mantıksızsa birimi veya döndürmeyi değiştir.`));
+      const objs = p._stl.objects || []; md.roller = md.roller || {};
+      if (objs.length > 1) {
+        const sens = ((p.devre || {}).sensorler || []);
+        const roleOpts = { govde: 'Gövde (çarpışma kutusu)', gorsel: 'Sadece görsel', kart: 'Elektronik kart', teker: 'Teker', sarhos: 'Sarhoş teker', led: 'Köşe LED\'i', stop: 'Acil stop', yoksay: 'Yok say' };
+        sens.forEach((s, i) => { roleOpts['sensor#' + i] = 'Sensör: ' + (s.ad || s.tip); });
+        const resolve = (r) => { if (r && r.startsWith('sensor:')) { const t = r.slice(7); const used = new Set(Object.values(md.roller)); const i = sens.findIndex((s, k) => String(s.tip).toUpperCase() === t && !used.has('sensor#' + k)); return i >= 0 ? 'sensor#' + i : 'gorsel'; } return r || 'govde'; };
+        for (const o of objs) md.roller[o.name] = resolve(md.roller[o.name]);
+        const tb = h('tbody'); objs.forEach(o => { const sel = h('select', {}, ...Object.entries(roleOpts).map(([k, v]) => h('option', { value: k }, v))); sel.value = md.roller[o.name] in roleOpts ? md.roller[o.name] : 'govde'; sel.onchange = () => { md.roller[o.name] = sel.value; saveProfiles(); };
+          const bb = o.bbox; tb.append(h('tr', {}, h('td', {}, o.name), h('td', {}, `${((bb[3] - bb[0]) * 100).toFixed(1)}×${((bb[4] - bb[1]) * 100).toFixed(1)}×${((bb[5] - bb[2]) * 100).toFixed(1)}`), h('td', {}, sel))); });
+        const boxes = h('input', { type: 'checkbox' }); boxes.checked = true;
+        mc3.append(h('h3', {}, `Modeldeki parçalar (${objs.length})`), h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Parça'), h('th', {}, 'Boyut (cm)'), h('th', {}, 'Bu nedir?'))), tb)),
+          h('div', { class: 'row' }, h('label', { class: 'chk' }, boxes, 'Gövde çarpışma kutularını modelden oluştur'), h('button', { class: 'btn pri sm', on: { click: () => { const n = applyModel(p, boxes.checked); saveProfiles(); rerender(); toast(n + ' değer modelden alındı'); } } }, 'Yerleşimi modelden uygula')));
+      }
+    }
   }
   root.append(mc3);
   // Parçalar
@@ -263,6 +305,21 @@ function renderMekanik(p) {
     h('div', { class: 'row' }, h('button', { class: 'btn sm', on: { click: () => { M.parcalar.push({ ad: 'Yeni parça', x: 0, y: 0, uzunluk: 5, genislik: 5, z0: 3, z1: 6, renk: '#94a3b8' }); saveProfiles(); rerender(); } } }, '+ Parça ekle')),
     h('details', {}, h('summary', {}, 'Gelişmiş: parçaları JSON olarak düzenle (servo ile dönen kapak vb.)'), h('p', { class: 'hint' }, 'Servo ile dönen parça: "servo_pin": 3, "pivot": [x, y], "aci_ofset": derece, "yon": 1 veya -1. "kati": false → sadece görsel. "sekil": "silindir".'), json,
       h('button', { class: 'btn sm', on: { click: () => { try { M.parcalar = JSON.parse(json.value); saveProfiles(); rerender(); toast('Parçalar güncellendi'); } catch (e) { toast('JSON hatası: ' + e.message); } } } }, 'Uygula'))));
+}
+function applyModel(p, makeBoxes) {
+  const M = p.mekanik, D = p.devre = p.devre || {}, md = M.model3d, objs = (p._stl || {}).objects || []; let n = 0;
+  const r1 = (v) => Math.round(v * 1000) / 10; const C = (b) => [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2]; const S = (b) => [b[3] - b[0], b[4] - b[1], b[5] - b[2]];
+  const by = (role) => objs.filter(o => (md.roller || {})[o.name] === role);
+  const wheels = by('teker').sort((a, b) => C(b.bbox)[1] - C(a.bbox)[1]);
+  if (wheels.length >= 2) { const L = wheels[0].bbox, R = wheels[wheels.length - 1].bbox, sL = S(L); M.tekerlek = Object.assign(M.tekerlek || {}, { cap_cm: r1(Math.max(sL[0], sL[2])), genislik_cm: r1(sL[1]), iz_cm: r1(C(L)[1] - C(R)[1]), x_cm: r1((C(L)[0] + C(R)[0]) / 2) }); n += 4; }
+  const cs = by('sarhos')[0]; if (cs) { const s = S(cs.bbox), c = C(cs.bbox); M.sarhos_teker = { x_cm: r1(c[0]), y_cm: r1(c[1]), cap_cm: r1(Math.min(s[0], s[1], s[2])) }; n += 3; }
+  (D.sensorler || []).forEach((s, i) => { const o = by('sensor#' + i)[0]; if (!o) return; const c = C(o.bbox); s.x = r1(c[0]); s.y = r1(c[1]); s.z = r1(c[2]); n += 3; });
+  const karts = by('kart'); if (karts.length) { const old = D.yerlesim || []; D.yerlesim = karts.map(o => { const s = S(o.bbox), c = C(o.bbox); const prev = old.find(x => x.ad === o.name); return { ad: o.name, x: r1(c[0]), y: r1(c[1]), z: r1(o.bbox[2]), uzunluk: r1(s[0]), genislik: r1(s[1]), kalinlik: r1(s[2]), renk: (prev && prev.renk) || o.color || (/arduino|uno|nano|mega/i.test(o.name) ? '#0e7490' : /pil|batt|18650/i.test(o.name) ? '#1d4ed8' : '#b91c1c') }; }); n += karts.length; }
+  const led = by('led')[0]; if (led && D.led) { const c = C(led.bbox); D.led.x = r1(c[0]); D.led.y = r1(c[1]); D.led.z = r1(led.bbox[5]); n += 3; }
+  const st = by('stop')[0]; if (st) { const c = C(st.bbox); M.acil_stop = { x: r1(c[0]), y: r1(c[1]), z: r1(st.bbox[2]) }; n += 3; }
+  if (makeBoxes) { const govde = by('govde'); if (govde.length) { const keep = (M.parcalar || []).filter(x => x.servo_pin != null);
+    M.parcalar = govde.map(o => { const s = S(o.bbox), c = C(o.bbox); return { ad: o.name, x: r1(c[0]), y: r1(c[1]), uzunluk: r1(s[0]), genislik: r1(s[1]), z0: r1(o.bbox[2]), z1: r1(o.bbox[5]), renk: o.color || '#94a3b8' }; }).concat(keep); md.kutulari_gizle = true; n += govde.length; } }
+  return n;
 }
 // ---------- DEVRE ----------
 function renderDevre(p) {
@@ -315,7 +372,7 @@ function renderDevre(p) {
 $('bCheck').onclick = async () => {
   const p = byId($('selCheck').value); if (!p) return; const team = $('selCheckTeam').value; if (p._stl === undefined) await attachSTL(p);
   $('bCheck').disabled = true; $('prog').style.display = ''; const bar = $('prog').firstElementChild; bar.style.width = '0';
-  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
+  const st = SIM.staticChecks(p); const tr = await SIM.runTrial(p, MatchClass, { sure: 15, team, saha: { tohum: seed }, kural: $('sKural').value, yesil_kose: $('sYesil').value, onProgress: f => { bar.style.width = (f * 100).toFixed(0) + '%'; } });
   $('bCheck').disabled = false; $('prog').style.display = 'none';
   const all = st.items.concat(tr.items); const order = ['Kod', 'Kod-Devre', 'Hareket', 'Kurallar', 'Mekanik', 'Devre'];
   const titles = { Kod: 'Kod', 'Kod-Devre': 'Kod ↔ devre uyumu', Hareket: '15 saniyelik deneme', Kurallar: 'Yarışma kuralları', Mekanik: 'Mekanik', Devre: 'Devre' };
@@ -331,9 +388,9 @@ $('bCheck').onclick = async () => {
 };
 function pathSvg(tr) {
   const F = RULES.FIELD, Z = RULES.ZONE, col = tr.match.field.colors; const pts = tr.path.map(([x, y]) => `${(x * 100).toFixed(1)},${((F - y) * 100).toFixed(1)}`).join(' ');
-  const eggs = tr.match.eggs.map(e => e.gone ? '' : `<circle cx="${(e.x * 100).toFixed(1)}" cy="${((F - e.y) * 100).toFixed(1)}" r="2.4" fill="${e.kind === 'red' ? col.kirmizi : e.kind === 'blue' ? col.mavi : '#7a3a6a'}"/>`).join('');
+  const eggs = tr.match.eggs.map(e => e.gone ? '' : `<circle cx="${(e.x * 100).toFixed(1)}" cy="${((F - e.y) * 100).toFixed(1)}" r="2.4" fill="${e.kind === 'red' ? col.kirmizi : e.kind === 'blue' ? col.mavi : e.kind === 'green' ? col.yesil : '#7a3a6a'}"/>`).join('');
   const s = tr.path[0], e = tr.path[tr.path.length - 1];
-  return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/><rect x="0" y="${(F - Z) * 100}" width="50" height="50" fill="${col.kirmizi}"/><rect x="200" y="0" width="50" height="50" fill="${col.mavi}"/>${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
+  return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/>${tr.match.zones.map(z => `<rect x="${z.x0 * 100}" y="${(F - z.y1) * 100}" width="${(z.x1 - z.x0) * 100}" height="${(z.y1 - z.y0) * 100}" fill="${z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil}"/>`).join('')}${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
 }
 
 // =====================================================================================

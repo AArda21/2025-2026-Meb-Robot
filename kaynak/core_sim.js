@@ -38,7 +38,7 @@ const Sensors = {
   surfaceAt(m, x, y) {
     const r = RULES.EGG_R;
     for (const e of m.eggs) { if (e.gone) continue; const dx = x - e.x, dy = y - e.y; if (dx * dx + dy * dy <= r * r) return Sensors.eggSurface(e, x, y); }
-    const z = m.zoneOf(x, y); return z === 'red' ? SURF.red : z === 'blue' ? SURF.blue : SURF.white;
+    const z = m.zoneOf(x, y); return z ? SURF[z] : SURF.white;
   },
   eggSurface(e, x, y) {
     if (e.kind !== 'penalty') return SURF[e.kind];
@@ -115,14 +115,20 @@ class Match {
       eRobotEgg: 0.2, eWall: 0.15, seed: S.tohum ?? 2026, refereeCollect: S.hakem_toplar ?? true,
       colors: Object.assign({ zemin: '#f6f5f1', kirmizi: '#c1121c', mavi: '#25356b', duvar: '#e2e2dc' }, S.renkler || {}),
     };
+    this.rules = RULESETS[this.opts.kural] || RULESETS['2026']; this.ruleKey = RULESETS[this.opts.kural] ? this.opts.kural : '2026';
+    this.field.colors.yesil = this.field.colors.yesil || '#2f8f46';
+    const F = RULES.FIELD, Z = RULES.ZONE;
+    this.zones = [{ kind: 'red', x0: 0, y0: 0, x1: Z, y1: Z }, { kind: 'blue', x0: F - Z, y0: F - Z, x1: F, y1: F }];
+    if (this.rules.yesil) this.zones.push(this.opts.yesil_kose === 'sol_ust' ? { kind: 'green', x0: 0, y0: F - Z, x1: Z, y1: F } : { kind: 'green', x0: F - Z, y0: 0, x1: F, y1: Z });
     this.startPoses = this.opts.startPoses || {};
     this.reset();
   }
   get dt() { return 0.001; }
   get engineName() { return '2B'; }
+  get matchTime() { return this.rules.sure; }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
-    this.time = 0; this.ended = false; this.banked = { red: [], blue: [] }; this.firstDrop = null; this.events = [];
+    this.time = 0; this.ended = false; this.banked = { red: [], blue: [], green: [] }; this.firstDrop = null; this.events = [];
     this.placeEggs();
     this.robots = [];
     for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team)); this.robots.push(rb); }
@@ -130,10 +136,10 @@ class Match {
   }
   placeEggs() {
     const rnd = mulberry32(this.field.seed | 0), F = RULES.FIELD, Z = RULES.ZONE; const eggs = [], kinds = [];
-    for (let i = 0; i < 10; i++) kinds.push('red'); for (let i = 0; i < 10; i++) kinds.push('blue'); kinds.push('penalty');
+    for (let i = 0; i < 10; i++) kinds.push('red'); for (let i = 0; i < 10; i++) kinds.push('blue'); if (this.rules.ceza) kinds.push('penalty'); for (let i = 0; i < this.rules.yesil; i++) kinds.push('green');
     for (const k of kinds) for (let tries = 0; tries < 2000; tries++) {
       const x = 0.06 + rnd() * (F - 0.12), y = 0.06 + rnd() * (F - 0.12);
-      if ((x < Z + 0.1 && y < Z + 0.1) || (x > F - Z - 0.1 && y > F - Z - 0.1)) continue; if (eggs.some(e => Math.hypot(e.x - x, e.y - y) < 0.09)) continue;
+      if (this.zones.some(zn => x > zn.x0 - 0.1 && x < zn.x1 + 0.1 && y > zn.y0 - 0.1 && y < zn.y1 + 0.1)) continue; if (eggs.some(e => Math.hypot(e.x - x, e.y - y) < 0.09)) continue;
       eggs.push({ id: eggs.length, kind: k, x, y, vx: 0, vy: 0, phi: rnd() * Math.PI * 2, still: 0, gone: false, z: RULES.EGG_H / 2 }); break;
     }
     this.eggs = eggs;
@@ -162,6 +168,8 @@ class Match {
     this.time += dt; this.afterStep(dt);
   }
   afterStep(dt) {
+    for (const e of this.eggs) { if (e.gone || Math.hypot(e.vx, e.vy) < 0.01) continue; let best = null, bd = 0.25; for (const rb of this.robots) { const d = Math.hypot(e.x - rb.state.x, e.y - rb.state.y); if (d < bd) { bd = d; best = rb; } } if (best) e.toucher = best.team; }
+    if (this.rules.ledCeza) for (const rb of this.robots) { if (rb.ledColor() === rb.team) { rb.ledOffT = 0; rb.ledPenActive = false; } else { rb.ledOffT = (rb.ledOffT || 0) + dt; if (rb.ledOffT > 5 && !rb.ledPenActive) { rb.ledPenActive = true; rb.ledPens = (rb.ledPens || 0) + 1; this.events.push({ t: this.time, txt: `${rb.name}: köşe LED'i 5 sn'den uzun yanmadı → −10 ceza` }); } } }
     for (const rb of this.robots) { const s = rb.state; this.stepStats(rb, dt); if (rb.trail.length === 0 || this.time - rb.trail[rb.trail.length - 1][2] > 0.05) { rb.trail.push([s.x, s.y, this.time, s.th]); if (rb.trail.length > 4000) rb.trail.shift(); } }
     this.referee(dt);
   }
@@ -245,7 +253,7 @@ class Match {
       const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy; if (d2 >= r2 * r2 || d2 < 1e-12) continue; const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, pen = r2 - d;
       a.x -= nx * pen / 2; a.y -= ny * pen / 2; b.x += nx * pen / 2; b.y += ny * pen / 2; const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny; if (vn < 0) { const jj = -1.4 * vn / 2; a.vx -= jj * nx; a.vy -= jj * ny; b.vx += jj * nx; b.vy += jj * ny; } } }
   }
-  zoneOf(x, y, rad = 0) { const F = RULES.FIELD, Z = RULES.ZONE; if (x - rad <= Z && y - rad <= Z) return 'red'; if (x + rad >= F - Z && y + rad >= F - Z) return 'blue'; return null; }
+  zoneOf(x, y, rad = 0) { for (const z of this.zones) if (x + rad >= z.x0 && x - rad <= z.x1 && y + rad >= z.y0 && y - rad <= z.y1) return z.kind; return null; }
   eggUnderRobot(e) {
     for (const rb of this.robots) {
       for (const wp of rb.worldParts()) { const dx = e.x - wp.wx, dy = e.y - wp.wy, lx = wp.c * dx + wp.s * dy, ly = -wp.s * dx + wp.c * dy; if (Math.abs(lx) < wp.p.hx + 0.004 && Math.abs(ly) < wp.p.hy + 0.004) return true; }
@@ -258,15 +266,19 @@ class Match {
     if (!this.field.refereeCollect) return;
     for (const e of this.eggs) {
       if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R);
-      if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; this.banked[z].push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${e.kind === 'penalty' ? 'Ceza' : e.kind === 'red' ? 'Kırmızı' : 'Mavi'} yumurta ${z === 'red' ? 'kırmızı' : 'mavi'} alanda — hakem aldı` }); } }
+      if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
       else e.still = 0;
     }
   }
   score() {
-    const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0 }, blue: { own: 0, wrong: 0, pen: 0 } } };
-    const add = (zone, kind) => { const d = sc.detail[zone]; if (kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (kind === zone) { sc[zone] += 1; d.own++; } else { sc[zone] -= 2; d.wrong++; } };
-    for (const z of ['red', 'blue']) for (const e of this.banked[z]) add(z, e.kind);
-    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && !this.eggUnderRobot(e)) add(z, e.kind); }
+    const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
+    const add = (zone, e) => {
+      if (zone === 'green') { if (e.kind === 'green' && e.by && sc.detail[e.by]) { sc[e.by] += 2; sc.detail[e.by].green++; } return; }
+      const d = sc.detail[zone]; if (!d) return; if (e.kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (e.kind === zone) { sc[zone] += 1; d.own++; } else if (!e.by || e.by === zone) { sc[zone] -= 2; d.wrong++; } else { d.planted = (d.planted || 0) + 1; }
+    };
+    for (const z of Object.keys(this.banked)) for (const e of this.banked[z]) add(z, e);
+    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && !this.eggUnderRobot(e)) add(z, Object.assign({ by: e.toucher }, e)); }
+    for (const rb of this.robots) if (rb.ledPens) { sc[rb.team] -= 10 * rb.ledPens; sc.detail[rb.team].led = rb.ledPens; }
     return sc;
   }
 }

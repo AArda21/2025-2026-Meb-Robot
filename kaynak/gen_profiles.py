@@ -1,6 +1,25 @@
 import json
 d = open('/home/claude/defaults.js').read()
 code = d[d.index('const DEFAULT_CODE = `') + len('const DEFAULT_CODE = `'):d.rindex('`;')]
+code = code.replace('''// 0 = yumurta yok, 1 = kırmızı, 2 = mavi
+int yumurtaRengi() {
+  int r = renkOku(LOW, LOW);
+  int b = renkOku(LOW, HIGH);
+  if (r > 120 && b > 120) return 0;
+  if (r < b) return 1;
+  return 2;
+}''', '''// 0 = yumurta yok, 1 = kırmızı, 2 = mavi, 3 = yeşil (2026 ödül yumurtası)
+// TCS3200: periyot ne kadar KÜÇÜKSE o renk o kadar GÜÇLÜ
+int yumurtaRengi() {
+  int r = renkOku(LOW, LOW);    // kırmızı filtre
+  int b = renkOku(LOW, HIGH);   // mavi filtre
+  int g = renkOku(HIGH, HIGH);  // yeşil filtre
+  if (r > 120 && b > 120 && g > 120) return 0;
+  if (r <= b && r <= g) return 1;
+  if (g < r && g < b) return 3;
+  return 2;
+}''')
+code = code.replace('if (renk != 0 && renk != benim) {', 'if (renk != 0 && renk != benim && renk != 3) {   // yeşil ödül yumurtasını tut')
 F = False; T = True; N = None
 yum = {
  "id": "yumyum", "ad": "Yum Yum", "renk": "#f08c00", "aciklama": "Takımın bu yılki robotu (örnek değerlerle başlar — kendi ölçülerinizi girin).",
@@ -42,7 +61,7 @@ yum = {
    {"ad": "Pil 2S 18650", "x": -4.5, "y": 0, "z": 4.6, "uzunluk": 4.2, "genislik": 7.6, "kalinlik": 2, "renk": "#1d4ed8"},
    {"ad": "Mini breadboard", "x": -5, "y": 3.5, "z": 8.9, "uzunluk": 4.5, "genislik": 3.4, "kalinlik": 0.9, "renk": "#d1d5db"}]}}
 eski = {
- "id": "eski2025", "ad": "Eski robot (2025)", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları. Mekanik ölçüler ve sensör yerleri TAHMİNİ.",
+ "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler ve sensör yerleri TAHMİNİ.",
  "kartlar": [{"id": "mega", "tip": "Mega", "kod": open('/tmp/eski/mega.ino').read()}, {"id": "nano", "tip": "Nano", "kod": open('/tmp/eski/nano.ino').read()}],
  "kart_baglantilari": [["mega:A0", "nano:A0"], ["mega:A1", "nano:A1"], ["mega:A2", "nano:A2"], ["mega:A3", "nano:A3"], ["mega:A4", "nano:A4"]],
  "mekanik": {"kutle_kg": 2.2, "agirlik_merkezi": {"x_cm": N, "z_cm": 6},

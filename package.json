@@ -1,6 +1,6 @@
 {
   "name": "meb-robot-sim",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "MEB Robot Yumurta Toplama Simülatörü (Arduino kodu + 3B Rapier fizik motoru)",
   "main": "electron/main.js",
   "author": "Eyüp Ensar",
@@ -26,10 +26,27 @@
   },
   "build": {
     "appId": "com.eyup.mebrobotsim",
-    "productName": "MEB Robot Simulator",
-    "files": ["electron/**", "www/**", "package.json"],
-    "win": { "target": ["portable"] },
-    "linux": { "target": ["AppImage"] },
-    "directories": { "output": "dist" }
+    "productName": "MEB Robot V3.1",
+    "files": [
+      "electron/**",
+      "www/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "portable": {
+      "artifactName": "MEB-Robot-V${version}.exe"
+    }
   }
 }

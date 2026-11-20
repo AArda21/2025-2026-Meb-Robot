@@ -96,7 +96,7 @@ function runTrial(profile, MatchClass, opts = {}) {
   const T = opts.sure || 15;
   return new Promise((resolve) => {
     const team = opts.team || 'red';
-    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {} });
+    const m = new MatchClass({ profiles: { red: team === 'red' ? profile : null, blue: team === 'blue' ? profile : null }, saha: opts.saha, startPoses: {}, kural: opts.kural, yesil_kose: opts.yesil_kose });
     const rb = m.robots[0]; const errs = m.compileAll(); const items = []; const add = (cat, level, txt) => items.push({ cat, level, txt });
     for (const e of errs) add('Kod', 'err', `[${e.board}] ${e.msg}`);
     if (errs.length === rb.boards.length) { resolve({ items, path: [], robot: rb, match: m }); return; }
@@ -183,6 +183,69 @@ function transformSTL(raw, cfg) {
   return { pos: out, bbox: bb };
 }
 
-return { RULES, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+
+// ---------- 3B model okuyucular (parça adlarıyla) ----------
+function parseOBJ(text) {
+  const V = [], objs = []; let cur = null; const ensure = (n) => { cur = { name: n || 'model', tri: [] }; objs.push(cur); };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || line[0] === '#') continue; const p = line.split(/\s+/);
+    if (p[0] === 'v') V.push([+p[1], +p[2], +p[3]]);
+    else if (p[0] === 'o' || (p[0] === 'g' && !objs.some(o => o.fromO))) { ensure(p.slice(1).join(' ')); if (p[0] === 'o') cur.fromO = true; }
+    else if (p[0] === 'f') { if (!cur) ensure('model'); const idx = p.slice(1).map(t => { let i = parseInt(t.split('/')[0], 10); return i < 0 ? V.length + i : i - 1; }); for (let k = 1; k + 1 < idx.length; k++) for (const i of [idx[0], idx[k], idx[k + 1]]) { const v = V[i] || [0, 0, 0]; cur.tri.push(v[0], v[1], v[2]); } }
+  }
+  return objs.filter(o => o.tri.length).map(o => ({ name: o.name, pos: new Float32Array(o.tri), color: null }));
+}
+function parseGLTF(buf) {
+  const u8 = new Uint8Array(buf); let json, bin = null;
+  if (u8[0] === 0x67 && u8[1] === 0x6c && u8[2] === 0x54 && u8[3] === 0x46) {
+    const dv = new DataView(buf); let off = 12;
+    while (off < buf.byteLength) { const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true); const chunk = buf.slice(off + 8, off + 8 + len); if (type === 0x4E4F534A) json = JSON.parse(new TextDecoder().decode(chunk)); else if (type === 0x004E4942) bin = chunk; off += 8 + len; }
+  } else json = JSON.parse(new TextDecoder().decode(u8));
+  const buffers = (json.buffers || []).map((b, i) => { if (i === 0 && bin) return bin; if (b.uri && b.uri.startsWith('data:')) { const s = atob(b.uri.split(',')[1]); const a = new Uint8Array(s.length); for (let k = 0; k < s.length; k++) a[k] = s.charCodeAt(k); return a.buffer; } return null; });
+  const comps = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+  const readAcc = (ai) => { const a = json.accessors[ai], bv = json.bufferViews[a.bufferView], b = buffers[bv.buffer]; if (!b) throw new Error('harici .bin dosyası desteklenmiyor — .glb olarak dışa aktar');
+    const nc = comps[a.type], T = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array, 5122: Int16Array, 5120: Int8Array }[a.componentType];
+    const stride = bv.byteStride || nc * T.BYTES_PER_ELEMENT, base = (bv.byteOffset || 0) + (a.byteOffset || 0), out = new Array(a.count * nc); const dv = new DataView(b);
+    const get = { 5126: (o) => dv.getFloat32(o, true), 5125: (o) => dv.getUint32(o, true), 5123: (o) => dv.getUint16(o, true), 5121: (o) => dv.getUint8(o), 5122: (o) => dv.getInt16(o, true), 5120: (o) => dv.getInt8(o) }[a.componentType];
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < nc; k++) out[i * nc + k] = get(base + i * stride + k * T.BYTES_PER_ELEMENT); return out; };
+  const mul = (a, b) => { const r = new Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; r[i * 4 + j] = s; } return r; };
+  const trs = (n) => { if (n.matrix) return n.matrix.slice(); const [x, y, z, w] = n.rotation || [0, 0, 0, 1], [sx, sy, sz] = n.scale || [1, 1, 1], [tx, ty, tz] = n.translation || [0, 0, 0];
+    return [(1 - 2 * (y * y + z * z)) * sx, 2 * (x * y + z * w) * sx, 2 * (x * z - y * w) * sx, 0, 2 * (x * y - z * w) * sy, (1 - 2 * (x * x + z * z)) * sy, 2 * (y * z + x * w) * sy, 0, 2 * (x * z + y * w) * sz, 2 * (y * z - x * w) * sz, (1 - 2 * (x * x + y * y)) * sz, 0, tx, ty, tz, 1]; };
+  const objs = []; const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const visit = (ni, parentM, parentName) => { const n = json.nodes[ni]; const M = mul(parentM, trs(n)); const name = n.name || parentName;
+    if (n.mesh != null) { const mesh = json.meshes[n.mesh]; const tri = []; let color = null;
+      for (const pr of mesh.primitives) { if (pr.mode != null && pr.mode !== 4) continue; const P = readAcc(pr.attributes.POSITION); const idx = pr.indices != null ? readAcc(pr.indices) : P.map((_, i) => i).filter(i => i < P.length / 3);
+        const mat = pr.material != null && json.materials ? json.materials[pr.material] : null; if (mat && mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorFactor && !color) { const c = mat.pbrMetallicRoughness.baseColorFactor; color = '#' + c.slice(0, 3).map(v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255).toString(16).padStart(2, '0')).join(''); }
+        for (const i of idx) { const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2]; tri.push(M[0] * x + M[4] * y + M[8] * z + M[12], M[1] * x + M[5] * y + M[9] * z + M[13], M[2] * x + M[6] * y + M[10] * z + M[14]); } }
+      if (tri.length) objs.push({ name: name || mesh.name || 'parça', pos: new Float32Array(tri), color }); }
+    for (const c of n.children || []) visit(c, M, name); };
+  const sc = json.scenes ? json.scenes[json.scene || 0] : { nodes: json.nodes.map((_, i) => i) }; for (const ni of sc.nodes) visit(ni, I, null);
+  return objs;
+}
+function parseModel(buf, fileName) {
+  const ext = String(fileName || '').toLowerCase().split('.').pop();
+  if (ext === 'stl') return [{ name: (fileName || 'model').replace(/\.stl$/i, ''), pos: parseSTL(buf), color: null }];
+  if (ext === 'obj') return parseOBJ(new TextDecoder().decode(new Uint8Array(buf)));
+  if (ext === 'glb' || ext === 'gltf') return parseGLTF(buf);
+  throw new Error('Desteklenen biçimler: STL, OBJ, GLB/GLTF');
+}
+// Tüm parçaları birlikte robot çerçevesine taşır; Y-yukarı modelleri (glTF/OBJ) Z-yukarıya çevirmek için dx=90 kullanılabilir.
+function transformModel(objs, cfg) {
+  const all = []; for (const o of objs) all.push(o.pos); const joined = new Float32Array(all.reduce((s, a) => s + a.length, 0)); let off = 0; for (const a of all) { joined.set(a, off); off += a.length; }
+  const tr = transformSTL(joined, cfg); off = 0; const out = [];
+  for (const o of objs) { const p = tr.pos.subarray(off, off + o.pos.length); off += o.pos.length; let bb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let i = 0; i < p.length; i += 3) { bb = [Math.min(bb[0], p[i]), Math.min(bb[1], p[i + 1]), Math.min(bb[2], p[i + 2]), Math.max(bb[3], p[i]), Math.max(bb[4], p[i + 1]), Math.max(bb[5], p[i + 2])]; } out.push({ name: o.name, color: o.color, pos: p, bbox: bb }); }
+  return { pos: tr.pos, bbox: tr.bbox, objects: out };
+}
+// Parça adından ne olduğunu tahmin et
+function guessRole(name) {
+  const n = String(name).toLowerCase();
+  if (/arduino|uno|nano|mega|esp32/.test(n)) return 'kart'; if (/l298|l293|tb6612|bts|ibt|driver|sürücü|surucu|motor ?drive/.test(n)) return 'kart'; if (/pil|batar|battery|18650|lipo|li-ion/.test(n)) return 'kart'; if (/breadboard|regülat|regulat|buck|lm2596/.test(n)) return 'kart';
+  if (/hc-?sr04|ultra|sonar/.test(n)) return 'sensor:HC-SR04'; if (/tcs|renk|colou?r/.test(n)) return 'sensor:TCS3200'; if (/tcrt|zemin|line/.test(n)) return 'sensor:TCRT5000'; if (/mz80|fc-?51|\bir\b|kizil|kızıl|goz|göz/.test(n)) return 'sensor:IR_ENGEL';
+  if (/caster|sarhos|sarhoş|bilye|ball/.test(n)) return 'sarhos'; if (/wheel|teker|tire|lastik|jant/.test(n)) return 'teker';
+  if (/neopixel|led/.test(n)) return 'led'; if (/stop|acil|mantar|emergency/.test(n)) return 'stop'; if (/servo/.test(n)) return 'gorsel'; if (/vida|screw|nut|somun|bolt|civata|cıvata/.test(n)) return 'yoksay';
+  return 'govde';
+}
+
+return { parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

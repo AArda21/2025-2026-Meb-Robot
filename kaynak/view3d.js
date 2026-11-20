@@ -26,12 +26,12 @@ function makeView3D(THREE, host) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, RULES.WALL_H), wallMat); m.position.set(cx, cy, RULES.WALL_H / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
   }
   let fieldColorsKey = '';
-  function paintField(col) {
-    const key = JSON.stringify(col); if (key === fieldColorsKey) return; fieldColorsKey = key;
+  function paintField(col, zones) {
+    const key = JSON.stringify([col, zones]); if (key === fieldColorsKey) return; fieldColorsKey = key;
     const g = fieldCanvas.getContext('2d'), S = 1024, Z = S * RULES.ZONE / F;
     g.fillStyle = col.zemin; g.fillRect(0, 0, S, S);
     g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2; for (let i = 1; i < 10; i++) { const v = i * S / 10; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, S); g.moveTo(0, v); g.lineTo(S, v); g.stroke(); }
-    g.fillStyle = col.kirmizi; g.fillRect(0, S - Z, Z, Z); g.fillStyle = col.mavi; g.fillRect(S - Z, 0, Z, Z);
+    const k = S / F; for (const z of zones || []) { g.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; g.fillRect(z.x0 * k, S - z.y1 * k, (z.x1 - z.x0) * k, (z.y1 - z.y0) * k); }
     fieldTex.needsUpdate = true;
   }
 
@@ -44,7 +44,7 @@ function makeView3D(THREE, host) {
     for (const m of eggMeshes) scene.remove(m); eggMeshes = [];
     const col = sim.field.colors; const g = penCanvas.getContext('2d');
     g.fillStyle = col.kirmizi; g.fillRect(0, 0, 128, 64); g.fillStyle = col.mavi; g.fillRect(0, 64, 128, 64); penTex.needsUpdate = true;
-    eggMats = { red: std(col.kirmizi, { roughness: 0.45 }), blue: std(col.mavi, { roughness: 0.45 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
+    eggMats = { red: std(col.kirmizi, { roughness: 0.45 }), blue: std(col.mavi, { roughness: 0.45 }), green: std(col.yesil || '#2f8f46', { roughness: 0.45 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
     for (const e of sim.eggs) {
       const m = new THREE.Mesh(eggGeo, e.kind === 'penalty' ? eggMats.pen : eggMats[e.kind]); m.castShadow = m.receiveShadow = true; scene.add(m); eggMeshes.push(m);
     }
@@ -74,10 +74,14 @@ function makeView3D(THREE, host) {
       m.castShadow = m.receiveShadow = true; m.userData = { p, zc: (p.z0 + p.z1) / 2 - wr }; m.visible = !hideBoxes || p.servoPin != null; robot.add(m); v.parts.push(m);
     }
     if (rb.model3d && rb.model3d.pos) {
-      const g = new THREE.BufferGeometry(); const pos = rb.model3d.pos.slice(); for (let i = 2; i < pos.length; i += 3) pos[i] -= wr;
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals();
-      const m = new THREE.Mesh(g, std(rb.model3d.renk || '#9aa5b1', { roughness: 0.55, metalness: 0.05, transparent: !!rb.model3d.seffaf, opacity: rb.model3d.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
-      m.castShadow = m.receiveShadow = true; robot.add(m); v.stl = m;
+      const md = rb.model3d, roles = md.roller || {}; const list = md.objects && md.objects.length ? md.objects : [{ name: 'model', pos: md.pos, color: null }];
+      v.stl = [];
+      for (const o of list) { const role = roles[o.name]; if (role === 'yoksay' || role === 'teker' || role === 'sarhos') continue;
+        const g = new THREE.BufferGeometry(); const pos = new Float32Array(o.pos); for (let i = 2; i < pos.length; i += 3) pos[i] -= wr;
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals();
+        const col = o.color || (role === 'kart' ? (/arduino|uno|nano|mega/i.test(o.name) ? '#0e7490' : '#b91c1c') : role === 'teker' ? '#1f2937' : role && role.startsWith('sensor') ? '#1d4ed8' : role === 'stop' ? '#dc2626' : md.renk || '#9aa5b1');
+        const m = new THREE.Mesh(g, std(col, { roughness: 0.55, metalness: 0.05, transparent: !!md.seffaf, opacity: md.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
+        m.castShadow = m.receiveShadow = true; robot.add(m); v.stl.push(m); }
     }
     for (const side of ['L', 'R']) {
       const g = new THREE.Group();
@@ -133,7 +137,7 @@ function makeView3D(THREE, host) {
     if (view.onDrag && view.onDrag(e)) return;
     if (!ptrs.has(e.pointerId)) return; const p = ptrs.get(e.pointerId); const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (ptrs.size === 1) {
-      if (p.b === 2 || e.shiftKey) pan(dx, dy); else { cam.az -= dx * 0.008; cam.pol = Math.min(1.5, Math.max(0.02, cam.pol - dy * 0.006)); }
+      if (p.b === 2 || e.shiftKey) pan(dx, dy); else { if (cam.mode === 'takip') cam.followOff = (cam.followOff || 0) - dx * 0.008; else cam.az -= dx * 0.008; cam.pol = Math.min(1.45, Math.max(0.02, cam.pol - dy * 0.006)); }
     } else if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
       if (last) { cam.dist = Math.min(8, Math.max(0.12, cam.dist * last.d / d)); pan(cx - last.cx, cy - last.cy); } last = { d, cx, cy };
@@ -150,13 +154,13 @@ function makeView3D(THREE, host) {
   let curSim = null; const colTmp = new THREE.Color();
   const view = {
     renderer, camera, cam, onPick: null, onDrag: null,
-    setSim(sim) { curSim = sim; paintField(sim.field.colors); buildEggs(sim); clearRobots(); for (const rb of sim.robots) buildRobot(rb); },
+    setSim(sim) { curSim = sim; paintField(sim.field.colors, sim.zones); buildEggs(sim); clearRobots(); for (const rb of sim.robots) buildRobot(rb); },
     focus: null,
     setMode(m) {
       cam.mode = m;
       if (m === 'ustten') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.4; cam.pol = 0.02; cam.az = -Math.PI / 2; }
       if (m === 'serbest') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.3; cam.pol = 0.75; cam.az = -Math.PI / 2; }
-      if (m === 'takip') { cam.dist = 0.75; cam.pol = 1.05; }
+      if (m === 'takip') { cam.dist = 0.7; cam.pol = 1.0; cam.followOff = 0; cam._init = false; }
     },
     resize() { const r = host.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); },
     // ekran → saha düzlemi (z=0)
@@ -189,9 +193,12 @@ function makeView3D(THREE, host) {
       rayGeo.setDrawRange(0, n * 2); rayGeo.attributes.position.needsUpdate = true; rayGeo.attributes.color.needsUpdate = true;
       sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; m.visible = !e.gone; if (e.gone) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
         if (e.q) m.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w); else { tmpQ.setFromAxisAngle(zAxis, e.phi); m.quaternion.copy(tmpQ).multiply(qx90); } });
-      const fr = view.focus || sim.robots[0]; const pose = fr ? { p: [fr.state.x, fr.state.y], yaw: fr.state.th } : { p: [F / 2, F / 2], yaw: 0 };
+      const fr = (view.focus && sim.robots.includes(view.focus)) ? view.focus : sim.robots[0]; const pose = fr ? { p: [fr.state.x, fr.state.y], yaw: fr.state.th } : { p: [F / 2, F / 2], yaw: 0 };
       // kamera
-      if (cam.mode === 'takip') { cam.target.set(pose.p[0], pose.p[1], 0.04); cam.az = pose.yaw + Math.PI; }
+      if (cam.mode === 'takip') {
+        const tx = pose.p[0], ty = pose.p[1]; if (!cam._init) { cam.target.set(tx, ty, 0.05); cam._init = true; } else { cam.target.x += (tx - cam.target.x) * 0.25; cam.target.y += (ty - cam.target.y) * 0.25; cam.target.z = 0.05; }
+        const want = pose.yaw + Math.PI + (cam.followOff || 0); let d = want - cam.az; d = Math.atan2(Math.sin(d), Math.cos(d)); cam.az += d * 0.12;
+      } else cam._init = false;
       const sp = Math.sin(cam.pol), cp = Math.cos(cam.pol);
       camera.position.set(cam.target.x + cam.dist * sp * Math.cos(cam.az), cam.target.y + cam.dist * sp * Math.sin(cam.az), cam.target.z + cam.dist * cp);
       camera.lookAt(cam.target);

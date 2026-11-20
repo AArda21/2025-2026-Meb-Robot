@@ -18,6 +18,7 @@ const SURF = {
   white: { ir: 90, rgb: [0.92, 0.92, 0.90], name: 'beyaz' },
   red: { ir: 320, rgb: [0.62, 0.07, 0.08], name: 'kırmızı' },
   blue: { ir: 650, rgb: [0.07, 0.13, 0.38], name: 'mavi' },
+  green: { ir: 420, rgb: [0.10, 0.42, 0.17], name: 'yeşil' },
   robot: { ir: 760, rgb: [0.25, 0.25, 0.27], name: 'robot' },
   none: { ir: 1010, rgb: [0, 0, 0], name: 'boş' },
 };
@@ -194,7 +195,7 @@ class Robot {
     const L = D.led; this.led = L ? { type: L.tip === 'NeoPixel' ? 'neo' : 'two', r: pin(L.kirmizi_pin), b: pin(L.mavi_pin), pin: pin(L.pin), x: cm(L.x || 0), y: cm(L.y || 0), z: cm(L.z ?? 9) } : null;
     this.circuit = (D.yerlesim || []).map(c => ({ name: c.ad, x: cm(c.x), y: cm(c.y), z: cm(c.z ?? 8), hx: cm(c.uzunluk) / 2, hy: cm(c.genislik) / 2, h: cm(c.kalinlik ?? 1.2), color: c.renk || '#0f766e' }));
     this.stop = M.acil_stop ? { x: cm(M.acil_stop.x), y: cm(M.acil_stop.y), z: cm(M.acil_stop.z ?? 8) } : null;
-    this.model3d = Pf._stl ? Object.assign({}, M.model3d || {}, { bbox: Pf._stl.bbox, pos: Pf._stl.pos }) : null;
+    this.model3d = Pf._stl ? Object.assign({}, M.model3d || {}, { bbox: Pf._stl.bbox, pos: Pf._stl.pos, objects: Pf._stl.objects }) : null;
     // kartlar arası teller
     this.links = new Map();
     for (const pair of (Pf.kart_baglantilari || [])) {

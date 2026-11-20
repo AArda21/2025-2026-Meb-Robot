@@ -3,6 +3,10 @@
 const SIM = (() => {
 'use strict';
 
+const RULESETS = {
+  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true },
+  '2025': { ad: '2025 (Kayseri) — ceza yumurtası, 3 dk', sure: 180, yesil: 0, ceza: true, ledCeza: false },
+};
 const RULES = { FIELD: 2.5, ZONE: 0.5, WALL_H: 0.08, EGG_R: 0.02, EGG_H: 0.02, MAX_DIM: 0.30, MAX_MASS: 5.0, MATCH_TIME: 180, G: 9.81 };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
