@@ -168,8 +168,13 @@ void ara() {
 void eve() {
   // hedef köşeye geldik mi?
   if (zeminRengi() == hedef) {
-    motorlar(120, 120);
-    delay(250);                       // biraz daha içeri gir
+    // Duvar boyunca önümüze yığılan başka yumurtaları köşeye itmemek için:
+    // biraz geri çekil, hafif sağa dön ve kepçeyle köşeye öyle gir.
+    motorlar(-160, -160);
+    delay(200);
+    donSaga(140);
+    motorlar(130, 130);
+    delay(300);
     motorlar(0, 0);
     kapak.write(KAPAK_ACIK);
     delay(250);
@@ -207,7 +212,7 @@ void sikismaKontrol() {
   if (millis() - sonKontrol < 500) return;
   sonKontrol = millis();
   long d = mesafeCm();
-  if (abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;
+  if (d < 900 && abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;
   sonMesafe = d;
   if (ayniSayac >= 3) {
     Serial.println("Sikisma! geri cikiliyor");

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.5</title>
+<title>MEB Robot V3.6</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -93,7 +93,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.5</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.6</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -147,6 +147,9 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
       <div class="card">
         <div class="row" style="margin:0 0 8px"><strong>Canlı veriler</strong><select id="selFocus" style="margin-left:auto"></select></div>
         <div class="stats" id="stats"></div>
+      </div>
+      <div class="card">
+        <details id="gecmisWrap"><summary>Son maçlar</summary><div id="gecmis" class="hint">Henüz maç yok.</div><div class="row"><button class="btn sm" id="bGecmisSil">Geçmişi temizle</button></div></details>
       </div>
     </div>
   </section>
@@ -2498,6 +2501,8 @@ const $ = (id) => document.getElementById(id);
 const { RULES, Match, Sensors, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, BOARDS, keyLabel, deepCopy } = SIM;
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function copyText(s) { const fb = () => { const ta = document.createElement('textarea'); ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) { } ta.remove(); toast(ok ? 'Kopyalandı' : 'Kopyalanamadı'); };
+  try { if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(s).then(() => toast('Kopyalandı'), fb); else fb(); } catch (e) { fb(); } }
 function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('on'), 2800); }
 function h(tag, attrs = {}, ...kids) { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'on') for (const [ev, fn] of Object.entries(v)) e.addEventListener(ev, fn); else if (k === 'html') e.innerHTML = v; else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c)); return e; }
 
@@ -2681,8 +2686,23 @@ function endMatch() {
   const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; const parts = [`kendi rengi ${d.own}`, `yanlış renk ${d.wrong}`]; if (match.rules.ceza) parts.push(`ceza yumurtası ${d.pen}`); if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (d.led) parts.push(`LED cezası ${d.led}×−10`);
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
   const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
+  saveHistory(sc, res);
   $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
+
+// ---------- Maç geçmişi ----------
+function loadHistory() { try { return JSON.parse(LS.get('mebsim3_gecmis') || '[]'); } catch (e) { return []; } }
+function saveHistory(sc, res) { const H = loadHistory(); const R = match.robotByTeam('red'), B = match.robotByTeam('blue');
+  H.unshift({ t: Date.now(), r: R ? R.name : '—', b: B ? B.name : '—', sr: sc.red, sb: sc.blue, w: res.winner || '', k: $('sKural').value, sd: seed, mf: gercek().motor_farki, f3: !!use3d });
+  LS.set('mebsim3_gecmis', JSON.stringify(H.slice(0, 30))); renderHistory(); }
+function renderHistory() { const H = loadHistory(), el = $('gecmis'); if (!el) return; if (!H.length) { el.textContent = 'Henüz maç yok.'; return; }
+  const ad = H.reduce((a, x) => { if (x.w) a[x.w === 'red' ? x.r : x.b] = (a[x.w === 'red' ? x.r : x.b] || 0) + 1; return a; }, {});
+  el.innerHTML = '<div class="scroll"><table style="min-width:0"><tr><th>Zaman</th><th>Kırmızı</th><th>Mavi</th><th>Sonuç</th><th></th></tr>' + H.map((x, i) => { const d = new Date(x.t); const tt = d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    return `<tr><td>${tt}</td><td${x.w === 'red' ? ' style="font-weight:700"' : ''}>${esc(x.r)} <b>${x.sr}</b></td><td${x.w === 'blue' ? ' style="font-weight:700"' : ''}>${esc(x.b)} <b>${x.sb}</b></td><td>${x.w ? (x.w === 'red' ? 'Kırmızı' : 'Mavi') + ' kazandı' : 'Berabere'}${x.f3 ? '' : ' · 2B'}</td><td><button class="btn sm" data-h="${i}" title="Aynı yumurta dizilimiyle yeniden oyna">↻</button></td></tr>`; }).join('') + '</table></div>'
+    + `<p class="hint">Galibiyetler: ${Object.entries(ad).map(([n, c]) => `${esc(n)} ${c}`).join(' · ') || '—'}</p>`;
+  el.querySelectorAll('[data-h]').forEach(b => b.onclick = () => { const x = H[+b.dataset.h]; seed = x.sd; LS.set('mebsim3_tohum', seed); const fr = profiles.find(p => p.ad === x.r), fb = profiles.find(p => p.ad === x.b); if (fr) $('selRed').value = fr.id; if (fb) $('selBlue').value = fb.id; startRun(); toast('Aynı yumurta dizilimiyle yeniden başlatıldı'); }); }
+$('bGecmisSil').onclick = () => { LS.set('mebsim3_gecmis', '[]'); renderHistory(); };
+renderHistory();
 
 // ---------- Geri oynatma ----------
 function enterReplay() { if (!match || rec.length < 2) { toast('Önce bir maç oynat'); return; } running = false; $('bPause').textContent = '▶ Devam'; replay = { t: 0, idx: -1, play: true }; $('result').classList.remove('on'); $('rpSlider').max = String(rec.length - 1); $('replayBar').style.display = ''; $('bRpPlay').textContent = '⏸'; }
@@ -2699,6 +2719,7 @@ function frame(ts) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
     for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
+    if (use3d && !frame._warned && match.time > 6 && realF < 0.55 * sp) { frame._slow = (frame._slow || 0) + dt; if (frame._slow > 4) { frame._warned = true; toast(`3B fizik bu cihazda yavaş (gerçek hızın %${Math.round(realF / sp * 100)}'i). Akıcı olsun istersen ayarlardan "Fizik: 2B hızlı" seç.`); } } else frame._slow = 0;
     if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
   }
   if (replay && match && rec.length) {
@@ -2947,8 +2968,10 @@ $('bCheck').onclick = async () => {
   for (const cat of order) { const items = all.filter(x => x.cat === cat).sort((a, b) => rank[a.level] - rank[b.level]); if (!items.length) continue;
     html += `<div class="card report"><h2>${titles[cat]}</h2>`; if (cat === 'Hareket' && tr.path.length > 1) html += pathSvg(tr);
     html += `<ul>${items.map(i => `<li><span class="ic ${i.level}">${sym[i.level]}</span><span>${esc(i.txt)}</span></li>`).join('')}</ul></div>`; }
-  html += `<div class="card"><button class="btn pri" id="bWatch">Sahada izle</button> <span class="hint">Bu robotu ${team === 'red' ? 'kırmızı' : 'mavi'} köşeye koyup maçı başlatır.</span></div>`;
+  html += `<div class="card"><button class="btn pri" id="bWatch">Sahada izle</button> <button class="btn" id="bCopyRep">Raporu kopyala</button> <span class="hint">Bu robotu ${team === 'red' ? 'kırmızı' : 'mavi'} köşeye koyup maçı başlatır.</span></div>`;
   $('report').innerHTML = html;
+  const repTxt = `${p.ad} — kontrol raporu (${nErr} hata, ${nWarn} uyarı)\n` + order.map(cat => { const it = all.filter(x => x.cat === cat).sort((a, b) => rank[a.level] - rank[b.level]); return it.length ? `\n## ${titles[cat]}\n` + it.map(i => `[${sym[i.level]}] ${i.txt}`).join('\n') : ''; }).join('') + '\n';
+  $('bCopyRep').onclick = () => copyText(repTxt);
   $('bWatch').onclick = () => { $(team === 'red' ? 'selRed' : 'selBlue').value = p.id; setTab('saha'); startRun(); };
 };
 function pathSvg(tr) {
