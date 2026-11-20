@@ -191,7 +191,7 @@ function makeView3D(THREE, host) {
       });
       for (let i = sim.robots.length; i < trails.length; i++) trails[i].l.visible = false;
       rayGeo.setDrawRange(0, n * 2); rayGeo.attributes.position.needsUpdate = true; rayGeo.attributes.color.needsUpdate = true;
-      sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; m.visible = !e.gone; if (e.gone) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
+      sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; const hid = e._hidden !== undefined ? e._hidden : e.gone; m.visible = !hid; if (hid) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
         if (e.q) m.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w); else { tmpQ.setFromAxisAngle(zAxis, e.phi); m.quaternion.copy(tmpQ).multiply(qx90); } });
       const fr = (view.focus && sim.robots.includes(view.focus)) ? view.focus : sim.robots[0]; const pose = fr ? { p: [fr.state.x, fr.state.y], yaw: fr.state.th } : { p: [F / 2, F / 2], yaw: 0 };
       // kamera

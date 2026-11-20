@@ -164,7 +164,8 @@ class Match {
     const E = this.field, g = RULES.G;
     for (const rb of this.robots) { const s = rb.state; s.x += s.vx * dt; s.y += s.vy * dt; s.th += s.w * dt; }
     for (const e of this.eggs) { if (e.gone) continue; const sp = Math.hypot(e.vx, e.vy); if (sp > 0) { const dv = Math.min(sp, E.muEggFloor * g * dt); e.vx -= e.vx / sp * dv; e.vy -= e.vy / sp * dv; } e.x += e.vx * dt; e.y += e.vy * dt; }
-    for (let it = 0; it < 3; it++) { for (const rb of this.robots) { this.collideRobotWalls(rb); this.collideRobotEggs(rb); } this.collideRobots(); this.collideEggsWalls(); this.collideEggs(); }
+    for (let it = 0; it < 3; it++) { for (const rb of this.robots) { rb._wp = rb.worldParts(); this.collideRobotWalls(rb); this.collideRobotEggs(rb); } this.collideRobots(); this.collideEggsWalls(); this.collideEggs(); }
+    for (const rb of this.robots) rb._wp = null;
     this.time += dt; this.afterStep(dt);
   }
   afterStep(dt) {
@@ -197,7 +198,8 @@ class Match {
   }
   collideRobotWalls(rb) {
     const F = RULES.FIELD, s = rb.state, E = this.field; const push = [0, 0, 0, 0]; let hit = false;
-    for (const wp of rb.worldParts()) {
+    const R0 = rb.radius || 0.3; if (s.x > R0 && s.y > R0 && s.x < F - R0 && s.y < F - R0) return;
+    for (const wp of rb._wp || rb.worldParts()) {
       if (!wp.p.solid || wp.p.z0 >= RULES.WALL_H) continue;
       for (const [cx, cy] of wp.corners) for (const [h, nx, ny, depth, idx] of [[cx < 0, 1, 0, -cx, 0], [cx > F, -1, 0, cx - F, 1], [cy < 0, 0, 1, -cy, 2], [cy > F, 0, -1, cy - F, 3]]) {
         if (!h) continue; hit = true; const rx = cx - s.x, ry = cy - s.y; let [vx, vy] = rb.pointVel(rx, ry);
@@ -211,9 +213,9 @@ class Match {
     if (hit) { if (!rb._wallHitT || this.time - rb._wallHitT > 0.4) rb.stats.wallHits++; rb._wallHitT = this.time; }
   }
   collideRobotEggs(rb) {
-    const s = rb.state, E = this.field, r = RULES.EGG_R, me = E.eggMass, F = RULES.FIELD; const parts = rb.worldParts();
+    const s = rb.state, E = this.field, r = RULES.EGG_R, me = E.eggMass, F = RULES.FIELD; const parts = rb._wp || rb.worldParts();
     for (const e of this.eggs) {
-      if (e.gone) continue;
+      if (e.gone) continue; if (Math.abs(e.x - s.x) > (rb.radius || 0.3) + 0.03 || Math.abs(e.y - s.y) > (rb.radius || 0.3) + 0.03) continue;
       for (const wp of parts) {
         const p = wp.p; if (!p.solid || p.z0 >= RULES.EGG_H) continue; const dx = e.x - wp.wx, dy = e.y - wp.wy; if (dx * dx + dy * dy > (p.hx + p.hy + r) ** 2) continue;
         const lxx = wp.c * dx + wp.s * dy, lyy = -wp.s * dx + wp.c * dy; const qx = clamp(lxx, -p.hx, p.hx), qy = clamp(lyy, -p.hy, p.hy);
@@ -231,7 +233,7 @@ class Match {
     }
   }
   collideRobots() {
-    if (this.robots.length < 2) return; const [A, B] = this.robots; const pa = A.worldParts(), pb = B.worldParts();
+    if (this.robots.length < 2) return; const [A, B] = this.robots; if (Math.hypot(A.state.x - B.state.x, A.state.y - B.state.y) > (A.radius || 0.3) + (B.radius || 0.3)) return; const pa = A._wp || A.worldParts(), pb = B._wp || B.worldParts();
     const test = (X, Y, px, py, sign) => {
       for (const a of px) { if (!a.p.solid) continue; for (const b of py) { if (!b.p.solid || a.p.z1 <= b.p.z0 || b.p.z1 <= a.p.z0) continue;
         for (const [cx, cy] of a.corners) {
@@ -269,6 +271,23 @@ class Match {
       if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
       else e.still = 0;
     }
+  }
+  result() {
+    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].own > 0;
+    if (teams.length < 2) { const t = teams[0]; return { sc, winner: t && ok(t) ? t : null, reason: t && ok(t) ? 'tek robot' : 'kendi rengi yok' }; }
+    const [a, b] = teams; let w = null, reason = '';
+    if (ok(a) && !ok(b)) { w = a; reason = 'rakip kendi rengini bırakamadı'; } else if (ok(b) && !ok(a)) { w = b; reason = 'rakip kendi rengini bırakamadı'; }
+    else if (!ok(a) && !ok(b)) { reason = 'iki robot da kendi rengini bırakamadı'; }
+    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop ? this.firstDrop.zone : null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
+    return { sc, winner: w, reason };
+  }
+  snapshot() {
+    return { t: this.time, sc: this.score(), r: this.robots.map(rb => ({ x: rb.state.x, y: rb.state.y, z: rb.state.z, th: rb.state.th, q: rb.state.q ? Object.assign({}, rb.state.q) : null, sa: Object.assign({}, rb.servoAng), sp: [rb.wheelInfo.L.spin, rb.wheelInfo.R.spin], led: rb.ledColor() })),
+      e: this.eggs.map(e => e.gone ? null : [e.x, e.y, e.z, e.phi, e.q ? [e.q.x, e.q.y, e.q.z, e.q.w] : null]), b: Object.fromEntries(Object.entries(this.banked).map(([k, v]) => [k, v.length])) };
+  }
+  applySnapshot(s) {
+    this.robots.forEach((rb, i) => { const r = s.r[i]; if (!r) return; Object.assign(rb.state, { x: r.x, y: r.y, z: r.z, th: r.th, q: r.q }); rb.servoAng = Object.assign({}, r.sa); rb.wheelInfo.L.spin = r.sp[0]; rb.wheelInfo.R.spin = r.sp[1]; rb._ledOverride = r.led; });
+    this.eggs.forEach((e, i) => { const v = s.e[i]; e._hidden = !v; if (v) { e.x = v[0]; e.y = v[1]; e.z = v[2]; e.phi = v[3]; e.q = v[4] ? { x: v[4][0], y: v[4][1], z: v[4][2], w: v[4][3] } : e.q; } });
   }
   score() {
     const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };

@@ -16,6 +16,7 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
 // ---------------- Profiller ----------------
 let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
 if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
+else { for (const d of DEFAULT_PROFILES) if (!profiles.some(p => p.id === d.id)) profiles.push(deepCopy(d)); }
 let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
 const byId = (id) => profiles.find(p => p.id === id);
 const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
@@ -40,7 +41,7 @@ let match = null, running = false, ended = false, dirty = false, seed = +(LS.get
 const startPoses = {};
 function fillProfileSelects() {
   const opts = (sel, withNone) => { const cur = sel.value; sel.innerHTML = (withNone ? '<option value="">— Robot yok —</option>' : '') + profiles.map(p => `<option value="${p.id}">${esc(p.ad)}</option>`).join(''); if ([...sel.options].some(o => o.value === cur)) sel.value = cur; };
-  opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck'));
+  opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck')); opts($('selBatchA')); opts($('selBatchB')); if (!$('selBatchA').dataset.init) { $('selBatchA').dataset.init = 1; if (byId('yumyum')) $('selBatchA').value = 'yumyum'; if (byId('rakip')) $('selBatchB').value = 'rakip'; }
   if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'yumyum'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
 }
 async function buildMatch() {
@@ -49,7 +50,7 @@ async function buildMatch() {
   match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
-  dirty = false; ended = false; $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
+  dirty = false; ended = false; rec = []; exitReplay(true); $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
 }
 function fillFocus() {
   const cur = $('selFocus').value; const opts = match ? match.robots.map((r, i) => `<option value="${i}">${esc(r.name)} (${r.team === 'red' ? 'kırmızı' : 'mavi'})</option>`).join('') : '';
@@ -58,7 +59,7 @@ function fillFocus() {
 const focusRobot = () => match && match.robots[+$('selFocus').value || 0];
 function showStartMsg(txt, ok) { const el = $('startMsg'); el.className = 'msg ' + (txt ? (ok ? 'ok' : 'err') : ''); el.textContent = txt || ''; }
 async function startRun() {
-  await buildMatch();
+  exitReplay(true); await buildMatch();
   if (!match.robots.length) { showStartMsg('Önce en az bir köşeye robot seç.', false); return; }
   const errs = match.compileAll();
   if (errs.length) { showStartMsg(errs.map(e => `${e.robot} [${e.board}]: ${e.msg}`).join('\n'), false); toast('Kodda hata var — ayrıntı aşağıda'); }
@@ -66,7 +67,7 @@ async function startRun() {
   running = true; ended = false; $('bPause').textContent = '⏸ Duraklat';
 }
 $('bStart').onclick = startRun;
-$('bPause').onclick = () => { if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
+$('bPause').onclick = () => { if (replay) exitReplay(); if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
 $('bReset').onclick = async () => { running = false; $('bPause').textContent = '▶ Devam'; showStartMsg(''); await buildMatch(); };
 $('selRed').onchange = $('selBlue').onchange = async () => { LS.set('mebsim3_red', $('selRed').value); LS.set('mebsim3_blue', $('selBlue').value); running = false; await buildMatch(); };
 $('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS.set('mebsim3_tohum', seed); running = false; await buildMatch(); toast('Yeni yumurta dizilimi'); };
@@ -95,7 +96,7 @@ function draw2d() {
   for (const z of match.zones) { ctx.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; ctx.fillRect(X(z.x0), Y(z.y1), (z.x1 - z.x0) * SC, (z.y1 - z.y0) * SC); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(`${(match.banked[z.kind] || []).length} toplandı`, X((z.x0 + z.x1) / 2), Y((z.y0 + z.y1) / 2)); }
   for (const rb of match.robots) if ($('cTrail').checked && rb.trail.length > 1) { ctx.strokeStyle = rb.team === 'red' ? 'rgba(230,126,0,.6)' : 'rgba(37,99,235,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); rb.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
   const r = RULES.EGG_R * SC;
-  for (const e of match.eggs) { if (e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
+  for (const e of match.eggs) { if (e._hidden !== undefined ? e._hidden : e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
     if (e.kind === 'penalty') { ctx.rotate(-e.phi); ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 2 * Math.PI); ctx.fillStyle = col.kirmizi; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.fillStyle = col.mavi; ctx.fill(); }
     else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : e.kind === 'green' ? col.yesil : col.mavi; ctx.fill(); }
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); ctx.restore(); }
@@ -168,19 +169,31 @@ function endMatch() {
   ended = true; running = false; $('bPause').textContent = '▶ Devam'; const sc = match.score();
   const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; const parts = [`kendi rengi ${d.own}`, `yanlış renk ${d.wrong}`]; if (match.rules.ceza) parts.push(`ceza yumurtası ${d.pen}`); if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (d.led) parts.push(`LED cezası ${d.led}×−10`);
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
-  const rs = ['red', 'blue'].filter(t => match.robotByTeam(t)); let win = '';
-  if (rs.length === 2) { const ok = (t) => sc.detail[t].own > 0; const [a, b] = rs; let w = null; if (ok(a) && !ok(b)) w = a; else if (ok(b) && !ok(a)) w = b; else if (ok(a) && ok(b)) w = sc[a] > sc[b] ? a : sc[b] > sc[a] ? b : (match.firstDrop ? match.firstDrop.zone : null); win = w ? `<div>Kazanan: <b>${esc(match.robotByTeam(w).name)}</b></div>` : '<div>İki robot da kaybetti (kendi rengi yok)</div>'; }
-  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').classList.add('on');
+  const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
+  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
+// ---------- Geri oynatma ----------
+function enterReplay() { if (!match || rec.length < 2) { toast('Önce bir maç oynat'); return; } running = false; $('bPause').textContent = '▶ Devam'; replay = { t: 0, idx: -1, play: true }; $('result').classList.remove('on'); $('rpSlider').max = String(rec.length - 1); $('replayBar').style.display = ''; $('bRpPlay').textContent = '⏸'; }
+function exitReplay(silent) { if (!replay) return; replay = null; $('replayBar').style.display = 'none'; if (match && !silent && rec.length) match.applySnapshot(rec[rec.length - 1]); if (match) { for (const e of match.eggs) delete e._hidden; for (const rb of match.robots) rb._ledOverride = undefined; } }
+$('bReplay').onclick = () => replay ? exitReplay() : enterReplay();
+$('bRpPlay').onclick = () => { if (!replay) return; if (replay.t >= rec[rec.length - 1].t - 0.01) replay.t = 0; replay.play = !replay.play; $('bRpPlay').textContent = replay.play ? '⏸' : '▶'; };
+$('rpSlider').oninput = () => { if (!replay) return; replay.play = false; $('bRpPlay').textContent = '▶'; replay.t = rec[+$('rpSlider').value].t; };
+$('bRpExit').onclick = () => exitReplay();
 // ---------- Ana döngü ----------
-let acc = 0, realF = 1, lastF = 0;
+let acc = 0, realF = 1, lastF = 0, rec = [], replay = null;
 function frame(ts) {
   const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
   if (running && match) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
     for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
+    if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
+  }
+  if (replay && match && rec.length) {
+    if (replay.play) { replay.t += dt * +$('sSpeed').value; if (replay.t >= rec[rec.length - 1].t) { replay.t = rec[rec.length - 1].t; replay.play = false; $('bRpPlay').textContent = '▶'; } }
+    let lo = 0, hi = rec.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rec[mid].t <= replay.t) lo = mid; else hi = mid - 1; }
+    if (replay.idx !== lo) { replay.idx = lo; match.applySnapshot(rec[lo]); $('rpSlider').value = String(lo); $('rpTime').textContent = fmtT(rec[lo].t) + ` · K ${rec[lo].sc.red} · M ${rec[lo].sc.blue}`; }
   }
   if (match) { if (use3d && view3d) view3d.render({ rays: $('cRays').checked, circuit: $('cCirc').checked, trail: $('cTrail').checked }); else draw2d(); if (ts - lastUi > 150) { lastUi = ts; updateUi(); } }
   requestAnimationFrame(frame);
@@ -198,6 +211,7 @@ $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfi
 $('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
+$('bDefaults').onclick = () => { let n = 0; for (const d of DEFAULT_PROFILES) { const c = deepCopy(d); if (profiles.some(p => p.id === c.id)) { c.id = newId(); c.ad = d.ad + ' (güncel örnek)'; } profiles.push(c); n++; } saveProfiles(); fillProfileSelects(); renderEditor(); toast(n + ' hazır örnek profil eklendi (seninkiler silinmedi)'); };
 $('bExport').onclick = () => { const txt = JSON.stringify(curProfile(), null, 1); try { navigator.clipboard.writeText(txt).then(() => toast('Profil JSON panoya kopyalandı'), () => toast('Kopyalanamadı')); } catch (e) { toast('Kopyalanamadı'); } };
 $('fImport').onchange = () => { const f = $('fImport').files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const p = JSON.parse(SIM.stripJsonComments(String(r.result))); p.id = newId(); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast((p.ad || 'Profil') + ' içe aktarıldı'); } catch (e) { toast('JSON okunamadı: ' + e.message); } }; r.readAsText(f); $('fImport').value = ''; };
 
@@ -391,6 +405,33 @@ function pathSvg(tr) {
   const eggs = tr.match.eggs.map(e => e.gone ? '' : `<circle cx="${(e.x * 100).toFixed(1)}" cy="${((F - e.y) * 100).toFixed(1)}" r="2.4" fill="${e.kind === 'red' ? col.kirmizi : e.kind === 'blue' ? col.mavi : e.kind === 'green' ? col.yesil : '#7a3a6a'}"/>`).join('');
   const s = tr.path[0], e = tr.path[tr.path.length - 1];
   return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/>${tr.match.zones.map(z => `<rect x="${z.x0 * 100}" y="${(F - z.y1) * 100}" width="${(z.x1 - z.x0) * 100}" height="${(z.y1 - z.y0) * 100}" fill="${z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil}"/>`).join('')}${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
+}
+
+// ---------- Toplu maç ----------
+let batchStop = false;
+$('bBatch').onclick = async () => {
+  if ($('bBatch').dataset.run) { batchStop = true; return; }
+  const A = byId($('selBatchA').value), B = byId($('selBatchB').value), N = +$('selBatchN').value; if (!A || !B) return;
+  for (const p of [A, B]) if (p._stl === undefined) await attachSTL(p);
+  $('bBatch').dataset.run = 1; $('bBatch').textContent = 'Durdur'; batchStop = false; const bar = $('progB').firstElementChild; $('progB').style.display = '';
+  const rows = []; const kural = $('sKural').value, yk = $('sYesil').value;
+  for (let i = 0; i < N && !batchStop; i++) {
+    const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
+    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk }); const errs = m.compileAll();
+    await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
+    const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
+    rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
+    renderBatch(A, B, rows, N);
+  }
+  delete $('bBatch').dataset.run; $('bBatch').textContent = 'Simülasyonu başlat'; $('progB').style.display = 'none';
+};
+function renderBatch(A, B, rows, N) {
+  const n = rows.length, wa = rows.filter(r => r.w === 'A').length, wb = rows.filter(r => r.w === 'B').length, avg = (k) => (rows.reduce((s, r) => s + r[k], 0) / n).toFixed(1);
+  const errNote = rows.some(r => r.errs) ? '<p class="msg err" style="display:block">Robotlardan birinin kodu derlenemedi; o robot hareket etmeden oynadı.</p>' : '';
+  $('batchOut').innerHTML = `${errNote}<div class="stats"><div class="stat"><div class="k">${esc(A.ad)} kazandı</div><div class="v">${wa} / ${n} (%${(wa / n * 100).toFixed(0)})</div></div><div class="stat"><div class="k">${esc(B.ad)} kazandı</div><div class="v">${wb} / ${n}</div></div><div class="stat"><div class="k">Kazanan yok</div><div class="v">${n - wa - wb}</div></div>
+    <div class="stat"><div class="k">Ort. puan ${esc(A.ad)}</div><div class="v">${avg('sA')}</div></div><div class="stat"><div class="k">Ort. puan ${esc(B.ad)}</div><div class="v">${avg('sB')}</div></div><div class="stat"><div class="k">Ort. kendi rengi (${esc(A.ad)})</div><div class="v">${avg('ownA')}</div></div></div>
+    <div class="scroll" style="margin-top:10px"><table><thead><tr><th>#</th><th>${esc(A.ad)} köşe</th><th>Puan A</th><th>Puan B</th><th>Kazanan</th><th>Neden</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.i}</td><td>${r.aRed ? 'Kırmızı' : 'Mavi'}</td><td>${r.sA}</td><td>${r.sB}</td><td>${r.w === 'A' ? esc(A.ad) : r.w === 'B' ? esc(B.ad) : '—'}</td><td>${esc(r.reason)}</td><td><button class="btn sm" data-watch="${r.i}">İzle</button></td></tr>`).join('')}</tbody></table></div>`;
+  $('batchOut').querySelectorAll('[data-watch]').forEach(b => b.onclick = () => { const r = rows[+b.dataset.watch - 1]; seed = r.sd; $('selRed').value = r.aRed ? A.id : B.id; $('selBlue').value = r.aRed ? B.id : A.id; setTab('saha'); startRun(); toast('Bu maç sahada aynı yumurta dizilimiyle yeniden oynatılıyor (sensör gürültüsü yüzünden birebir aynı olmayabilir)'); });
 }
 
 // =====================================================================================

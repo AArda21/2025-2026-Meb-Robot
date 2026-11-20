@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.1</title>
+<title>MEB Robot V3.2</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -86,7 +86,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.1</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.2</span></h1>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -108,8 +108,10 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
           <button class="btn pri" id="bStart">▶ Başlat</button>
           <button class="btn" id="bPause">⏸ Duraklat</button>
           <button class="btn" id="bReset">↺ Sıfırla</button>
+          <button class="btn" id="bReplay" title="Maçı geri oynat">⏪ Tekrar</button>
           <select id="sSpeed" aria-label="Hız"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
         </div>
+        <div class="row" id="replayBar" style="display:none"><button class="btn sm" id="bRpPlay">⏸</button><input type="range" id="rpSlider" min="0" max="0" value="0" style="flex:1;min-width:140px"><span class="hint" id="rpTime" style="margin:0"></span><button class="btn sm" id="bRpExit">Canlıya dön</button></div>
         <div class="msg" id="startMsg"></div>
         <details><summary>Görünüm ve saha ayarları</summary>
           <div class="row">
@@ -144,6 +146,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
         <label class="f" style="flex:1 1 200px">Robot profili<select id="selProfile"></select></label>
         <button class="btn sm" id="bNew">+ Yeni</button><button class="btn sm" id="bDup">Çoğalt</button>
         <button class="btn sm" id="bExport">Dışa aktar</button><label class="btn sm">İçe aktar<input type="file" id="fImport" accept=".json,.txt" hidden></label>
+        <button class="btn sm" id="bDefaults" title="Uygulamadaki en güncel örnek robotları ekler">Hazır örnekler</button>
         <button class="btn sm danger" id="bDel">Sil</button>
       </div>
       <div class="fields"><label class="f" style="flex:1 1 220px">Ad<input type="text" id="pName"></label><label class="f" style="flex:3 1 260px">Açıklama<input type="text" id="pDesc"></label></div>
@@ -163,6 +166,13 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
       <div class="progress" id="prog" style="display:none"><div></div></div>
     </div>
     <div id="report"></div>
+    <div class="card">
+      <h2>Toplu maç simülasyonu</h2>
+      <p class="hint">İki robotu farklı yumurta dizilimleriyle arka arkaya oynatır, köşeleri her maçta değiştirir; kazanma oranını ve ortalama puanı gösterir. Hız için 2B fizik kullanılır.</p>
+      <div class="row"><label class="f" style="flex:1 1 160px">Robot A<select id="selBatchA"></select></label><label class="f" style="flex:1 1 160px">Robot B<select id="selBatchB"></select></label><label class="f">Maç sayısı<select id="selBatchN"><option>10</option><option selected>20</option><option>50</option></select></label><button class="btn pri" id="bBatch">Simülasyonu başlat</button></div>
+      <div class="progress" id="progB" style="display:none"><div></div></div>
+      <div id="batchOut"></div>
+    </div>
   </section>
 
   <!-- ================= MONİTÖR ================= -->

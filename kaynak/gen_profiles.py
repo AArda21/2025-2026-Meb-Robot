@@ -1,3 +1,5 @@
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
 import json
 d = open('/home/claude/defaults.js').read()
 code = d[d.index('const DEFAULT_CODE = `') + len('const DEFAULT_CODE = `'):d.rindex('`;')]
@@ -19,6 +21,8 @@ int yumurtaRengi() {
   if (g < r && g < b) return 3;
   return 2;
 }''')
+code = code.replace('const bool TAKIM_KIRMIZI = true;   // mavi köşedeysen false yap', 'bool TAKIM_KIRMIZI = true;   // köşe anahtarından okunur (A5: kırmızıda HIGH)')
+code = code.replace('  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);', '  pinMode(A5, INPUT);\n  TAKIM_KIRMIZI = digitalRead(A5) == HIGH;   // köşe anahtarı\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);')
 code = code.replace('if (renk != 0 && renk != benim) {', 'if (renk != 0 && renk != benim && renk != 3) {   // yeşil ödül yumurtasını tut')
 F = False; T = True; N = None
 yum = {
@@ -52,7 +56,8 @@ yum = {
    {"tip": "IR_ENGEL", "ad": "Sol IR", "pin": 2, "x": 8, "y": 7.5, "z": 1.5, "aci": 40, "menzil_cm": 14},
    {"tip": "IR_ENGEL", "ad": "Sağ IR", "pin": 4, "x": 8, "y": -7.5, "z": 1.5, "aci": -40, "menzil_cm": 14},
    {"tip": "TCRT5000", "ad": "Zemin", "pin": "A0", "x": 2, "y": 0, "z": 1, "esik": 500},
-   {"tip": "TCS3200", "ad": "Renk (kepçe)", "s2": "A1", "s3": "A2", "out": 13, "olcek": 20, "x": 10.6, "y": 0, "z": 1, "aci": 0, "bakis": "ileri", "menzil_cm": 2.5}],
+   {"tip": "TCS3200", "ad": "Renk (kepçe)", "s2": "A1", "s3": "A2", "out": 13, "olcek": 20, "x": 10.6, "y": 0, "z": 1, "aci": 0, "bakis": "ileri", "menzil_cm": 2.5},
+   {"tip": "BUTON", "ad": "Köşe anahtarı", "pin": "A5", "deger": "KIRMIZIDA_HIGH"}],
   "servolar": [{"ad": "Kapak servosu", "pin": 3, "hiz_derece_s": 450, "baslangic_aci": 0}],
   "led": {"tip": "iki_pin", "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -7, "y": 0, "z": 8.9},
   "yerlesim": [
@@ -89,14 +94,14 @@ eski = {
    {"ad": "Arduino Nano", "x": 5, "y": 4, "z": 12, "uzunluk": 4.5, "genislik": 1.8, "kalinlik": 1, "renk": "#0369a1"},
    {"ad": "BTS7960 sol", "x": 4, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"},
    {"ad": "BTS7960 sağ", "x": -9, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"}]}}
-rakip_code = open('/home/claude/v3/rakip.ino').read()
+rakip_code = open(os.path.join(HERE, 'rakip.ino')).read()
 rakip = {"id": "rakip", "ad": "Basit rakip", "renk": "#2563eb", "aciklama": "Rastgele dolaşan basit rakip robot.",
  "kartlar": [{"id": "ana", "tip": "Uno", "kod": rakip_code}], "kart_baglantilari": [],
  "mekanik": {"kutle_kg": 0.9, "agirlik_merkezi": {"x_cm": N, "z_cm": 4}, "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.6, "iz_cm": 15, "x_cm": 0}, "sarhos_teker": {"x_cm": -8, "y_cm": 0, "cap_cm": 1.6}, "motor": {"model": "TT 1:48 6V"}, "pil": {"volt": 7.4}, "acil_stop": {"x": -3, "y": 3, "z": 7},
   "parcalar": [{"ad": "Şasi", "x": 0, "y": 0, "uzunluk": 20, "genislik": 12, "z0": 2.5, "z1": 7, "renk": "#3b82f6"}, {"ad": "Tampon", "x": 10.5, "y": 0, "uzunluk": 1, "genislik": 16, "z0": 0.5, "z1": 5, "renk": "#1e3a8a"}], "model3d": N},
  "devre": {"surucu": {"tip": "L298N", "sol": {"en": 5, "in1": 7, "in2": 8}, "sag": {"en": 6, "in1": 9, "in2": 10}},
-  "sensorler": [{"tip": "HC-SR04", "ad": "Ultrasonik", "trig": 11, "echo": 12, "x": 9, "y": 0, "z": 6, "aci": 0}], "servolar": [],
-  "led": {"tip": "iki_pin", "mavi_pin": "A4", "x": -4, "y": 0, "z": 7},
+  "sensorler": [{"tip": "HC-SR04", "ad": "Ultrasonik", "trig": 11, "echo": 12, "x": 9, "y": 0, "z": 6, "aci": 0}, {"tip": "BUTON", "ad": "Köşe anahtarı", "pin": "A5", "deger": "KIRMIZIDA_HIGH"}], "servolar": [],
+  "led": {"tip": "iki_pin", "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -4, "y": 0, "z": 7},
   "yerlesim": [{"ad": "Arduino Uno", "x": -2, "y": 0, "z": 7, "uzunluk": 6.9, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490"}]}}
-open('/home/claude/v3/profiles.js', 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip], ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
+open(os.path.join(HERE, 'profiles.js'), 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip], ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
 print('ok')

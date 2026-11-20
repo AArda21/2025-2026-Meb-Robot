@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.1</title>
+<title>MEB Robot V3.2</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -86,7 +86,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.1</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V3.2</span></h1>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
 <nav class="tabs" id="tabs">
@@ -108,8 +108,10 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
           <button class="btn pri" id="bStart">▶ Başlat</button>
           <button class="btn" id="bPause">⏸ Duraklat</button>
           <button class="btn" id="bReset">↺ Sıfırla</button>
+          <button class="btn" id="bReplay" title="Maçı geri oynat">⏪ Tekrar</button>
           <select id="sSpeed" aria-label="Hız"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
         </div>
+        <div class="row" id="replayBar" style="display:none"><button class="btn sm" id="bRpPlay">⏸</button><input type="range" id="rpSlider" min="0" max="0" value="0" style="flex:1;min-width:140px"><span class="hint" id="rpTime" style="margin:0"></span><button class="btn sm" id="bRpExit">Canlıya dön</button></div>
         <div class="msg" id="startMsg"></div>
         <details><summary>Görünüm ve saha ayarları</summary>
           <div class="row">
@@ -144,6 +146,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
         <label class="f" style="flex:1 1 200px">Robot profili<select id="selProfile"></select></label>
         <button class="btn sm" id="bNew">+ Yeni</button><button class="btn sm" id="bDup">Çoğalt</button>
         <button class="btn sm" id="bExport">Dışa aktar</button><label class="btn sm">İçe aktar<input type="file" id="fImport" accept=".json,.txt" hidden></label>
+        <button class="btn sm" id="bDefaults" title="Uygulamadaki en güncel örnek robotları ekler">Hazır örnekler</button>
         <button class="btn sm danger" id="bDel">Sil</button>
       </div>
       <div class="fields"><label class="f" style="flex:1 1 220px">Ad<input type="text" id="pName"></label><label class="f" style="flex:3 1 260px">Açıklama<input type="text" id="pDesc"></label></div>
@@ -163,6 +166,13 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
       <div class="progress" id="prog" style="display:none"><div></div></div>
     </div>
     <div id="report"></div>
+    <div class="card">
+      <h2>Toplu maç simülasyonu</h2>
+      <p class="hint">İki robotu farklı yumurta dizilimleriyle arka arkaya oynatır, köşeleri her maçta değiştirir; kazanma oranını ve ortalama puanı gösterir. Hız için 2B fizik kullanılır.</p>
+      <div class="row"><label class="f" style="flex:1 1 160px">Robot A<select id="selBatchA"></select></label><label class="f" style="flex:1 1 160px">Robot B<select id="selBatchB"></select></label><label class="f">Maç sayısı<select id="selBatchN"><option>10</option><option selected>20</option><option>50</option></select></label><button class="btn pri" id="bBatch">Simülasyonu başlat</button></div>
+      <div class="progress" id="progB" style="display:none"><div></div></div>
+      <div id="batchOut"></div>
+    </div>
   </section>
 
   <!-- ================= MONİTÖR ================= -->
@@ -665,6 +675,7 @@ class Robot {
     let minX = 1, maxX = -1, minY = 1, maxY = -1;
     for (const p of this.parts) if (p.servoPin == null) { minX = Math.min(minX, p.x - p.hx); maxX = Math.max(maxX, p.x + p.hx); minY = Math.min(minY, p.y - p.hy); maxY = Math.max(maxY, p.y + p.hy); }
     this.inertia = this.mass * ((maxX - minX) ** 2 + (maxY - minY) ** 2) / 12 || 0.005;
+    this.radius = 0.02 + Math.max(0.1, ...this.parts.map(p => p.servoPin != null && p.pivot ? Math.hypot(p.pivot[0], p.pivot[1]) + p.len : Math.hypot(Math.abs(p.x) + p.hx, Math.abs(p.y) + p.hy)));
   }
   reset(pose) {
     this.state = { x: pose.x, y: pose.y, th: pose.th, vx: 0, vy: 0, w: 0, z: this.wheelR, tilt: 0 };
@@ -740,6 +751,7 @@ class Robot {
     return { V, mode, duty: d };
   }
   ledColor() {
+    if (this._ledOverride !== undefined) return this._ledOverride;
     const L = this.led; if (!L) return null;
     if (L.type === 'neo') { const rt = L.pin != null && this.rtOf(L.pin); const px = rt && rt.neo[L.pin]; if (!px || !px.length) return null; let r = 0, b = 0; for (const c of px) { r += (c >> 16) & 255; b += c & 255; } r /= px.length; b /= px.length; if (r < 20 && b < 20) return null; return r > 2 * b ? 'red' : b > 2 * r ? 'blue' : 'mor'; }
     const r = L.r != null && this.duty(L.r) > 0.1, b = L.b != null && this.duty(L.b) > 0.1; return r && b ? 'mor' : r ? 'red' : b ? 'blue' : null;
@@ -922,7 +934,8 @@ class Match {
     const E = this.field, g = RULES.G;
     for (const rb of this.robots) { const s = rb.state; s.x += s.vx * dt; s.y += s.vy * dt; s.th += s.w * dt; }
     for (const e of this.eggs) { if (e.gone) continue; const sp = Math.hypot(e.vx, e.vy); if (sp > 0) { const dv = Math.min(sp, E.muEggFloor * g * dt); e.vx -= e.vx / sp * dv; e.vy -= e.vy / sp * dv; } e.x += e.vx * dt; e.y += e.vy * dt; }
-    for (let it = 0; it < 3; it++) { for (const rb of this.robots) { this.collideRobotWalls(rb); this.collideRobotEggs(rb); } this.collideRobots(); this.collideEggsWalls(); this.collideEggs(); }
+    for (let it = 0; it < 3; it++) { for (const rb of this.robots) { rb._wp = rb.worldParts(); this.collideRobotWalls(rb); this.collideRobotEggs(rb); } this.collideRobots(); this.collideEggsWalls(); this.collideEggs(); }
+    for (const rb of this.robots) rb._wp = null;
     this.time += dt; this.afterStep(dt);
   }
   afterStep(dt) {
@@ -955,7 +968,8 @@ class Match {
   }
   collideRobotWalls(rb) {
     const F = RULES.FIELD, s = rb.state, E = this.field; const push = [0, 0, 0, 0]; let hit = false;
-    for (const wp of rb.worldParts()) {
+    const R0 = rb.radius || 0.3; if (s.x > R0 && s.y > R0 && s.x < F - R0 && s.y < F - R0) return;
+    for (const wp of rb._wp || rb.worldParts()) {
       if (!wp.p.solid || wp.p.z0 >= RULES.WALL_H) continue;
       for (const [cx, cy] of wp.corners) for (const [h, nx, ny, depth, idx] of [[cx < 0, 1, 0, -cx, 0], [cx > F, -1, 0, cx - F, 1], [cy < 0, 0, 1, -cy, 2], [cy > F, 0, -1, cy - F, 3]]) {
         if (!h) continue; hit = true; const rx = cx - s.x, ry = cy - s.y; let [vx, vy] = rb.pointVel(rx, ry);
@@ -969,9 +983,9 @@ class Match {
     if (hit) { if (!rb._wallHitT || this.time - rb._wallHitT > 0.4) rb.stats.wallHits++; rb._wallHitT = this.time; }
   }
   collideRobotEggs(rb) {
-    const s = rb.state, E = this.field, r = RULES.EGG_R, me = E.eggMass, F = RULES.FIELD; const parts = rb.worldParts();
+    const s = rb.state, E = this.field, r = RULES.EGG_R, me = E.eggMass, F = RULES.FIELD; const parts = rb._wp || rb.worldParts();
     for (const e of this.eggs) {
-      if (e.gone) continue;
+      if (e.gone) continue; if (Math.abs(e.x - s.x) > (rb.radius || 0.3) + 0.03 || Math.abs(e.y - s.y) > (rb.radius || 0.3) + 0.03) continue;
       for (const wp of parts) {
         const p = wp.p; if (!p.solid || p.z0 >= RULES.EGG_H) continue; const dx = e.x - wp.wx, dy = e.y - wp.wy; if (dx * dx + dy * dy > (p.hx + p.hy + r) ** 2) continue;
         const lxx = wp.c * dx + wp.s * dy, lyy = -wp.s * dx + wp.c * dy; const qx = clamp(lxx, -p.hx, p.hx), qy = clamp(lyy, -p.hy, p.hy);
@@ -989,7 +1003,7 @@ class Match {
     }
   }
   collideRobots() {
-    if (this.robots.length < 2) return; const [A, B] = this.robots; const pa = A.worldParts(), pb = B.worldParts();
+    if (this.robots.length < 2) return; const [A, B] = this.robots; if (Math.hypot(A.state.x - B.state.x, A.state.y - B.state.y) > (A.radius || 0.3) + (B.radius || 0.3)) return; const pa = A._wp || A.worldParts(), pb = B._wp || B.worldParts();
     const test = (X, Y, px, py, sign) => {
       for (const a of px) { if (!a.p.solid) continue; for (const b of py) { if (!b.p.solid || a.p.z1 <= b.p.z0 || b.p.z1 <= a.p.z0) continue;
         for (const [cx, cy] of a.corners) {
@@ -1027,6 +1041,23 @@ class Match {
       if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
       else e.still = 0;
     }
+  }
+  result() {
+    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].own > 0;
+    if (teams.length < 2) { const t = teams[0]; return { sc, winner: t && ok(t) ? t : null, reason: t && ok(t) ? 'tek robot' : 'kendi rengi yok' }; }
+    const [a, b] = teams; let w = null, reason = '';
+    if (ok(a) && !ok(b)) { w = a; reason = 'rakip kendi rengini bırakamadı'; } else if (ok(b) && !ok(a)) { w = b; reason = 'rakip kendi rengini bırakamadı'; }
+    else if (!ok(a) && !ok(b)) { reason = 'iki robot da kendi rengini bırakamadı'; }
+    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop ? this.firstDrop.zone : null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
+    return { sc, winner: w, reason };
+  }
+  snapshot() {
+    return { t: this.time, sc: this.score(), r: this.robots.map(rb => ({ x: rb.state.x, y: rb.state.y, z: rb.state.z, th: rb.state.th, q: rb.state.q ? Object.assign({}, rb.state.q) : null, sa: Object.assign({}, rb.servoAng), sp: [rb.wheelInfo.L.spin, rb.wheelInfo.R.spin], led: rb.ledColor() })),
+      e: this.eggs.map(e => e.gone ? null : [e.x, e.y, e.z, e.phi, e.q ? [e.q.x, e.q.y, e.q.z, e.q.w] : null]), b: Object.fromEntries(Object.entries(this.banked).map(([k, v]) => [k, v.length])) };
+  }
+  applySnapshot(s) {
+    this.robots.forEach((rb, i) => { const r = s.r[i]; if (!r) return; Object.assign(rb.state, { x: r.x, y: r.y, z: r.z, th: r.th, q: r.q }); rb.servoAng = Object.assign({}, r.sa); rb.wheelInfo.L.spin = r.sp[0]; rb.wheelInfo.R.spin = r.sp[1]; rb._ledOverride = r.led; });
+    this.eggs.forEach((e, i) => { const v = s.e[i]; e._hidden = !v; if (v) { e.x = v[0]; e.y = v[1]; e.z = v[2]; e.phi = v[3]; e.q = v[4] ? { x: v[4][0], y: v[4][1], z: v[4][2], w: v[4][3] } : e.q; } });
   }
   score() {
     const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
@@ -1302,7 +1333,7 @@ const DEFAULT_PROFILES = [
    {
     "id": "ana",
     "tip": "Uno",
-    "kod": "// Örnek yumurta toplama kodu — kendi kodunu buraya yapıştır\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n\nServo kapak;\nconst bool TAKIM_KIRMIZI = true;   // mavi köşedeysen false yap\nunsigned long sonYazdirma = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yumurta yok, 1 = kırmızı, 2 = mavi\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);\n  int b = renkOku(LOW, HIGH);\n  if (r > 120 && b > 120) return 0;\n  if (r < b) return 1;\n  return 2;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT);\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(0);      // başlangıçta kapalı (30 cm sınırı)\n  delay(300);\n  kapak.write(90);     // maç başlayınca aç\n  Serial.println(\"Robot hazir\");\n}\n\nvoid loop() {\n  int renk = yumurtaRengi();\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (renk != 0 && renk != benim) {\n    // Yanlış renk / ceza yumurtası: geri çekil, bırak\n    motorlar(-180, -180);\n    delay(350);\n    motorlar(-170, 170);\n    delay(300);\n  }\n\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n\n  if (d < 32) {                 // duvar (ultrasonik 6 cm yükseklikte → yumurtayı görmez); açık kapak önde 11 cm\n    motorlar(-170, -170);\n    delay(250);\n    motorlar(180, -180);\n    delay(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(110, 200);         // solda yumurta → sola yönel\n  } else if (sagVar && !solVar) {\n    motorlar(200, 110);\n  } else {\n    motorlar(190, 190);\n  }\n\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"mesafe=\");\n    Serial.print(d);\n    Serial.print(\" renk=\");\n    Serial.println(renk);\n  }\n}\n"
+    "kod": "// Örnek yumurta toplama kodu — kendi kodunu buraya yapıştır\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;   // köşe anahtarından okunur (A5: kırmızıda HIGH)\nunsigned long sonYazdirma = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yumurta yok, 1 = kırmızı, 2 = mavi, 3 = yeşil (2026 ödül yumurtası)\n// TCS3200: periyot ne kadar KÜÇÜKSE o renk o kadar GÜÇLÜ\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);    // kırmızı filtre\n  int b = renkOku(LOW, HIGH);   // mavi filtre\n  int g = renkOku(HIGH, HIGH);  // yeşil filtre\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT);\n  pinMode(A5, INPUT);\n  TAKIM_KIRMIZI = digitalRead(A5) == HIGH;   // köşe anahtarı\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(0);      // başlangıçta kapalı (30 cm sınırı)\n  delay(300);\n  kapak.write(90);     // maç başlayınca aç\n  Serial.println(\"Robot hazir\");\n}\n\nvoid loop() {\n  int renk = yumurtaRengi();\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (renk != 0 && renk != benim && renk != 3) {   // yeşil ödül yumurtasını tut\n    // Yanlış renk / ceza yumurtası: geri çekil, bırak\n    motorlar(-180, -180);\n    delay(350);\n    motorlar(-170, 170);\n    delay(300);\n  }\n\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n\n  if (d < 32) {                 // duvar (ultrasonik 6 cm yükseklikte → yumurtayı görmez); açık kapak önde 11 cm\n    motorlar(-170, -170);\n    delay(250);\n    motorlar(180, -180);\n    delay(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(110, 200);         // solda yumurta → sola yönel\n  } else if (sagVar && !solVar) {\n    motorlar(200, 110);\n  } else {\n    motorlar(190, 190);\n  }\n\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"mesafe=\");\n    Serial.print(d);\n    Serial.print(\" renk=\");\n    Serial.println(renk);\n  }\n}\n"
    }
   ],
   "kart_baglantilari": [],
@@ -1548,6 +1579,12 @@ const DEFAULT_PROFILES = [
      "aci": 0,
      "bakis": "ileri",
      "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
     }
    ],
    "servolar": [
@@ -1612,9 +1649,9 @@ const DEFAULT_PROFILES = [
  },
  {
   "id": "eski2025",
-  "ad": "Eski robot (2025)",
+  "ad": "Antalya 2026 robotumuz",
   "renk": "#6d28d9",
-  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları. Mekanik ölçüler ve sensör yerleri TAHMİNİ.",
+  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler ve sensör yerleri TAHMİNİ.",
   "kartlar": [
    {
     "id": "mega",
@@ -1887,7 +1924,7 @@ const DEFAULT_PROFILES = [
    {
     "id": "ana",
     "tip": "Uno",
-    "kod": "// Basit rakip: dolaşır, duvar görünce döner\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define LED_M A4\n\nvoid motor(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0); digitalWrite(IN2, sol < 0);\n  digitalWrite(IN3, sag >= 0); digitalWrite(IN4, sag < 0);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafe() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long t = pulseIn(ECHO, HIGH, 30000);\n  return t == 0 ? 999 : t / 58;\n}\n\nvoid setup() {\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(LED_M, OUTPUT);\n  digitalWrite(LED_M, HIGH);\n}\n\nvoid loop() {\n  if (mesafe() < 25) { motor(-160, -160); delay(300); motor(170, -170); delay(random(300, 700)); }\n  else motor(170, 180);\n}\n"
+    "kod": "// Basit rakip: dolaşır, duvar görünce döner\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5   // köşe anahtarı: kırmızıda HIGH\n\nvoid motor(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0); digitalWrite(IN2, sol < 0);\n  digitalWrite(IN3, sag >= 0); digitalWrite(IN4, sag < 0);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafe() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long t = pulseIn(ECHO, HIGH, 30000);\n  return t == 0 ? 999 : t / 58;\n}\n\nvoid setup() {\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  bool kirmizi = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, kirmizi); digitalWrite(LED_M, !kirmizi);\n}\n\nvoid loop() {\n  if (mesafe() < 25) { motor(-160, -160); delay(300); motor(170, -170); delay(random(300, 700)); }\n  else motor(170, 180);\n}\n"
    }
   ],
   "kart_baglantilari": [],
@@ -1968,11 +2005,18 @@ const DEFAULT_PROFILES = [
      "y": 0,
      "z": 6,
      "aci": 0
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
     }
    ],
    "servolar": [],
    "led": {
     "tip": "iki_pin",
+    "kirmizi_pin": "A3",
     "mavi_pin": "A4",
     "x": -4,
     "y": 0,
@@ -2321,7 +2365,7 @@ function makeView3D(THREE, host) {
       });
       for (let i = sim.robots.length; i < trails.length; i++) trails[i].l.visible = false;
       rayGeo.setDrawRange(0, n * 2); rayGeo.attributes.position.needsUpdate = true; rayGeo.attributes.color.needsUpdate = true;
-      sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; m.visible = !e.gone; if (e.gone) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
+      sim.eggs.forEach((e, i) => { const m = eggMeshes[i]; if (!m) return; const hid = e._hidden !== undefined ? e._hidden : e.gone; m.visible = !hid; if (hid) return; m.position.set(e.x, e.y, e.z !== undefined ? e.z : RULES.EGG_H / 2);
         if (e.q) m.quaternion.set(e.q.x, e.q.y, e.q.z, e.q.w); else { tmpQ.setFromAxisAngle(zAxis, e.phi); m.quaternion.copy(tmpQ).multiply(qx90); } });
       const fr = (view.focus && sim.robots.includes(view.focus)) ? view.focus : sim.robots[0]; const pose = fr ? { p: [fr.state.x, fr.state.y], yaw: fr.state.th } : { p: [F / 2, F / 2], yaw: 0 };
       // kamera
@@ -2356,6 +2400,7 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
 // ---------------- Profiller ----------------
 let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
 if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
+else { for (const d of DEFAULT_PROFILES) if (!profiles.some(p => p.id === d.id)) profiles.push(deepCopy(d)); }
 let saveT = null; function saveProfiles() { clearTimeout(saveT); saveT = setTimeout(() => LS.set('mebsim3_profiller', JSON.stringify(profiles)), 300); dirty = true; }
 const byId = (id) => profiles.find(p => p.id === id);
 const newId = () => 'p' + Math.random().toString(36).slice(2, 8);
@@ -2380,7 +2425,7 @@ let match = null, running = false, ended = false, dirty = false, seed = +(LS.get
 const startPoses = {};
 function fillProfileSelects() {
   const opts = (sel, withNone) => { const cur = sel.value; sel.innerHTML = (withNone ? '<option value="">— Robot yok —</option>' : '') + profiles.map(p => `<option value="${p.id}">${esc(p.ad)}</option>`).join(''); if ([...sel.options].some(o => o.value === cur)) sel.value = cur; };
-  opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck'));
+  opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck')); opts($('selBatchA')); opts($('selBatchB')); if (!$('selBatchA').dataset.init) { $('selBatchA').dataset.init = 1; if (byId('yumyum')) $('selBatchA').value = 'yumyum'; if (byId('rakip')) $('selBatchB').value = 'rakip'; }
   if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'yumyum'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
 }
 async function buildMatch() {
@@ -2389,7 +2434,7 @@ async function buildMatch() {
   match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
-  dirty = false; ended = false; $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
+  dirty = false; ended = false; rec = []; exitReplay(true); $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
 }
 function fillFocus() {
   const cur = $('selFocus').value; const opts = match ? match.robots.map((r, i) => `<option value="${i}">${esc(r.name)} (${r.team === 'red' ? 'kırmızı' : 'mavi'})</option>`).join('') : '';
@@ -2398,7 +2443,7 @@ function fillFocus() {
 const focusRobot = () => match && match.robots[+$('selFocus').value || 0];
 function showStartMsg(txt, ok) { const el = $('startMsg'); el.className = 'msg ' + (txt ? (ok ? 'ok' : 'err') : ''); el.textContent = txt || ''; }
 async function startRun() {
-  await buildMatch();
+  exitReplay(true); await buildMatch();
   if (!match.robots.length) { showStartMsg('Önce en az bir köşeye robot seç.', false); return; }
   const errs = match.compileAll();
   if (errs.length) { showStartMsg(errs.map(e => `${e.robot} [${e.board}]: ${e.msg}`).join('\n'), false); toast('Kodda hata var — ayrıntı aşağıda'); }
@@ -2406,7 +2451,7 @@ async function startRun() {
   running = true; ended = false; $('bPause').textContent = '⏸ Duraklat';
 }
 $('bStart').onclick = startRun;
-$('bPause').onclick = () => { if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
+$('bPause').onclick = () => { if (replay) exitReplay(); if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
 $('bReset').onclick = async () => { running = false; $('bPause').textContent = '▶ Devam'; showStartMsg(''); await buildMatch(); };
 $('selRed').onchange = $('selBlue').onchange = async () => { LS.set('mebsim3_red', $('selRed').value); LS.set('mebsim3_blue', $('selBlue').value); running = false; await buildMatch(); };
 $('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS.set('mebsim3_tohum', seed); running = false; await buildMatch(); toast('Yeni yumurta dizilimi'); };
@@ -2435,7 +2480,7 @@ function draw2d() {
   for (const z of match.zones) { ctx.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; ctx.fillRect(X(z.x0), Y(z.y1), (z.x1 - z.x0) * SC, (z.y1 - z.y0) * SC); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(`${(match.banked[z.kind] || []).length} toplandı`, X((z.x0 + z.x1) / 2), Y((z.y0 + z.y1) / 2)); }
   for (const rb of match.robots) if ($('cTrail').checked && rb.trail.length > 1) { ctx.strokeStyle = rb.team === 'red' ? 'rgba(230,126,0,.6)' : 'rgba(37,99,235,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); rb.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
   const r = RULES.EGG_R * SC;
-  for (const e of match.eggs) { if (e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
+  for (const e of match.eggs) { if (e._hidden !== undefined ? e._hidden : e.gone) continue; ctx.save(); ctx.translate(X(e.x), Y(e.y));
     if (e.kind === 'penalty') { ctx.rotate(-e.phi); ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 2 * Math.PI); ctx.fillStyle = col.kirmizi; ctx.fill(); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.fillStyle = col.mavi; ctx.fill(); }
     else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : e.kind === 'green' ? col.yesil : col.mavi; ctx.fill(); }
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); ctx.restore(); }
@@ -2508,19 +2553,31 @@ function endMatch() {
   ended = true; running = false; $('bPause').textContent = '▶ Devam'; const sc = match.score();
   const line = (t) => { const d = sc.detail[t], rb = match.robotByTeam(t); if (!rb) return ''; const parts = [`kendi rengi ${d.own}`, `yanlış renk ${d.wrong}`]; if (match.rules.ceza) parts.push(`ceza yumurtası ${d.pen}`); if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (d.led) parts.push(`LED cezası ${d.led}×−10`);
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
-  const rs = ['red', 'blue'].filter(t => match.robotByTeam(t)); let win = '';
-  if (rs.length === 2) { const ok = (t) => sc.detail[t].own > 0; const [a, b] = rs; let w = null; if (ok(a) && !ok(b)) w = a; else if (ok(b) && !ok(a)) w = b; else if (ok(a) && ok(b)) w = sc[a] > sc[b] ? a : sc[b] > sc[a] ? b : (match.firstDrop ? match.firstDrop.zone : null); win = w ? `<div>Kazanan: <b>${esc(match.robotByTeam(w).name)}</b></div>` : '<div>İki robot da kaybetti (kendi rengi yok)</div>'; }
-  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').classList.add('on');
+  const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
+  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
+// ---------- Geri oynatma ----------
+function enterReplay() { if (!match || rec.length < 2) { toast('Önce bir maç oynat'); return; } running = false; $('bPause').textContent = '▶ Devam'; replay = { t: 0, idx: -1, play: true }; $('result').classList.remove('on'); $('rpSlider').max = String(rec.length - 1); $('replayBar').style.display = ''; $('bRpPlay').textContent = '⏸'; }
+function exitReplay(silent) { if (!replay) return; replay = null; $('replayBar').style.display = 'none'; if (match && !silent && rec.length) match.applySnapshot(rec[rec.length - 1]); if (match) { for (const e of match.eggs) delete e._hidden; for (const rb of match.robots) rb._ledOverride = undefined; } }
+$('bReplay').onclick = () => replay ? exitReplay() : enterReplay();
+$('bRpPlay').onclick = () => { if (!replay) return; if (replay.t >= rec[rec.length - 1].t - 0.01) replay.t = 0; replay.play = !replay.play; $('bRpPlay').textContent = replay.play ? '⏸' : '▶'; };
+$('rpSlider').oninput = () => { if (!replay) return; replay.play = false; $('bRpPlay').textContent = '▶'; replay.t = rec[+$('rpSlider').value].t; };
+$('bRpExit').onclick = () => exitReplay();
 // ---------- Ana döngü ----------
-let acc = 0, realF = 1, lastF = 0;
+let acc = 0, realF = 1, lastF = 0, rec = [], replay = null;
 function frame(ts) {
   const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
   if (running && match) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
     for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
+    if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
+  }
+  if (replay && match && rec.length) {
+    if (replay.play) { replay.t += dt * +$('sSpeed').value; if (replay.t >= rec[rec.length - 1].t) { replay.t = rec[rec.length - 1].t; replay.play = false; $('bRpPlay').textContent = '▶'; } }
+    let lo = 0, hi = rec.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (rec[mid].t <= replay.t) lo = mid; else hi = mid - 1; }
+    if (replay.idx !== lo) { replay.idx = lo; match.applySnapshot(rec[lo]); $('rpSlider').value = String(lo); $('rpTime').textContent = fmtT(rec[lo].t) + ` · K ${rec[lo].sc.red} · M ${rec[lo].sc.blue}`; }
   }
   if (match) { if (use3d && view3d) view3d.render({ rays: $('cRays').checked, circuit: $('cCirc').checked, trail: $('cTrail').checked }); else draw2d(); if (ts - lastUi > 150) { lastUi = ts; updateUi(); } }
   requestAnimationFrame(frame);
@@ -2538,6 +2595,7 @@ $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfi
 $('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
+$('bDefaults').onclick = () => { let n = 0; for (const d of DEFAULT_PROFILES) { const c = deepCopy(d); if (profiles.some(p => p.id === c.id)) { c.id = newId(); c.ad = d.ad + ' (güncel örnek)'; } profiles.push(c); n++; } saveProfiles(); fillProfileSelects(); renderEditor(); toast(n + ' hazır örnek profil eklendi (seninkiler silinmedi)'); };
 $('bExport').onclick = () => { const txt = JSON.stringify(curProfile(), null, 1); try { navigator.clipboard.writeText(txt).then(() => toast('Profil JSON panoya kopyalandı'), () => toast('Kopyalanamadı')); } catch (e) { toast('Kopyalanamadı'); } };
 $('fImport').onchange = () => { const f = $('fImport').files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const p = JSON.parse(SIM.stripJsonComments(String(r.result))); p.id = newId(); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast((p.ad || 'Profil') + ' içe aktarıldı'); } catch (e) { toast('JSON okunamadı: ' + e.message); } }; r.readAsText(f); $('fImport').value = ''; };
 
@@ -2731,6 +2789,33 @@ function pathSvg(tr) {
   const eggs = tr.match.eggs.map(e => e.gone ? '' : `<circle cx="${(e.x * 100).toFixed(1)}" cy="${((F - e.y) * 100).toFixed(1)}" r="2.4" fill="${e.kind === 'red' ? col.kirmizi : e.kind === 'blue' ? col.mavi : e.kind === 'green' ? col.yesil : '#7a3a6a'}"/>`).join('');
   const s = tr.path[0], e = tr.path[tr.path.length - 1];
   return `<svg class="pathsvg" viewBox="-3 -3 256 256" role="img" aria-label="Robotun 15 saniyelik yolu"><rect x="0" y="0" width="250" height="250" fill="${col.zemin}" stroke="#cfd5dd"/>${tr.match.zones.map(z => `<rect x="${z.x0 * 100}" y="${(F - z.y1) * 100}" width="${(z.x1 - z.x0) * 100}" height="${(z.y1 - z.y0) * 100}" fill="${z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil}"/>`).join('')}${eggs}<polyline points="${pts}" fill="none" stroke="#e67e00" stroke-width="2"/><circle cx="${s[0] * 100}" cy="${(F - s[1]) * 100}" r="4" fill="#16a34a"/><circle cx="${e[0] * 100}" cy="${(F - e[1]) * 100}" r="4" fill="#1d2430"/></svg><p class="hint">Yeşil: başlangıç, siyah: 15. saniye. Turuncu çizgi robotun izlediği yol.</p>`;
+}
+
+// ---------- Toplu maç ----------
+let batchStop = false;
+$('bBatch').onclick = async () => {
+  if ($('bBatch').dataset.run) { batchStop = true; return; }
+  const A = byId($('selBatchA').value), B = byId($('selBatchB').value), N = +$('selBatchN').value; if (!A || !B) return;
+  for (const p of [A, B]) if (p._stl === undefined) await attachSTL(p);
+  $('bBatch').dataset.run = 1; $('bBatch').textContent = 'Durdur'; batchStop = false; const bar = $('progB').firstElementChild; $('progB').style.display = '';
+  const rows = []; const kural = $('sKural').value, yk = $('sYesil').value;
+  for (let i = 0; i < N && !batchStop; i++) {
+    const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
+    const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk }); const errs = m.compileAll();
+    await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
+    const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
+    rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
+    renderBatch(A, B, rows, N);
+  }
+  delete $('bBatch').dataset.run; $('bBatch').textContent = 'Simülasyonu başlat'; $('progB').style.display = 'none';
+};
+function renderBatch(A, B, rows, N) {
+  const n = rows.length, wa = rows.filter(r => r.w === 'A').length, wb = rows.filter(r => r.w === 'B').length, avg = (k) => (rows.reduce((s, r) => s + r[k], 0) / n).toFixed(1);
+  const errNote = rows.some(r => r.errs) ? '<p class="msg err" style="display:block">Robotlardan birinin kodu derlenemedi; o robot hareket etmeden oynadı.</p>' : '';
+  $('batchOut').innerHTML = `${errNote}<div class="stats"><div class="stat"><div class="k">${esc(A.ad)} kazandı</div><div class="v">${wa} / ${n} (%${(wa / n * 100).toFixed(0)})</div></div><div class="stat"><div class="k">${esc(B.ad)} kazandı</div><div class="v">${wb} / ${n}</div></div><div class="stat"><div class="k">Kazanan yok</div><div class="v">${n - wa - wb}</div></div>
+    <div class="stat"><div class="k">Ort. puan ${esc(A.ad)}</div><div class="v">${avg('sA')}</div></div><div class="stat"><div class="k">Ort. puan ${esc(B.ad)}</div><div class="v">${avg('sB')}</div></div><div class="stat"><div class="k">Ort. kendi rengi (${esc(A.ad)})</div><div class="v">${avg('ownA')}</div></div></div>
+    <div class="scroll" style="margin-top:10px"><table><thead><tr><th>#</th><th>${esc(A.ad)} köşe</th><th>Puan A</th><th>Puan B</th><th>Kazanan</th><th>Neden</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.i}</td><td>${r.aRed ? 'Kırmızı' : 'Mavi'}</td><td>${r.sA}</td><td>${r.sB}</td><td>${r.w === 'A' ? esc(A.ad) : r.w === 'B' ? esc(B.ad) : '—'}</td><td>${esc(r.reason)}</td><td><button class="btn sm" data-watch="${r.i}">İzle</button></td></tr>`).join('')}</tbody></table></div>`;
+  $('batchOut').querySelectorAll('[data-watch]').forEach(b => b.onclick = () => { const r = rows[+b.dataset.watch - 1]; seed = r.sd; $('selRed').value = r.aRed ? A.id : B.id; $('selBlue').value = r.aRed ? B.id : A.id; setTab('saha'); startRun(); toast('Bu maç sahada aynı yumurta dizilimiyle yeniden oynatılıyor (sensör gürültüsü yüzünden birebir aynı olmayabilir)'); });
 }
 
 // =====================================================================================

@@ -206,6 +206,7 @@ class Robot {
     let minX = 1, maxX = -1, minY = 1, maxY = -1;
     for (const p of this.parts) if (p.servoPin == null) { minX = Math.min(minX, p.x - p.hx); maxX = Math.max(maxX, p.x + p.hx); minY = Math.min(minY, p.y - p.hy); maxY = Math.max(maxY, p.y + p.hy); }
     this.inertia = this.mass * ((maxX - minX) ** 2 + (maxY - minY) ** 2) / 12 || 0.005;
+    this.radius = 0.02 + Math.max(0.1, ...this.parts.map(p => p.servoPin != null && p.pivot ? Math.hypot(p.pivot[0], p.pivot[1]) + p.len : Math.hypot(Math.abs(p.x) + p.hx, Math.abs(p.y) + p.hy)));
   }
   reset(pose) {
     this.state = { x: pose.x, y: pose.y, th: pose.th, vx: 0, vy: 0, w: 0, z: this.wheelR, tilt: 0 };
@@ -281,6 +282,7 @@ class Robot {
     return { V, mode, duty: d };
   }
   ledColor() {
+    if (this._ledOverride !== undefined) return this._ledOverride;
     const L = this.led; if (!L) return null;
     if (L.type === 'neo') { const rt = L.pin != null && this.rtOf(L.pin); const px = rt && rt.neo[L.pin]; if (!px || !px.length) return null; let r = 0, b = 0; for (const c of px) { r += (c >> 16) & 255; b += c & 255; } r /= px.length; b /= px.length; if (r < 20 && b < 20) return null; return r > 2 * b ? 'red' : b > 2 * r ? 'blue' : 'mor'; }
     const r = L.r != null && this.duty(L.r) > 0.1, b = L.b != null && this.duty(L.b) > 0.1; return r && b ? 'mor' : r ? 'red' : b ? 'blue' : null;
