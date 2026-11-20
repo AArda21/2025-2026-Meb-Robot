@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V3.9</title>
+<title>MEB Robot V4.0</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -93,7 +93,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V3.9</span></h1>
+  <h1>MEB Robot <span style="color:var(--accent)">V4.0</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -124,6 +124,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
         <details><summary>Görünüm ve saha ayarları</summary>
           <div class="row">
             <label class="f">Fizik<select id="sEngine"><option value="3d">3B gerçekçi (Rapier)</option><option value="2d">2B hızlı</option></select></label>
+            <label class="f" id="qWrap">Grafik<select id="sQual"><option value="yuksek">Yüksek</option><option value="dusuk">Düşük (hızlı)</option></select></label>
             <label class="f" id="camWrap">Kamera<select id="sCam"><option value="serbest">Serbest</option><option value="ustten">Üstten</option><option value="takip">Robotu takip</option></select></label>
             <button class="btn sm" id="bShuffle">Yumurtaları karıştır</button>
           </div>

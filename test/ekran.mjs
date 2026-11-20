@@ -15,6 +15,15 @@ for (const [name, vp] of [['mobil', { width: 390, height: 844, deviceScaleFactor
   await pg.selectOption('#sCam', 'ustten'); await pg.waitForTimeout(1500); await pg.screenshot({ path: `sonuc/${name}_4_ustten.png` });
   logs.push(`[${name}] ovl=` + await pg.textContent('#ovl') + ' sure=' + await pg.textContent('#hTime') + ' K=' + await pg.textContent('#hRed') + ' M=' + await pg.textContent('#hBlue'));
   await pg.click('#tabs button[data-t="kontrol"]'); await pg.click('#bCheck'); await pg.waitForTimeout(20000); await pg.screenshot({ path: `sonuc/${name}_5_kontrol.png`, fullPage: true });
+  // Düşük grafik
+  await pg.click('#tabs button[data-t="saha"]'); await pg.evaluate(() => { document.querySelector('#saha details').open = true; }); await pg.selectOption('#sQual', 'dusuk'); await pg.selectOption('#sCam', 'serbest'); await pg.waitForTimeout(2500); await pg.screenshot({ path: `sonuc/${name}_6_dusuk_grafik.png` });
+  logs.push(`[${name}] dusuk grafik ovl=` + await pg.textContent('#ovl'));
+  // Kalibrasyon (2B + 3B)
+  await pg.click('#tabs button[data-t="robotlar"]'); await pg.click('#seg button[data-s="mekanik"]'); await pg.waitForTimeout(300);
+  const c = pg.locator('.card', { hasText: 'Gerçek robotla eşleştir' });
+  for (const [lab, val] of [['Gerçekte gittiği', '38'], ['Gerçekte döndüğü', '180']]) { const i = c.locator('label', { hasText: lab }).locator('input'); await i.fill(val); await i.dispatchEvent('change'); }
+  await c.getByRole('button', { name: 'Otomatik eşleştir' }).click(); await pg.waitForTimeout(45000);
+  logs.push(`[${name}] kalibrasyon: ` + (await c.locator('.msg').innerText()).replace(/\n/g, ' | ') + ' || ' + await c.locator('p.hint').last().innerText());
   await pg.close();
 }
 fs.writeFileSync('sonuc/tarayici_log.txt', logs.join('\n')); await b.close();

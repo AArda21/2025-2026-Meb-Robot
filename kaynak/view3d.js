@@ -162,6 +162,7 @@ function makeView3D(THREE, host) {
       if (m === 'serbest') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.3; cam.pol = 0.75; cam.az = -Math.PI / 2; }
       if (m === 'takip') { cam.dist = 0.7; cam.pol = 1.0; cam.followOff = 0; cam._init = false; }
     },
+    setQuality(q) { const lo = q === 'dusuk'; renderer.setPixelRatio(lo ? 1 : Math.min(2, window.devicePixelRatio || 1)); renderer.shadowMap.enabled = !lo; sun.castShadow = !lo; scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(mm => { mm.needsUpdate = true; }); } }); this.resize(); },
     resize() { const r = host.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix(); },
     // ekran → saha düzlemi (z=0)
     pick(e) {

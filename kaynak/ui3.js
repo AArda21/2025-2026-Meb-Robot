@@ -203,6 +203,7 @@ function renderHistory() { const H = loadHistory(), el = $('gecmis'); if (!el) r
     return `<tr><td>${tt}</td><td${x.w === 'red' ? ' style="font-weight:700"' : ''}>${esc(x.r)} <b>${x.sr}</b></td><td${x.w === 'blue' ? ' style="font-weight:700"' : ''}>${esc(x.b)} <b>${x.sb}</b></td><td>${x.w ? (x.w === 'red' ? 'Kırmızı' : 'Mavi') + ' kazandı' : 'Berabere'}${x.f3 ? '' : ' · 2B'}</td><td><button class="btn sm" data-h="${i}" title="Aynı yumurta dizilimiyle yeniden oyna">↻</button></td></tr>`; }).join('') + '</table></div>'
     + `<p class="hint">Galibiyetler: ${Object.entries(ad).map(([n, c]) => `${esc(n)} ${c}`).join(' · ') || '—'}</p>`;
   el.querySelectorAll('[data-h]').forEach(b => b.onclick = () => { const x = H[+b.dataset.h]; seed = x.sd; LS.set('mebsim3_tohum', seed); const fr = profiles.find(p => p.ad === x.r), fb = profiles.find(p => p.ad === x.b); if (fr) $('selRed').value = fr.id; if (fb) $('selBlue').value = fb.id; startRun(); toast('Aynı yumurta dizilimiyle yeniden başlatıldı'); }); }
+$('sQual').onchange = () => { LS.set('mebsim3_grafik', $('sQual').value); if (view3d) view3d.setQuality($('sQual').value); };
 $('bGecmisSil').onclick = () => { LS.set('mebsim3_gecmis', '[]'); renderHistory(); };
 renderHistory();
 
@@ -221,7 +222,7 @@ function frame(ts) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
     for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
-    if (use3d && !frame._warned && match.time > 6 && realF < 0.55 * sp) { frame._slow = (frame._slow || 0) + dt; if (frame._slow > 4) { frame._warned = true; toast(`3B fizik bu cihazda yavaş (gerçek hızın %${Math.round(realF / sp * 100)}'i). Akıcı olsun istersen ayarlardan "Fizik: 2B hızlı" seç.`); } } else frame._slow = 0;
+    if (use3d && !frame._warned && match.time > 6 && realF < 0.55 * sp) { frame._slow = (frame._slow || 0) + dt; if (frame._slow > 4) { frame._warned = true; toast(`3B bu cihazda yavaş (gerçek hızın %${Math.round(realF / sp * 100)}'i). Ayarlardan önce "Grafik: Düşük", yetmezse "Fizik: 2B hızlı" seç.`); } } else frame._slow = 0;
     if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
   }
   if (replay && match && rec.length) {
@@ -562,7 +563,7 @@ async function loadLibs() {
 }
 async function setEngine(mode) {
   running = false; $('bPause').textContent = '▶ Başlat'; use3d = mode === '3d' && !!libs; $('sEngine').value = use3d ? '3d' : '2d'; LS.set('mebsim3_motor', $('sEngine').value);
-  MatchClass = use3d ? Match3D : Match; $('v3').style.display = use3d ? 'block' : 'none'; cv.style.display = use3d ? 'none' : 'block'; $('camWrap').style.display = use3d ? '' : 'none';
+  MatchClass = use3d ? Match3D : Match; $('v3').style.display = use3d ? 'block' : 'none'; cv.style.display = use3d ? 'none' : 'block'; $('camWrap').style.display = use3d ? '' : 'none'; $('qWrap').style.display = use3d ? '' : 'none';
   await buildMatch(); if (use3d) { view3d.resize(); view3d.setMode($('sCam').value); view3d.focus = focusRobot(); }
 }
 $('sEngine').onchange = () => { if ($('sEngine').value === '3d' && !libs) { toast('3B motor yüklenemedi'); $('sEngine').value = '2d'; return; } setEngine($('sEngine').value); };
@@ -571,7 +572,7 @@ setInterval(() => { if (dirty && !running && match && tab !== 'robotlar') buildM
   fillProfileSelects(); fillCut(); resize2d(); $('camWrap').style.display = 'none'; await buildMatch(); requestAnimationFrame(frame);
   $('ovl').textContent = '3B fizik motoru yükleniyor…';
   try {
-    libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3'));
+    libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3')); $('sQual').value = LS.get('mebsim3_grafik') || 'yuksek'; if ($('sQual').value !== 'yuksek') view3d.setQuality($('sQual').value);
     view3d.onPick = (e) => { const p = view3d.pick(e); const rb = pickRobot(p); if (!rb) return false; drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; e.target.setPointerCapture(e.pointerId); return true; };
     view3d.onDrag = (e) => { if (!drag) return false; dragMove(view3d.pick(e)); return true; };
     view3d.renderer.domElement.addEventListener('pointerup', () => { if (drag) { drag = null; buildMatch(); } });
