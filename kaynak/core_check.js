@@ -28,6 +28,7 @@ function staticChecks(profile) {
   const Nw = rb.mass * g * rb.loadFrac / 2; const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
   const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
+  { const K = (profile.mekanik || {}).kalibrasyon || {}; if (!K['2B'] && !K['3B'] && !K.hiz_carpani) add('Mekanik', 'info', 'Gerçek robotla eşleştirilmemiş: Robotlar → Mekanik → "Gerçek robotla eşleştir" ile 1 dakikalık ölçüm yaparsan simülasyon gerçeğe çok daha yakın olur.'); else add('Mekanik', 'ok', 'Gerçek robot ölçümüyle eşleştirilmiş (kalibre).'); }
   if (Vs > M.vNom * 1.5) add('Mekanik', 'warn', `Motorlara ${Vs.toFixed(1)} V gidiyor, motor ${M.vNom} V'luk: çok aşırı gerilim, motor ısınır/ömrü kısalır.`);
   else if (Vs < M.vNom * 0.6) add('Mekanik', 'warn', `Motorlara sadece ${Vs.toFixed(1)} V gidiyor (motor ${M.vNom} V): robot yavaş ve güçsüz olur.`);
   const iSt = M.iStall * (Vs / M.vNom);
@@ -103,6 +104,81 @@ function staticChecks(profile) {
 }
 
 // Kısa deneme: robotu tek başına çalıştırıp davranışını özetler (asenkron, arayüzü kilitlemez)
+// ---------- Gerçek robotla eşleştirme (kalibrasyon) ----------
+// Kodu çalıştırmadan motorlara doğrudan sabit PWM verip robotu boş sahanın ortasında sürer.
+function measureMotion(profile, MatchClass, test, calib) {
+  const P = deepCopy(profile); P.mekanik = P.mekanik || {}; if (calib) P.mekanik.kalibrasyon = { hiz_carpani: calib.hiz_carpani, donus_direnci: calib.donus_direnci };
+  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100 } });
+  for (const e of m.eggs) { if (e.body && m.world) { try { m.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } e.gone = true; e.x = -9; e.y = -9; }
+  const rb = m.robots[0]; rb.runPrograms = () => { }; rb.gain = { L: 1, R: 1 };
+  const cmd = { L: 0, R: 0 }; const D = rb.driver;
+  rb.sideVoltage = (side) => { const Vs = Math.max(0, D.vBat * (rb.batFactor || 1) - D.drop); const u = cmd[side]; if (!u) return { V: 0, mode: 'brake', duty: 1 }; return { V: Math.sign(u) * Math.min(1, Math.abs(u) / 255) * Vs * rb.calib.hiz, mode: 'drive', duty: Math.min(1, Math.abs(u) / 255) }; };
+  const s0 = { x: rb.state.x, y: rb.state.y, th: rb.state.th }; const T = +test.sure || 1;
+  cmd.L = test.tip === 'don' ? -test.pwm : test.pwm; cmd.R = test.pwm;
+  while (m.time < T) m.step(m.dt); cmd.L = cmd.R = 0; const tEnd = m.time; while (m.time < tEnd + 1) m.step(m.dt);
+  const s = rb.state; return { mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100, ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100, aci_der: (s.th - s0.th) * 180 / Math.PI };
+}
+function autoCalibrate(profile, MatchClass, real) {
+  const out = { hiz_carpani: 1, donus_direnci: 0, notlar: [] }; const bis = (lo, hi, f, target, inc) => { for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const v = f(mid); if ((v < target) === inc) lo = mid; else hi = mid; } return (lo + hi) / 2; };
+  if (real.duz && real.duz.olcum > 0) {
+    const f = (h) => measureMotion(profile, MatchClass, { tip: 'duz', pwm: real.duz.pwm, sure: real.duz.sure }, { hiz_carpani: h, donus_direnci: 0 }).ileri_cm;
+    const lo = f(0.2), hi = f(3); if (real.duz.olcum < lo) { out.hiz_carpani = 0.2; out.notlar.push('Gerçek robot çok yavaş: motor modelini, pil gerilimini ve tekerlek çapını kontrol et.'); }
+    else if (real.duz.olcum > hi) { out.hiz_carpani = 3; out.notlar.push('Gerçek robot simülasyondan çok hızlı: motor devrini (rpm) ve tekerlek çapını kontrol et.'); }
+    else out.hiz_carpani = +bis(0.2, 3, f, real.duz.olcum, true).toFixed(3);
+  }
+  if (real.don && real.don.olcum > 0) {
+    const f = (d) => Math.abs(measureMotion(profile, MatchClass, { tip: 'don', pwm: real.don.pwm, sure: real.don.sure }, { hiz_carpani: out.hiz_carpani, donus_direnci: d }).aci_der);
+    const a0 = f(0), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = 0; if (real.don.olcum > a0 * 1.1) out.notlar.push(`Gerçek robot simülasyondan hızlı dönüyor (${Math.round(a0)}° yerine ${real.don.olcum}°). İz genişliğini (iki teker arası) ve sarhoş teker yerini kontrol et.`); }
+    else if (real.don.olcum <= a1) { out.donus_direnci = 4; out.notlar.push('Gerçek robot çok zor dönüyor: tekerlek kayıyor ya da sarhoş teker sıkışıyor olabilir.'); }
+    else out.donus_direnci = +bis(0, 4, f, real.don.olcum, false).toFixed(3);
+  }
+  return out;
+}
+// Gerçek robota yüklenecek ölçüm kodu (devredeki sürücü pinleriyle)
+function calibSketch(profile, real) {
+  const Dr = ((profile.devre || {}).surucu) || {}; const tip = String(Dr.tip || 'L298N').toUpperCase(); const boards = new Set(); const pn = (v) => { if (v == null || v === '') return null; const s = String(v); const i = s.indexOf(':'); if (i >= 0) boards.add(s.slice(0, i)); return i >= 0 ? s.slice(i + 1) : s; };
+  const S = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pn(v); return r; }; const L = S(Dr.sol), R = S(Dr.sag), stby = pn(Dr.stby);
+  const d = real.duz || { pwm: 200, sure: 1 }, t = real.don || { pwm: 170, sure: 1 };
+  const pins = [...Object.values(L), ...Object.values(R), stby].filter(x => x != null);
+  const brake = (P) => tip === 'BTS7960' ? `  ${P.en != null ? `digitalWrite(${P.en}, HIGH); ` : ''}analogWrite(${P.rpwm}, 0); analogWrite(${P.lpwm}, 0);` : ['L9110', 'DRV8833', 'MX1508'].includes(tip) ? `  analogWrite(${P.ia}, 255); analogWrite(${P.ib}, 255);` : `  digitalWrite(${P.in1}, LOW); digitalWrite(${P.in2}, LOW);${(P.en ?? P.pwm) != null ? ` analogWrite(${P.en ?? P.pwm}, 255);` : ''}`;
+  let side;
+  if (tip === 'BTS7960') side = (P, inv) => `  { int p = abs(hiz); bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    ${P.en != null ? `digitalWrite(${P.en}, HIGH);\n    ` : ''}analogWrite(${P.rpwm}, ileri ? p : 0); analogWrite(${P.lpwm}, ileri ? 0 : p); }`;
+  else if (['L9110', 'DRV8833', 'MX1508'].includes(tip)) side = (P, inv) => `  { int p = abs(hiz); bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    analogWrite(${P.ia}, ileri ? p : 0); analogWrite(${P.ib}, ileri ? 0 : p); }`;
+  else side = (P, inv) => `  { bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    digitalWrite(${P.in1}, ileri ? HIGH : LOW); digitalWrite(${P.in2}, ileri ? LOW : HIGH);\n    ${(P.en ?? P.pwm) != null ? `analogWrite(${P.en ?? P.pwm}, abs(hiz));` : '// EN pini jumper ile bağlı'} }`;
+  return `// MEB Robot simülatörü — ölçüm kodu (${profile.ad || 'robot'}, sürücü ${tip})
+// 1) Bu kodu robota yükle. 2) Robotu düz zemine koy, önüne bir işaret koy.
+// 3) Açınca 3 sn bekler, ${d.sure} sn düz gider (PWM ${d.pwm}), durur.
+//    Başlangıçtan durduğu yere kadar olan mesafeyi cm olarak ölç.
+// 4) 5 sn sonra ${t.sure} sn yerinde SOLA döner (PWM ${t.pwm}), durur. Kaç derece döndüğünü ölç
+//    (tam tur = 360). İki sayıyı uygulamadaki "Gerçek robotla eşleştir" kutusuna yaz.
+${boards.size > 1 ? '// DİKKAT: motor pinleri birden çok kartta görünüyor; bu kodu motor sürücüsünün bağlı olduğu karta yükle.\n' : ''}
+void sol(int hiz) {
+${side(L, !!Dr.sol_ters)}
+}
+void sag(int hiz) {
+${side(R, !!Dr.sag_ters)}
+}
+void dur() {   // fren: tekerlekleri kilitler (boşa bırakmaz)
+${brake(L)}
+${brake(R)}
+}
+
+void setup() {
+${pins.map(p => `  pinMode(${p}, OUTPUT);`).join('\n')}
+${stby != null ? `  digitalWrite(${stby}, HIGH);\n` : ''}  dur();
+  delay(3000);
+  sol(${d.pwm}); sag(${d.pwm});
+  delay(${Math.round(d.sure * 1000)});
+  dur();
+  delay(5000);
+  sol(-${t.pwm}); sag(${t.pwm});
+  delay(${Math.round(t.sure * 1000)});
+  dur();
+}
+
+void loop() { }
+`;
+}
 function runTrial(profile, MatchClass, opts = {}) {
   const T = opts.sure || 15;
   return new Promise((resolve) => {
@@ -262,6 +338,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

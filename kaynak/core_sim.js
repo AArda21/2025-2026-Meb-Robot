@@ -210,6 +210,7 @@ class Match {
       const wi = rb.wheelInfo[side]; wi.V = V; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = mode; wi.spin = (wi.spin || 0) + rpm * 2 * Math.PI / 60 * dt;
     }
     if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
+    if (rb.calib && rb.calib.donus > 0 && s.w) { const tq = rb.calib.donus * rb.mass * g * rb.track / 2; const dw = Math.min(Math.abs(s.w), tq * dt / rb.inertia); s.w -= Math.sign(s.w) * dw; }
     for (let it = 0; it < 4; it++) for (const sy of [1, -1]) {
       const rx = c * rb.wheelX - n * sy * rb.track / 2, ry = n * rb.wheelX + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
       const j = clamp(-vl / rb.invMass(rx, ry, lx, ly), -rb.muLat * Nw * dt, rb.muLat * Nw * dt); rb.applyImp(rx, ry, j * lx, j * ly);

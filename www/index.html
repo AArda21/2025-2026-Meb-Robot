@@ -218,6 +218,8 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
   <li><b>Mekanik</b>: kütle, lastik türü, motor modeli, pil, teker ölçüleri. En iyisi 3D modeli yüklemek: Fusion 360 / Tinkercad / SolidWorks'ten <b>OBJ</b> veya <b>GLB</b> olarak dışa aktar; parçalara anlamlı ad ver ("Arduino Uno", "HC-SR04", "Sol teker", "Acil stop"). Uygulama her parçanın ne olduğunu tahmin eder, <b>Yerleşimi modelden uygula</b> ile sensör, kart ve teker yerlerini modelden alır.</li>
   <li><b>Devre</b>: motor sürücüsü, sensörler, servolar ve LED'in hangi pinlere bağlı olduğu. Fritzing'de <i>Dosya → Dışa Aktar → XML Netlist</i> dosyasını yüklersen şema ile pinler karşılaştırılır.</li>
   <li><b>Kalibrasyon</b>: renk sensörü (TCS3200) ve zemin sensörü (TCRT5000) için gerçek robotta ölçtüğün değerleri gir; simülasyon bu değerleri kullanır, kodundaki renk formülünü her renk için hesaplar.</li></ul>
+  <h3>Gerçek robotla eşleştirme</h3>
+  <p>Robotlar → Mekanik → <b>Gerçek robotla eşleştir</b>: uygulamanın verdiği kısa ölçüm kodunu robota yükle, robotun 1 sn'de kaç cm gittiğini ve kaç derece döndüğünü ölçüp yaz, "Otomatik eşleştir"e bas. Böylece simülasyondaki <code>delay()</code> süreleri gerçek robottaki gibi aynı mesafe ve açıyı verir.</p>
   <h3>3. Kontrol raporu</h3>
   <p>Kontrol sekmesi kurallara uygunluğu (30×30×30 cm, 5 kg, LED, acil stop), mekanik sorunları (sürtünen teker, iç içe geçen parça, devrilme, kapak çarpması), devre hatalarını (pin çakışması, PWM olmayan pin, servo/PWM çakışması, sürücü akım sınırı) ve kodu (derleme, eksik noktalı virgül, kullanılmayan pin, yanlış pin modu) denetler. Sonra robotu 15 sn tek başına sürüp ne yaptığını anlatır ve yolunu çizer. Kırmızı ✕ büyük ihtimalle gerçek robotta sorun çıkarır.</p>
   <h3>4. Toplu maç</h3>
@@ -718,6 +720,7 @@ class Robot {
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
     this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
+    { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) && dn > 0 ? dn : 0 }; }
     this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
     const side = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pin(v); return r; };
     this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, maxA: DRIVERS[dkey].maxA, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
@@ -826,6 +829,7 @@ class Robot {
     }
     if (side === 'L' ? D.invL : D.invR) V = -V;
     if (this.gain) V *= this.gain[side];
+    if (this.calib && this.calib.hiz !== 1) V *= this.calib.hiz;
     return { V, mode, duty: d };
   }
   ledColor() {
@@ -1058,6 +1062,7 @@ class Match {
       const wi = rb.wheelInfo[side]; wi.V = V; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = mode; wi.spin = (wi.spin || 0) + rpm * 2 * Math.PI / 60 * dt;
     }
     if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
+    if (rb.calib && rb.calib.donus > 0 && s.w) { const tq = rb.calib.donus * rb.mass * g * rb.track / 2; const dw = Math.min(Math.abs(s.w), tq * dt / rb.inertia); s.w -= Math.sign(s.w) * dw; }
     for (let it = 0; it < 4; it++) for (const sy of [1, -1]) {
       const rx = c * rb.wheelX - n * sy * rb.track / 2, ry = n * rb.wheelX + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
       const j = clamp(-vl / rb.invMass(rx, ry, lx, ly), -rb.muLat * Nw * dt, rb.muLat * Nw * dt); rb.applyImp(rx, ry, j * lx, j * ly);
@@ -1198,6 +1203,7 @@ function staticChecks(profile) {
   const Nw = rb.mass * g * rb.loadFrac / 2; const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
   const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
+  { const K = (profile.mekanik || {}).kalibrasyon || {}; if (!K['2B'] && !K['3B'] && !K.hiz_carpani) add('Mekanik', 'info', 'Gerçek robotla eşleştirilmemiş: Robotlar → Mekanik → "Gerçek robotla eşleştir" ile 1 dakikalık ölçüm yaparsan simülasyon gerçeğe çok daha yakın olur.'); else add('Mekanik', 'ok', 'Gerçek robot ölçümüyle eşleştirilmiş (kalibre).'); }
   if (Vs > M.vNom * 1.5) add('Mekanik', 'warn', `Motorlara ${Vs.toFixed(1)} V gidiyor, motor ${M.vNom} V'luk: çok aşırı gerilim, motor ısınır/ömrü kısalır.`);
   else if (Vs < M.vNom * 0.6) add('Mekanik', 'warn', `Motorlara sadece ${Vs.toFixed(1)} V gidiyor (motor ${M.vNom} V): robot yavaş ve güçsüz olur.`);
   const iSt = M.iStall * (Vs / M.vNom);
@@ -1273,6 +1279,81 @@ function staticChecks(profile) {
 }
 
 // Kısa deneme: robotu tek başına çalıştırıp davranışını özetler (asenkron, arayüzü kilitlemez)
+// ---------- Gerçek robotla eşleştirme (kalibrasyon) ----------
+// Kodu çalıştırmadan motorlara doğrudan sabit PWM verip robotu boş sahanın ortasında sürer.
+function measureMotion(profile, MatchClass, test, calib) {
+  const P = deepCopy(profile); P.mekanik = P.mekanik || {}; if (calib) P.mekanik.kalibrasyon = { hiz_carpani: calib.hiz_carpani, donus_direnci: calib.donus_direnci };
+  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100 } });
+  for (const e of m.eggs) { if (e.body && m.world) { try { m.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } e.gone = true; e.x = -9; e.y = -9; }
+  const rb = m.robots[0]; rb.runPrograms = () => { }; rb.gain = { L: 1, R: 1 };
+  const cmd = { L: 0, R: 0 }; const D = rb.driver;
+  rb.sideVoltage = (side) => { const Vs = Math.max(0, D.vBat * (rb.batFactor || 1) - D.drop); const u = cmd[side]; if (!u) return { V: 0, mode: 'brake', duty: 1 }; return { V: Math.sign(u) * Math.min(1, Math.abs(u) / 255) * Vs * rb.calib.hiz, mode: 'drive', duty: Math.min(1, Math.abs(u) / 255) }; };
+  const s0 = { x: rb.state.x, y: rb.state.y, th: rb.state.th }; const T = +test.sure || 1;
+  cmd.L = test.tip === 'don' ? -test.pwm : test.pwm; cmd.R = test.pwm;
+  while (m.time < T) m.step(m.dt); cmd.L = cmd.R = 0; const tEnd = m.time; while (m.time < tEnd + 1) m.step(m.dt);
+  const s = rb.state; return { mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100, ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100, aci_der: (s.th - s0.th) * 180 / Math.PI };
+}
+function autoCalibrate(profile, MatchClass, real) {
+  const out = { hiz_carpani: 1, donus_direnci: 0, notlar: [] }; const bis = (lo, hi, f, target, inc) => { for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const v = f(mid); if ((v < target) === inc) lo = mid; else hi = mid; } return (lo + hi) / 2; };
+  if (real.duz && real.duz.olcum > 0) {
+    const f = (h) => measureMotion(profile, MatchClass, { tip: 'duz', pwm: real.duz.pwm, sure: real.duz.sure }, { hiz_carpani: h, donus_direnci: 0 }).ileri_cm;
+    const lo = f(0.2), hi = f(3); if (real.duz.olcum < lo) { out.hiz_carpani = 0.2; out.notlar.push('Gerçek robot çok yavaş: motor modelini, pil gerilimini ve tekerlek çapını kontrol et.'); }
+    else if (real.duz.olcum > hi) { out.hiz_carpani = 3; out.notlar.push('Gerçek robot simülasyondan çok hızlı: motor devrini (rpm) ve tekerlek çapını kontrol et.'); }
+    else out.hiz_carpani = +bis(0.2, 3, f, real.duz.olcum, true).toFixed(3);
+  }
+  if (real.don && real.don.olcum > 0) {
+    const f = (d) => Math.abs(measureMotion(profile, MatchClass, { tip: 'don', pwm: real.don.pwm, sure: real.don.sure }, { hiz_carpani: out.hiz_carpani, donus_direnci: d }).aci_der);
+    const a0 = f(0), a1 = f(4); if (real.don.olcum >= a0) { out.donus_direnci = 0; if (real.don.olcum > a0 * 1.1) out.notlar.push(`Gerçek robot simülasyondan hızlı dönüyor (${Math.round(a0)}° yerine ${real.don.olcum}°). İz genişliğini (iki teker arası) ve sarhoş teker yerini kontrol et.`); }
+    else if (real.don.olcum <= a1) { out.donus_direnci = 4; out.notlar.push('Gerçek robot çok zor dönüyor: tekerlek kayıyor ya da sarhoş teker sıkışıyor olabilir.'); }
+    else out.donus_direnci = +bis(0, 4, f, real.don.olcum, false).toFixed(3);
+  }
+  return out;
+}
+// Gerçek robota yüklenecek ölçüm kodu (devredeki sürücü pinleriyle)
+function calibSketch(profile, real) {
+  const Dr = ((profile.devre || {}).surucu) || {}; const tip = String(Dr.tip || 'L298N').toUpperCase(); const boards = new Set(); const pn = (v) => { if (v == null || v === '') return null; const s = String(v); const i = s.indexOf(':'); if (i >= 0) boards.add(s.slice(0, i)); return i >= 0 ? s.slice(i + 1) : s; };
+  const S = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pn(v); return r; }; const L = S(Dr.sol), R = S(Dr.sag), stby = pn(Dr.stby);
+  const d = real.duz || { pwm: 200, sure: 1 }, t = real.don || { pwm: 170, sure: 1 };
+  const pins = [...Object.values(L), ...Object.values(R), stby].filter(x => x != null);
+  const brake = (P) => tip === 'BTS7960' ? `  ${P.en != null ? `digitalWrite(${P.en}, HIGH); ` : ''}analogWrite(${P.rpwm}, 0); analogWrite(${P.lpwm}, 0);` : ['L9110', 'DRV8833', 'MX1508'].includes(tip) ? `  analogWrite(${P.ia}, 255); analogWrite(${P.ib}, 255);` : `  digitalWrite(${P.in1}, LOW); digitalWrite(${P.in2}, LOW);${(P.en ?? P.pwm) != null ? ` analogWrite(${P.en ?? P.pwm}, 255);` : ''}`;
+  let side;
+  if (tip === 'BTS7960') side = (P, inv) => `  { int p = abs(hiz); bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    ${P.en != null ? `digitalWrite(${P.en}, HIGH);\n    ` : ''}analogWrite(${P.rpwm}, ileri ? p : 0); analogWrite(${P.lpwm}, ileri ? 0 : p); }`;
+  else if (['L9110', 'DRV8833', 'MX1508'].includes(tip)) side = (P, inv) => `  { int p = abs(hiz); bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    analogWrite(${P.ia}, ileri ? p : 0); analogWrite(${P.ib}, ileri ? 0 : p); }`;
+  else side = (P, inv) => `  { bool ileri = (hiz >= 0) ${inv ? '== false' : ''};\n    digitalWrite(${P.in1}, ileri ? HIGH : LOW); digitalWrite(${P.in2}, ileri ? LOW : HIGH);\n    ${(P.en ?? P.pwm) != null ? `analogWrite(${P.en ?? P.pwm}, abs(hiz));` : '// EN pini jumper ile bağlı'} }`;
+  return `// MEB Robot simülatörü — ölçüm kodu (${profile.ad || 'robot'}, sürücü ${tip})
+// 1) Bu kodu robota yükle. 2) Robotu düz zemine koy, önüne bir işaret koy.
+// 3) Açınca 3 sn bekler, ${d.sure} sn düz gider (PWM ${d.pwm}), durur.
+//    Başlangıçtan durduğu yere kadar olan mesafeyi cm olarak ölç.
+// 4) 5 sn sonra ${t.sure} sn yerinde SOLA döner (PWM ${t.pwm}), durur. Kaç derece döndüğünü ölç
+//    (tam tur = 360). İki sayıyı uygulamadaki "Gerçek robotla eşleştir" kutusuna yaz.
+${boards.size > 1 ? '// DİKKAT: motor pinleri birden çok kartta görünüyor; bu kodu motor sürücüsünün bağlı olduğu karta yükle.\n' : ''}
+void sol(int hiz) {
+${side(L, !!Dr.sol_ters)}
+}
+void sag(int hiz) {
+${side(R, !!Dr.sag_ters)}
+}
+void dur() {   // fren: tekerlekleri kilitler (boşa bırakmaz)
+${brake(L)}
+${brake(R)}
+}
+
+void setup() {
+${pins.map(p => `  pinMode(${p}, OUTPUT);`).join('\n')}
+${stby != null ? `  digitalWrite(${stby}, HIGH);\n` : ''}  dur();
+  delay(3000);
+  sol(${d.pwm}); sag(${d.pwm});
+  delay(${Math.round(d.sure * 1000)});
+  dur();
+  delay(5000);
+  sol(-${t.pwm}); sag(${t.pwm});
+  delay(${Math.round(t.sure * 1000)});
+  dur();
+}
+
+void loop() { }
+`;
+}
 function runTrial(profile, MatchClass, opts = {}) {
   const T = opts.sure || 15;
   return new Promise((resolve) => {
@@ -1432,7 +1513,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -2244,6 +2325,7 @@ function makeMatch3D(R) {
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
           const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
+        if (rb.calib && rb.calib.donus > 0) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; if (Math.abs(wu) > 1e-4) { const tq = rb.calib.donus * rb.mass * 9.81 * rb.track / 2; const j = -Math.sign(wu) * Math.min(tq * dt, Math.abs(wu) * rb.inertia); rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
       }
       this.world.step();
       for (const rb of this.robots) this.syncRobot(rb);
@@ -2821,6 +2903,7 @@ function renderMekanik(p) {
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
+  root.append(calibCard(p, M, rerender));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
   root.append(st);
@@ -2867,6 +2950,30 @@ function renderMekanik(p) {
     h('div', { class: 'row' }, h('button', { class: 'btn sm', on: { click: () => { M.parcalar.push({ ad: 'Yeni parça', x: 0, y: 0, uzunluk: 5, genislik: 5, z0: 3, z1: 6, renk: '#94a3b8' }); saveProfiles(); rerender(); } } }, '+ Parça ekle')),
     h('details', {}, h('summary', {}, 'Gelişmiş: parçaları JSON olarak düzenle (servo ile dönen kapak vb.)'), h('p', { class: 'hint' }, 'Servo ile dönen parça: "servo_pin": 3, "pivot": [x, y], "aci_ofset": derece, "yon": 1 veya -1. "kati": false → sadece görsel. "sekil": "silindir".'), json,
       h('button', { class: 'btn sm', on: { click: () => { try { M.parcalar = JSON.parse(json.value); saveProfiles(); rerender(); toast('Parçalar güncellendi'); } catch (e) { toast('JSON hatası: ' + e.message); } } } }, 'Uygula'))));
+}
+function calibCard(p, M, rerender) {
+  const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
+  const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';
+  const cur = h('p', { class: 'hint' }); const showCur = () => { cur.textContent = `Şu anki ayar — 2B: ${fmtK(K['2B'])} · 3B: ${fmtK(K['3B'])}`; }; showCur();
+  const out = h('div', { class: 'msg' }); const sk = h('textarea', { class: 'short', readonly: true, style: 'display:none;height:220px' });
+  const real = () => ({ duz: { pwm: +O.duz_pwm || 200, sure: +O.duz_sure || 1, olcum: +O.duz_cm || 0 }, don: { pwm: +O.don_pwm || 170, sure: +O.don_sure || 1, olcum: Math.abs(+O.don_der || 0) } });
+  const engines = () => [['2B', Match]].concat(Match3D ? [['3B', Match3D]] : []);
+  const simRow = (name, MC, kal) => { const r = real(); const a = SIM.measureMotion(p, MC, { tip: 'duz', pwm: r.duz.pwm, sure: r.duz.sure }, kal || { hiz_carpani: 1, donus_direnci: 0 }); const b = SIM.measureMotion(p, MC, { tip: 'don', pwm: r.don.pwm, sure: r.don.sure }, kal || { hiz_carpani: 1, donus_direnci: 0 });
+    const pct = (s, g) => g ? ` (gerçeğin %${Math.round(s / g * 100)}'i)` : ''; return `${name}: düz ${a.ileri_cm.toFixed(1)} cm${pct(a.ileri_cm, r.duz.olcum)}, dönüş ${Math.abs(b.aci_der).toFixed(0)}°${pct(Math.abs(b.aci_der), r.don.olcum)}`; };
+  const busy = (fn) => { out.className = 'msg'; out.textContent = 'Hesaplanıyor…'; setTimeout(() => { try { fn(); } catch (e) { out.className = 'msg err'; out.textContent = 'Hata: ' + e.message; } }, 30); };
+  return card('Gerçek robotla eşleştir (kalibrasyon)',
+    h('p', { class: 'hint' }, 'Simülasyondaki robotun gerçeği kadar hızlı gidip dönmesi için: 1) "Ölçüm kodu"nu robota yükle. 2) Robot 1 sn düz gidip durur, sonra yerinde 1 sn sola döner. Gittiği mesafeyi (cm) ve döndüğü açıyı (derece, tam tur = 360) ölç. 3) Buraya yaz ve "Otomatik eşleştir"e bas. En iyi sonuç için yarışma zemininde (sunta) ve dolu pille ölç.'),
+    h('div', { class: 'fields' }, fld(O, 'duz_pwm', 'Düz: PWM (0–255)'), fld(O, 'duz_sure', 'Süre (sn)'), fld(O, 'duz_cm', 'Gerçekte gittiği (cm)')),
+    h('div', { class: 'fields', style: 'margin-top:8px' }, fld(O, 'don_pwm', 'Dönüş: PWM'), fld(O, 'don_sure', 'Süre (sn)'), fld(O, 'don_der', 'Gerçekte döndüğü (°)')),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn sm', on: { click: () => { sk.value = SIM.calibSketch(p, real()); sk.style.display = sk.style.display === 'none' ? '' : 'none'; } } }, 'Ölçüm kodu'),
+      h('button', { class: 'btn sm', on: { click: () => copyText(SIM.calibSketch(p, real())) } }, 'Ölçüm kodunu kopyala'),
+      h('button', { class: 'btn sm', on: { click: () => busy(() => { out.className = 'msg'; out.textContent = engines().map(([n, MC]) => simRow(n, MC, K[n])).join('\n'); }) } }, 'Simülasyonda ölç'),
+      h('button', { class: 'btn pri sm', on: { click: () => busy(() => { const r = real(); if (!r.duz.olcum && !r.don.olcum) { out.className = 'msg err'; out.textContent = 'Önce gerçek ölçümleri (cm ve derece) yaz.'; return; }
+        const notes = new Set(); for (const [n, MC] of engines()) { const c = SIM.autoCalibrate(p, MC, r); K[n] = { hiz_carpani: c.hiz_carpani, donus_direnci: c.donus_direnci }; c.notlar.forEach(x => notes.add(x)); }
+        saveProfiles(); showCur(); out.className = 'msg ok'; out.textContent = 'Eşleştirildi.\n' + engines().map(([n, MC]) => simRow(n, MC, K[n])).join('\n') + (notes.size ? '\n' + [...notes].join('\n') : '') + (Match3D ? '' : '\n(3B fizik yüklenince bir kez daha bas, 3B de eşleşsin.)'); }) } }, 'Otomatik eşleştir'),
+      h('button', { class: 'btn sm', on: { click: () => { delete K['2B']; delete K['3B']; delete K.hiz_carpani; delete K.donus_direnci; saveProfiles(); rerender(); toast('Kalibrasyon sıfırlandı'); } } }, 'Sıfırla')),
+    cur, out, sk);
 }
 function applyModel(p, makeBoxes) {
   const M = p.mekanik, D = p.devre = p.devre || {}, md = M.model3d, objs = (p._stl || {}).objects || []; let n = 0;

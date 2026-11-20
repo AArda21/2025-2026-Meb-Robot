@@ -90,6 +90,7 @@ function makeMatch3D(R) {
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
           const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
+        if (rb.calib && rb.calib.donus > 0) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; if (Math.abs(wu) > 1e-4) { const tq = rb.calib.donus * rb.mass * 9.81 * rb.track / 2; const j = -Math.sign(wu) * Math.min(tq * dt, Math.abs(wu) * rb.inertia); rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
       }
       this.world.step();
       for (const rb of this.robots) this.syncRobot(rb);

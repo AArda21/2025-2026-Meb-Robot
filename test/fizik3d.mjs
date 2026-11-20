@@ -38,3 +38,8 @@ for (const [nm, a, b] of [['YumYum_vs_Rakip', P[0], P[2]], ['Antalya2026_vs_Raki
 // Kontrol (3B)
 for (const p of P) { const r = await SIM.runTrial(p, M3, { sure: 10 }); log('KONTROL3B', p.ad, r.items.filter(i => i.cat === 'Hareket' || i.cat === 'Kod').map(i => i.level + ':' + i.txt)); }
 fs.mkdirSync('sonuc', { recursive: true }); fs.writeFileSync('sonuc/fizik3d.txt', out.join('\n'));
+// Kalibrasyon (gerçek robotla eşleştirme) 3B ve 2B
+for (const p of P) { for (const [n, MC] of [['2B', SIM.Match], ['3B', M3]]) { const t0 = Date.now(); const a = SIM.measureMotion(p, MC, { tip: 'duz', pwm: 200, sure: 1 }); const b = SIM.measureMotion(p, MC, { tip: 'don', pwm: 170, sure: 1 });
+  const c = SIM.autoCalibrate(p, MC, { duz: { pwm: 200, sure: 1, olcum: 38 }, don: { pwm: 170, sure: 1, olcum: 180 } }); const a2 = SIM.measureMotion(p, MC, { tip: 'duz', pwm: 200, sure: 1 }, c), b2 = SIM.measureMotion(p, MC, { tip: 'don', pwm: 170, sure: 1 }, c);
+  log('KALIB', p.ad, n, JSON.stringify({ ham_duz: +a.ileri_cm.toFixed(1), ham_don: +b.aci_der.toFixed(0), kal: c, sonra_duz: +a2.ileri_cm.toFixed(1), sonra_don: +b2.aci_der.toFixed(0), ms: Date.now() - t0 })); } }
+fs.writeFileSync('sonuc/fizik3d.txt', out.join('\n'));

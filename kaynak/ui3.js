@@ -323,6 +323,7 @@ function renderMekanik(p) {
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
+  root.append(calibCard(p, M, rerender));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
   root.append(st);
@@ -369,6 +370,30 @@ function renderMekanik(p) {
     h('div', { class: 'row' }, h('button', { class: 'btn sm', on: { click: () => { M.parcalar.push({ ad: 'Yeni parça', x: 0, y: 0, uzunluk: 5, genislik: 5, z0: 3, z1: 6, renk: '#94a3b8' }); saveProfiles(); rerender(); } } }, '+ Parça ekle')),
     h('details', {}, h('summary', {}, 'Gelişmiş: parçaları JSON olarak düzenle (servo ile dönen kapak vb.)'), h('p', { class: 'hint' }, 'Servo ile dönen parça: "servo_pin": 3, "pivot": [x, y], "aci_ofset": derece, "yon": 1 veya -1. "kati": false → sadece görsel. "sekil": "silindir".'), json,
       h('button', { class: 'btn sm', on: { click: () => { try { M.parcalar = JSON.parse(json.value); saveProfiles(); rerender(); toast('Parçalar güncellendi'); } catch (e) { toast('JSON hatası: ' + e.message); } } } }, 'Uygula'))));
+}
+function calibCard(p, M, rerender) {
+  const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
+  const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';
+  const cur = h('p', { class: 'hint' }); const showCur = () => { cur.textContent = `Şu anki ayar — 2B: ${fmtK(K['2B'])} · 3B: ${fmtK(K['3B'])}`; }; showCur();
+  const out = h('div', { class: 'msg' }); const sk = h('textarea', { class: 'short', readonly: true, style: 'display:none;height:220px' });
+  const real = () => ({ duz: { pwm: +O.duz_pwm || 200, sure: +O.duz_sure || 1, olcum: +O.duz_cm || 0 }, don: { pwm: +O.don_pwm || 170, sure: +O.don_sure || 1, olcum: Math.abs(+O.don_der || 0) } });
+  const engines = () => [['2B', Match]].concat(Match3D ? [['3B', Match3D]] : []);
+  const simRow = (name, MC, kal) => { const r = real(); const a = SIM.measureMotion(p, MC, { tip: 'duz', pwm: r.duz.pwm, sure: r.duz.sure }, kal || { hiz_carpani: 1, donus_direnci: 0 }); const b = SIM.measureMotion(p, MC, { tip: 'don', pwm: r.don.pwm, sure: r.don.sure }, kal || { hiz_carpani: 1, donus_direnci: 0 });
+    const pct = (s, g) => g ? ` (gerçeğin %${Math.round(s / g * 100)}'i)` : ''; return `${name}: düz ${a.ileri_cm.toFixed(1)} cm${pct(a.ileri_cm, r.duz.olcum)}, dönüş ${Math.abs(b.aci_der).toFixed(0)}°${pct(Math.abs(b.aci_der), r.don.olcum)}`; };
+  const busy = (fn) => { out.className = 'msg'; out.textContent = 'Hesaplanıyor…'; setTimeout(() => { try { fn(); } catch (e) { out.className = 'msg err'; out.textContent = 'Hata: ' + e.message; } }, 30); };
+  return card('Gerçek robotla eşleştir (kalibrasyon)',
+    h('p', { class: 'hint' }, 'Simülasyondaki robotun gerçeği kadar hızlı gidip dönmesi için: 1) "Ölçüm kodu"nu robota yükle. 2) Robot 1 sn düz gidip durur, sonra yerinde 1 sn sola döner. Gittiği mesafeyi (cm) ve döndüğü açıyı (derece, tam tur = 360) ölç. 3) Buraya yaz ve "Otomatik eşleştir"e bas. En iyi sonuç için yarışma zemininde (sunta) ve dolu pille ölç.'),
+    h('div', { class: 'fields' }, fld(O, 'duz_pwm', 'Düz: PWM (0–255)'), fld(O, 'duz_sure', 'Süre (sn)'), fld(O, 'duz_cm', 'Gerçekte gittiği (cm)')),
+    h('div', { class: 'fields', style: 'margin-top:8px' }, fld(O, 'don_pwm', 'Dönüş: PWM'), fld(O, 'don_sure', 'Süre (sn)'), fld(O, 'don_der', 'Gerçekte döndüğü (°)')),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn sm', on: { click: () => { sk.value = SIM.calibSketch(p, real()); sk.style.display = sk.style.display === 'none' ? '' : 'none'; } } }, 'Ölçüm kodu'),
+      h('button', { class: 'btn sm', on: { click: () => copyText(SIM.calibSketch(p, real())) } }, 'Ölçüm kodunu kopyala'),
+      h('button', { class: 'btn sm', on: { click: () => busy(() => { out.className = 'msg'; out.textContent = engines().map(([n, MC]) => simRow(n, MC, K[n])).join('\n'); }) } }, 'Simülasyonda ölç'),
+      h('button', { class: 'btn pri sm', on: { click: () => busy(() => { const r = real(); if (!r.duz.olcum && !r.don.olcum) { out.className = 'msg err'; out.textContent = 'Önce gerçek ölçümleri (cm ve derece) yaz.'; return; }
+        const notes = new Set(); for (const [n, MC] of engines()) { const c = SIM.autoCalibrate(p, MC, r); K[n] = { hiz_carpani: c.hiz_carpani, donus_direnci: c.donus_direnci }; c.notlar.forEach(x => notes.add(x)); }
+        saveProfiles(); showCur(); out.className = 'msg ok'; out.textContent = 'Eşleştirildi.\n' + engines().map(([n, MC]) => simRow(n, MC, K[n])).join('\n') + (notes.size ? '\n' + [...notes].join('\n') : '') + (Match3D ? '' : '\n(3B fizik yüklenince bir kez daha bas, 3B de eşleşsin.)'); }) } }, 'Otomatik eşleştir'),
+      h('button', { class: 'btn sm', on: { click: () => { delete K['2B']; delete K['3B']; delete K.hiz_carpani; delete K.donus_direnci; saveProfiles(); rerender(); toast('Kalibrasyon sıfırlandı'); } } }, 'Sıfırla')),
+    cur, out, sk);
 }
 function applyModel(p, makeBoxes) {
   const M = p.mekanik, D = p.devre = p.devre || {}, md = M.model3d, objs = (p._stl || {}).objects || []; let n = 0;
