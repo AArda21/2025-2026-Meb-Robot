@@ -83,7 +83,7 @@ function makeMatch3D(R) {
           const { V, mode, duty } = rb.sideVoltage(side);
           let target = 0, damp = M.tFric * 2;
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
-          wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
+          wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp; wh.duty = duty ?? 1;
           const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
         }
         if (rb.calib && rb.calib.donus) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; const dw = SIM.calibYaw(rb, wu, dt); if (dw) { const j = dw * rb.inertia; rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
@@ -102,7 +102,7 @@ function makeMatch3D(R) {
       for (const side of ['L', 'R']) { const ws = rb.wheelList.filter(w => w.side === side); let F = 0, rpm = 0, slip = false;
         for (const wh of ws) { const wa = wh.body.angvel(); const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
           const wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2]; wh.spin += wrel * this.dt;
-          F += (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; rpm += wrel * 60 / (2 * Math.PI) / ws.length; slip = slip || Math.abs(wrel * rb.wheelR - vf) > 0.04; }
+          F += (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; if (wh.mode === 'drive') rb._Iacc = (rb._Iacc || 0) + rb.motor.iStall * Math.min(1.2, Math.abs((wh.damp || 0) * ((wh.target || 0) - wrel)) / rb.motor.tStall) * (wh.duty ?? 1); rpm += wrel * 60 / (2 * Math.PI) / ws.length; slip = slip || Math.abs(wrel * rb.wheelR - vf) > 0.04; }
         const wi = rb.wheelInfo[side], w0 = ws[0]; wi.V = w0.V || 0; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = w0.mode; wi.spin = w0.spin;
       }
       for (const g of rb.gates) { let d = (yawOf(g.body.rotation()) - s.th) * 180 / Math.PI; d = ((d % 360) + 540) % 360 - 180; rb.servoAng[g.p.servoPin] = (d - g.p.angOff) / (g.p.dir || 1); rb.servoVel[g.p.servoPin] = 0; }

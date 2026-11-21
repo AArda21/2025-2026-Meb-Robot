@@ -155,9 +155,14 @@ class Runtime {
     };
     for (let i = 0; i < B.nA; i++) api['A' + i] = B.A0 + i;
     const mkSerial = (name) => ({
-      begin() { if (name === 'Serial') rt.serialOn = true; }, end() { }, available() { return 0; }, read() { return -1; }, peek() { return -1; }, flush() { }, setTimeout() { },
-      print(v, a) { rt.print(fmt(v, a)); cost(1e-4); }, println(v, a) { rt.print((v === undefined ? '' : fmt(v, a)) + '\n'); cost(1e-4); },
-      write(v) { rt.print(typeof v === 'number' ? String.fromCharCode(v) : String(v)); }, [Symbol.toPrimitive]: () => 1,
+      begin(baud) { if (name === 'Serial') { rt.serialOn = true; rt.baud = +baud || 9600; } }, end() { }, available() { return 0; }, read() { return -1; }, peek() { return -1; }, setTimeout() { },
+      // Gerçek Arduino: 64 baytlık gönderme tamponu dolunca print() bekler (9600 baud ≈ 1 ms/karakter)
+      flush() { const rate = (rt.baud || 9600) / 10; const q = Math.max(0, (rt.txQ || 0) - (rt.t - (rt.txT ?? rt.t)) * rate); if (q > 0) { cost(q / rate); rt.txBlock = (rt.txBlock || 0) + q / rate; } rt.txQ = 0; rt.txT = rt.t; },
+      _tx(str) { if (name !== 'Serial' || !rt.serialOn) return; const n = unescape(encodeURIComponent(str)).length; const rate = (rt.baud || 9600) / 10;
+        let q = Math.max(0, (rt.txQ || 0) - (rt.t - (rt.txT ?? rt.t)) * rate) + n; if (q > 64) { const w = (q - 64) / rate; cost(w); rt.txBlock = (rt.txBlock || 0) + w; q = 64; } rt.txQ = q; rt.txT = rt.t;
+        if ((rt.txBlock || 0) > 0.05 && rt.t > 2 && rt.txBlock / rt.t > 0.08) rt.warnOnce('serial_yavas', `Serial.print kodunu yavaşlatıyor: ${rt.baud || 9600} baud'da yazdırmak zamanın %${Math.round(rt.txBlock / rt.t * 100)}'ini alıyor (robot bu sürede sensörlere bakamaz). Yarışmada Serial yazdırmalarını kaldır` + ((rt.baud || 9600) < 115200 ? ' ya da Serial.begin(115200) kullan.' : ' ya da azalt.')); },
+      print(v, a) { const s = fmt(v, a); rt.print(s); cost(5e-6); this._tx(s); }, println(v, a) { const s = (v === undefined ? '' : fmt(v, a)) + '\r\n'; rt.print(s.slice(0, -2) + '\n'); cost(5e-6); this._tx(s); },
+      write(v) { const s = typeof v === 'number' ? String.fromCharCode(v) : String(v); rt.print(s); this._tx(s); }, [Symbol.toPrimitive]: () => 1,
     });
     api.Serial = mkSerial('Serial'); if (board.tip === 'Mega') { api.Serial1 = mkSerial('Serial1'); api.Serial2 = mkSerial('Serial2'); api.Serial3 = mkSerial('Serial3'); }
     return api;
@@ -198,7 +203,10 @@ class Robot {
       this.axleLoad = this.wheelCount === 4 ? [ff, 1 - ff] : [1]; } // her dingile düşen ağırlık oranı (tekerlerdeki toplam yükün)
     this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
     { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) ? Math.max(-4, Math.min(4, dn)) : 0 }; }
-    this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
+    { const Pl = M.pil || {}, volt = +Pl.volt || 7.4; const tip = BATTERIES[Pl.tip] ? Pl.tip : (Math.abs(volt - 9) < 0.6 ? 'pil9v' : 'liion'); const B = BATTERIES[tip];
+      const n = Math.max(1, Math.round(volt / B.hucre)); const mah = +Pl.mah || B.mah;
+      // nominal gerilimdeki hücre değeri (yaklaşık %50 dolu) = B.hucre; dolu/boş arası doğrusal model
+      this.battery = { volt, mAh: mah, tip, n, dolu: B.dolu * n, bos: B.bos * n, nom: B.hucre * n, rIc: B.rIc * n + 0.03, soc: 1, I: 0, V: B.dolu * n, Imax: 0, Vmin: 99, usedAh: 0 }; }
     const side = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) r[k] = pin(v); return r; };
     this.driver = { type: dkey, vBat: +((M.pil || {}).volt) || 7.4, drop: DRIVERS[dkey].dusum, maxA: DRIVERS[dkey].maxA, L: side(Dr.sol), R: side(Dr.sag), invL: !!Dr.sol_ters, invR: !!Dr.sag_ters, stby: pin(Dr.stby), raw: Dr };
     this.parts = (M.parcalar || []).map(p => ({

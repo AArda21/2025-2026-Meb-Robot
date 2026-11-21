@@ -33,7 +33,7 @@ const Sensors = {
       const r = RULES.EGG_R;
       for (const e of m.eggs) { if (e.gone) continue; const ox = e.x - x, oy = e.y - y; const tc = ox * dx + oy * dy; if (tc < -r) continue; const d2 = ox * ox + oy * oy - tc * tc; if (d2 > r * r) continue; const t = tc - Math.sqrt(r * r - d2); if (t >= 0 && t < best) { best = t; hit = e; } }
     }
-    for (const o of m.robots) { if (o === rb) continue; if (Math.hypot(o.state.x - x, o.state.y - y) > maxD + (o.radius || 0.3)) continue; for (const wp of o.cachedParts(m.time)) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o }; } } }
+    for (const o of m.robots) { if (o === rb) continue; if (Math.hypot(o.state.x - x, o.state.y - y) > maxD + (o.radius || 0.3)) continue; for (const wp of o.cachedParts(m.time)) { if (z < wp.p.z0 - 0.01 || z > wp.p.z1 + 0.01) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t < best) { best = t; hit = { robot: o, part: wp.p }; } } }
     if (opts.self) for (const wp of rb.worldParts()) { if (wp.p.auto || !wp.p.solid || z < wp.p.z0 || z > wp.p.z1) continue; const t = rayOBB(x, y, dx, dy, wp); if (t != null && t > 0.002 && t < best) { best = t; hit = { self: wp.p }; } }
     return { d: best, hit };
   },
@@ -44,7 +44,11 @@ const Sensors = {
     return best + (RNG() - 0.5) * 0.004;
   },
   irObstacle(m, rb, s) { if (s._mT === m.time && s._mR === rb) return s._mV; const v = Sensors._ir(m, rb, s); s._mT = m.time; s._mR = rb; s._mV = v; return v; },
-  _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit) return true; } return false; },
+  // Kızılötesi engel sensörü (MZ80/E18-D80NK, FC-51): ayarlanan menzil beyaz yüzeye göredir; koyu ve mat yüzeyleri
+  // daha yakından görür (yansıyan ışık az). Yansıtma: beyaz duvar 1, kırmızı ~0.75, yeşil ~0.6, mavi ~0.5, robot gövdesi rengine göre.
+  reflect(hit) { if (!hit) return 0; if (hit === 'duvar') return 1; if (hit.kind) return { red: 0.75, blue: 0.5, green: 0.6, penalty: 0.6 }[hit.kind] ?? 0.6;
+    if (hit.robot) { const c = hit.part && hit.part.color; if (c && /^#[0-9a-f]{6}$/i.test(c)) { const v = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255); const L = 0.3 * v[0] + 0.55 * v[1] + 0.15 * v[2]; return clamp(0.25 + 0.75 * L, 0.25, 1); } return 0.55; } return 0.7; },
+  _ir(m, rb, s) { const w = rb.sensorWorld(s); for (const da of [-0.08, 0, 0.08]) { const r = Sensors.ray(m, rb, w.x, w.y, w.a + da, w.z, s.range); if (r.hit && r.d <= s.range * Sensors.reflect(r.hit)) return true; } return false; },
   surfaceAt(m, x, y) {
     const r = RULES.EGG_R;
     for (const e of m.eggs) { if (e.gone) continue; const dx = x - e.x, dy = y - e.y; if (dx * dx + dy * dy <= r * r) return Sensors.eggSurface(e, x, y); }
@@ -157,7 +161,7 @@ class Match {
     this.placeEggs();
     this.robots = [];
     for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team));
-      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark }; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.batFactor = 0.86 + 0.22 * lvl; rb.cut = new Set(G.kesik && G.kesik[team] || []);
+      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark }; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.battery.soc = lvl; rb.battery.V = rb.battery.bos + (rb.battery.dolu - rb.battery.bos) * lvl; rb.batFactor = rb.battery.V / rb.driver.vBat; rb._Iacc = 0; rb.cut = new Set(G.kesik && G.kesik[team] || []);
       this.robots.push(rb); }
     if (this.afterReset) this.afterReset();
   }
@@ -222,7 +226,14 @@ class Match {
   }
   storeEgg(e, rb, bm) { e.gone = true; e.stored = { team: rb.team, bolme: bm.ad }; e.vx = e.vy = 0; bm.icerik.push(e); }
   placeEgg(e, x, y, vx, vy) { const F = RULES.FIELD, r = RULES.EGG_R; e.x = clamp(x, r, F - r); e.y = clamp(y, r, F - r); e.vx = vx; e.vy = vy; e.gone = false; e.still = 0; e.stored = null; }
+  // Pil: açık devre gerilimi şarja göre düşer, çekilen akım iç dirençte gerilim kaybettirir (motorlar zorlanınca gerilim çöker)
+  updateBattery(rb, dt) { const B = rb.battery; if (!B) return; const I = (rb._Iacc || 0) + 0.12 * (rb.boards ? rb.boards.length : 1); rb._Iacc = 0;
+    B.I = B.I * 0.7 + I * 0.3; B.soc = Math.max(0, B.soc - B.I * dt / 3.6 / B.mAh); B.usedAh += B.I * dt / 3600;
+    const voc = B.bos + (B.dolu - B.bos) * B.soc; B.V = Math.max(0, voc - B.I * B.rIc); B.Imax = Math.max(B.Imax, B.I); B.Vmin = Math.min(B.Vmin, B.V);
+    rb.batFactor = B.V / rb.driver.vBat;
+    if (B.V < B.nom * 0.68 && !rb._brownWarn) { rb._brownWarn = true; this.events.push({ t: this.time, txt: `${rb.name}: pil gerilimi ${B.V.toFixed(1)} V'a düştü (${B.I.toFixed(1)} A çekiliyor) — Arduino resetlenebilir, motorlar güçsüz kalır` }); } }
   afterStep(dt) {
+    for (const rb of this.robots) this.updateBattery(rb, dt);
     for (const e of this.eggs) { if (e.gone || Math.hypot(e.vx, e.vy) < 0.01) continue; let best = null, bd = 0.25; for (const rb of this.robots) { const d = Math.hypot(e.x - rb.state.x, e.y - rb.state.y); if (d < bd) { bd = d; best = rb; } } if (best) e.toucher = best.team; }
     if (this.rules.ledCeza) for (const rb of this.robots) { if (rb.ledColor() === rb.team) { rb.ledOffT = 0; rb.ledPenActive = false; } else { rb.ledOffT = (rb.ledOffT || 0) + dt; if (rb.ledOffT > 5 && !rb.ledPenActive) { rb.ledPenActive = true; rb.ledPens = (rb.ledPens || 0) + 1; this.events.push({ t: this.time, txt: `${rb.name}: köşe LED'i 5 sn'den uzun yanmadı → −10 ceza` }); } } }
     for (const rb of this.robots) { const s = rb.state; this.stepStats(rb, dt); if (rb.trail.length === 0 || this.time - rb.trail[rb.trail.length - 1][2] > 0.05) { rb.trail.push([s.x, s.y, this.time, s.th]); if (rb.trail.length > 4000) rb.trail.shift(); } }
@@ -238,6 +249,7 @@ class Match {
       const wxL = rb.axles[ai], wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
       let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
+      if (mode === 'drive') rb._Iacc = (rb._Iacc || 0) + M.iStall * Math.min(1.2, Math.abs(tau) / M.tStall) * (duty ?? 1);
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
       if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }

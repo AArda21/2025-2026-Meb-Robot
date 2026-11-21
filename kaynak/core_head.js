@@ -7,6 +7,14 @@ const RULESETS = {
   '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true, erkenBitis: 10 },
   '2025': { ad: '2025 (Kayseri) — ceza yumurtası, 3 dk', sure: 180, yesil: 0, ceza: true, ledCeza: false },
 };
+// Pil tipleri: hücre gerilimi (dolu/boş), iç direnç (Ω, hücre başına), varsayılan kapasite
+const BATTERIES = {
+  liion: { ad: 'Li-ion 18650 (3,7 V hücre)', hucre: 3.7, dolu: 4.15, bos: 3.3, rIc: 0.06, mah: 2400 },
+  lipo: { ad: 'LiPo (3,7 V hücre)', hucre: 3.7, dolu: 4.2, bos: 3.5, rIc: 0.02, mah: 1500 },
+  pil9v: { ad: '9 V kare pil (alkalin)', hucre: 9, dolu: 9.4, bos: 6.5, rIc: 1.7, mah: 500 },
+  aa: { ad: 'AA kalem pil (alkalin, 1,5 V)', hucre: 1.5, dolu: 1.55, bos: 1.0, rIc: 0.15, mah: 2000 },
+  nimh: { ad: 'AA şarjlı NiMH (1,2 V)', hucre: 1.2, dolu: 1.35, bos: 1.05, rIc: 0.03, mah: 2000 },
+};
 const RULES = { FIELD: 2.5, ZONE: 0.5, WALL_H: 0.08, EGG_R: 0.02, EGG_H: 0.02, MAX_DIM: 0.30, MAX_MASS: 5.0, MATCH_TIME: 180, G: 9.81 };
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }

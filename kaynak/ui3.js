@@ -164,6 +164,7 @@ function updateUi() {
     for (const [k, lab] of [['L', 'Sol motor'], ['R', 'Sağ motor']]) cards.push([lab, `<span class="${wi[k].slip ? 'bad' : ''}">${wi[k].V.toFixed(1)} V · ${wi[k].rpm.toFixed(0)} rpm${wi[k].slip ? ' · PATİNAJ' : ''}</span>`]);
     const led = rb.ledColor(); cards.push(['Üst LED', led ? ({ red: 'kırmızı', blue: 'mavi', mor: 'mor' }[led] + (led === rb.team ? ' ✓' : ' <span class="bad">⚠ yanlış renk</span>')) : '<span class="bad">sönük</span>']);
     { const d = sc.detail[rb.team]; const parts = [`kendi ${d.own}`, `yanlış ${d.wrong}`]; if (match.rules.yesil) parts.push(`yeşil ${d.green}`); if (match.rules.ceza) parts.push(`ceza ${d.pen}`); if (d.led) parts.push(`LED −${10 * d.led}`); cards.push(['Puan ' + sc[rb.team], parts.join(' · ')]); }
+    if (rb.battery) { const B = rb.battery; cards.push(['Pil', `${B.V.toFixed(2)} V · ${B.I.toFixed(1)} A · %${Math.round(B.soc * 100)}` + (B.V < B.nom * 0.75 ? ' ⚠ düşük' : '')]); }
     if (rb.hazne) cards.push(['Hazne', rb.hazne.bolmeler.map(b => `${esc(b.ad)} ${b.icerik.length}/${b.kap}` + (b.icerik.length ? ' (' + b.icerik.map(e => ({ red: 'K', blue: 'M', green: 'Y', penalty: 'C' }[e.kind] || '?')).join('') + ')' : '')).join(' · ') || '—']);
     if (rb.state.tilt > 3) cards.push(['Eğim', rb.state.tilt.toFixed(0) + '°']);
     for (const r of Sensors.readouts(match, rb)) cards.push([r.name, esc(r.val)]);
@@ -341,7 +342,8 @@ function renderMekanik(p) {
   const cc = card('Sarhoş teker', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: hasCaster, onchange: (e) => { M.sarhos_teker = e.target.checked ? { x_cm: -8, y_cm: 0, cap_cm: 1.6 } : null; saveProfiles(); rerender(); } }), 'Sarhoş teker var'));
   if (hasCaster) cc.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.sarhos_teker, 'x_cm', 'x (cm)'), fld(M.sarhos_teker, 'y_cm', 'y (cm)'), fld(M.sarhos_teker, 'cap_cm', 'Bilye çapı (cm)')));
   root.append(cc);
-  const mc = card('Motorlar ve pil', h('div', { class: 'fields' }, fld(Mo, 'model', 'Motor', { type: 'select', options: Object.fromEntries(Object.entries(MOTORS).map(([k, v]) => [k, v.ad])), def: 'TT 1:48 6V', after: rerender }), fld(M.pil, 'volt', 'Pil gerilimi (V)')));
+  const mc = card('Motorlar ve pil', h('div', { class: 'fields' }, fld(Mo, 'model', 'Motor', { type: 'select', options: Object.fromEntries(Object.entries(MOTORS).map(([k, v]) => [k, v.ad])), def: 'TT 1:48 6V', after: rerender }), fld(M.pil, 'volt', 'Pil gerilimi (V)'), fld(M.pil, 'tip', 'Pil tipi', { type: 'select', options: Object.fromEntries(Object.entries(SIM.BATTERIES).map(([k, v]) => [k, v.ad])), def: Math.abs((+M.pil.volt || 7.4) - 9) < 0.6 ? 'pil9v' : 'liion' }), fld(M.pil, 'mah', 'Kapasite (mAh)')),
+    h('p', { class: 'hint' }, 'Pilin iç direnci hesaplanır: motorlar zorlanınca (itişme, duvara dayanma) gerilim düşer ve robot yavaşlar; maç boyunca pil de azalır. 9 V kare piller motor için çok zayıftır.'));
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
