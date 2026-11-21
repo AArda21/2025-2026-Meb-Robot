@@ -1,0 +1,54 @@
+name: video-hazirla
+# Maç videolarını Drive'dan indirir, küçültür ve sadece simülatör geliştiricisinin
+# açabileceği şekilde şifreleyip test-sonuclari dalına koyar.
+on:
+  workflow_dispatch:
+    inputs:
+      dosya_id:
+        description: Drive dosya kimliği (zip)
+        required: true
+permissions:
+  contents: write
+jobs:
+  hazirla:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Araçlar
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg unzip p7zip-full >/dev/null
+          pip install -q gdown
+      - name: İndir
+        run: |
+          mkdir -p ham && cd ham
+          gdown --id "${{ github.event.inputs.dosya_id }}" -O videolar.zip
+          ls -la
+          7z x -y videolar.zip >/dev/null || unzip -o -q videolar.zip
+          rm -f videolar.zip
+          find . -type f | head -100
+      - name: Küçült
+        run: |
+          mkdir -p cikti
+          i=0
+          find ham -type f \( -iname '*.mp4' -o -iname '*.mov' -o -iname '*.m4v' -o -iname '*.3gp' -o -iname '*.mkv' -o -iname '*.webm' -o -iname '*.avi' \) -print0 | sort -z | while IFS= read -r -d '' f; do
+            i=$((i+1)); n=$(printf "v%02d" $i)
+            echo "$n <- $f" >> cikti/liste.txt
+            ffprobe -v error -show_entries format=duration:stream=width,height,r_frame_rate,codec_name -of json "$f" > "cikti/$n.json" || true
+            ffmpeg -nostdin -v error -y -i "$f" -vf "scale='if(gt(iw,ih),854,-2)':'if(gt(iw,ih),-2,854)'" -r 30 -c:v libx264 -preset veryfast -crf 28 -an "cikti/$n.mp4" || echo "HATA $f" >> cikti/liste.txt
+          done
+          cat cikti/liste.txt; du -sh cikti
+      - name: Şifrele ve gönder
+        run: |
+          tar czf paket.tgz cikti
+          openssl rand -hex 32 > anahtar.txt
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in paket.tgz -out paket.enc -pass file:anahtar.txt
+          openssl pkeyutl -encrypt -pubin -inkey test/video_pub.pem -in anahtar.txt -out anahtar.enc
+          rm -f anahtar.txt paket.tgz
+          mkdir -p out && split -b 45m paket.enc out/paket.enc.part_ && cp anahtar.enc out/
+          ls -la out
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git fetch origin test-sonuclari || true
+          git checkout -B test-sonuclari origin/test-sonuclari 2>/dev/null || git checkout --orphan test-sonuclari
+          git rm -rq --cached . 2>/dev/null || true
+          rm -rf video && mkdir video && cp out/* video/
+          git add video && git commit -q -m "video paketi (şifreli)" && git push -q origin test-sonuclari
