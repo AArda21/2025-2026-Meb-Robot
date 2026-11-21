@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V4.4</title>
+<title>MEB Robot V4.5</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -95,7 +95,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span class="ver">V4.4</span></h1>
+  <h1>MEB Robot <span class="ver">V4.5</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -127,7 +127,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
           <div class="row">
             <label class="f">Fizik<select id="sEngine"><option value="3d">3B gerçekçi (Rapier)</option><option value="2d">2B hızlı</option></select></label>
             <label class="f" id="qWrap">Grafik<select id="sQual"><option value="yuksek">Yüksek</option><option value="dusuk">Düşük (hızlı)</option></select></label>
-            <label class="f" id="camWrap">Kamera<select id="sCam"><option value="serbest">Serbest</option><option value="ustten">Üstten</option><option value="takip">Robotu takip</option></select></label>
+            <label class="f" id="camWrap">Kamera<select id="sCam"><option value="seyirci">Seyirci gözü</option><option value="serbest">Serbest</option><option value="ustten">Üstten</option><option value="takip">Robotu takip</option></select></label>
             <button class="btn sm" id="bShuffle">Yumurtaları karıştır</button>
           </div>
           <div class="row"><button class="btn sm" id="bEggEdit">✎ Yumurtaları düzenle</button><span class="hint" id="ozelInfo" style="margin:0"></span></div>
@@ -144,9 +144,9 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
             <label class="f" title="Pil boşaldıkça gerilim düşer, robot yavaşlar">Pil doluluğu (%)<input type="number" id="nPil" min="0" max="100" step="5" value="100"></label>
           </div>
           <div class="row">
-            <label class="chk"><input type="checkbox" id="cRays" checked> Sensör ışınları</label>
-            <label class="chk"><input type="checkbox" id="cCirc" checked> Kablolar</label>
-            <label class="chk"><input type="checkbox" id="cTrail" checked> İz</label>
+            <label class="chk"><input type="checkbox" id="cRays"> Sensör ışınları</label>
+            <label class="chk"><input type="checkbox" id="cCirc"> Kablolar</label>
+            <label class="chk"><input type="checkbox" id="cTrail"> İz</label>
             <label class="chk"><input type="checkbox" id="cNoLimit"> Süre sınırı yok</label>
           </div>
           <p class="hint">Robotu başlamadan önce parmağınla sürükleyerek başlangıç yerini değiştirebilirsin. ⟲/⟳ ile döndür: <button class="btn sm" id="bRotL">⟲ 15°</button> <button class="btn sm" id="bRotR">⟳ 15°</button></p>
@@ -2629,24 +2629,39 @@ function makeView3D(THREE, host) {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none';
   host.appendChild(renderer.domElement);
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe9edf2); scene.fog = new THREE.Fog(0xe9edf2, 6, 14);
-  const camera = new THREE.PerspectiveCamera(42, 1, 0.005, 40); camera.up.set(0, 0, 1);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(0.6, -0.4, 3.2); sun.target.position.set(1.25, 1.25, 0);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 6 }); sun.shadow.bias = -0.0004;
-  scene.add(sun, sun.target);
+  // Spor salonu ortamı: koyu tribün arka planı, tavandan gelen salon ışıkları, yansımalar için ortam haritası
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2b3038); scene.fog = new THREE.Fog(0x2b3038, 7, 22);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.005, 60); camera.up.set(0, 0, 1);
+  { // ortam haritası (PBR yansıma): kapalı salon + tavanda aydınlatma panelleri
+    const env = new THREE.Scene(); const room = new THREE.Mesh(new THREE.BoxGeometry(30, 30, 12), new THREE.MeshBasicMaterial({ color: 0x3c4149, side: THREE.BackSide })); room.position.z = 5; env.add(room);
+    const floorE = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshBasicMaterial({ color: 0x55595f })); floorE.position.z = -0.9; env.add(floorE);
+    for (let i = -2; i <= 2; i++) for (let j = -1; j <= 1; j++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.7), new THREE.MeshBasicMaterial({ color: 0xffffff })); p.position.set(i * 4, j * 4, 10.5); p.rotation.x = Math.PI; env.add(p); }
+    const side = new THREE.Mesh(new THREE.PlaneGeometry(14, 3), new THREE.MeshBasicMaterial({ color: 0x8c96a6 })); side.position.set(0, 14.5, 4); side.rotation.x = Math.PI / 2; env.add(side);
+    try { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(env, 0.03).texture; scene.environmentIntensity = 0.9; pm.dispose(); } catch (e) { }
+  }
+  scene.add(new THREE.HemisphereLight(0xdfe7f2, 0x3a3f47, 0.45));
+  const sun = new THREE.DirectionalLight(0xfff6e8, 2.3); sun.position.set(1.0, 0.2, 4.2); sun.target.position.set(1.25, 1.25, 0);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.7, right: 1.7, top: 1.7, bottom: -1.7, near: 1, far: 7 }); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.002; sun.shadow.radius = 3;
+  const fill = new THREE.DirectionalLight(0xdbe6ff, 0.55); fill.position.set(3.5, 4.5, 2.5);
+  scene.add(sun, sun.target, fill);
   const F = RULES.FIELD;
   const std = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.75, metalness: 0.05 }, o));
 
   // ---- Saha ----
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), std(0xd5dae1, { roughness: 1 })); ground.position.set(F / 2, F / 2, -0.001); ground.receiveShadow = true; scene.add(ground);
+  // Yarışma masası: saha yerden ~75 cm yüksekte, yanları lacivert pano; salon zemini
+  const TABLE_H = 0.75, WT = 0.018;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), std(0x3d434c, { roughness: 0.9 })); ground.position.set(F / 2, F / 2, -TABLE_H); ground.receiveShadow = true; scene.add(ground);
+  { const standMat = std(0x262b33, { roughness: 0.95 }); for (let i = 0; i < 6; i++) for (const [cx, cy, sx, sy] of [[F / 2, F + 5 + i * 0.7, 16, 0.7], [F / 2, -5 - i * 0.7, 16, 0.7], [-5 - i * 0.7, F / 2, 0.7, 16], [F + 5 + i * 0.7, F / 2, 0.7, 16]]) { const st = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, 0.45 * (i + 1)), standMat); st.position.set(cx, cy, -TABLE_H + 0.225 * (i + 1)); scene.add(st); } }
+  { const skirt = new THREE.Mesh(new THREE.BoxGeometry(F + 2 * WT + 0.01, F + 2 * WT + 0.01, TABLE_H - 0.004), std(0x1d2f8a, { roughness: 0.55 })); skirt.position.set(F / 2, F / 2, -TABLE_H / 2 - 0.002); skirt.receiveShadow = true; scene.add(skirt);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(F + 2 * WT + 0.014, F + 2 * WT + 0.014, 0.012), std(0x2bb3c0, { roughness: 0.5 })); stripe.position.set(F / 2, F / 2, -TABLE_H + 0.05); scene.add(stripe); }
   const fieldCanvas = document.createElement('canvas'); fieldCanvas.width = fieldCanvas.height = 1024;
   const fieldTex = new THREE.CanvasTexture(fieldCanvas); if ('colorSpace' in fieldTex) fieldTex.colorSpace = THREE.SRGBColorSpace; fieldTex.anisotropy = 4;
-  const field = new THREE.Mesh(new THREE.PlaneGeometry(F, F), std(0xffffff, { map: fieldTex, roughness: 0.9 })); field.position.set(F / 2, F / 2, 0); field.receiveShadow = true; scene.add(field);
-  const wallMat = std(0xf4f4f1, { roughness: 0.6 });
-  for (const [cx, cy, sx, sy] of [[-0.01, F / 2, 0.02, F + 0.04], [F + 0.01, F / 2, 0.02, F + 0.04], [F / 2, -0.01, F, 0.02], [F / 2, F + 0.01, F, 0.02]]) {
+  const field = new THREE.Mesh(new THREE.PlaneGeometry(F, F), std(0xffffff, { map: fieldTex, roughness: 0.42, metalness: 0 })); /* beyaz sunta (melamin kaplı, yarı parlak) */ field.position.set(F / 2, F / 2, 0); field.receiveShadow = true; scene.add(field);
+  const wallMat = std(0xf6f6f3, { roughness: 0.4 });
+  for (const [cx, cy, sx, sy] of [[-WT / 2, F / 2, WT, F + 2 * WT], [F + WT / 2, F / 2, WT, F + 2 * WT], [F / 2, -WT / 2, F, WT], [F / 2, F + WT / 2, F, WT]]) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, RULES.WALL_H), wallMat); m.position.set(cx, cy, RULES.WALL_H / 2); m.castShadow = m.receiveShadow = true; scene.add(m);
   }
   let fieldColorsKey = '';
@@ -2654,13 +2669,21 @@ function makeView3D(THREE, host) {
     const key = JSON.stringify([col, zones]); if (key === fieldColorsKey) return; fieldColorsKey = key;
     const g = fieldCanvas.getContext('2d'), S = 1024, Z = S * RULES.ZONE / F;
     g.fillStyle = col.zemin; g.fillRect(0, 0, S, S);
-    g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2; for (let i = 1; i < 10; i++) { const v = i * S / 10; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, S); g.moveTo(0, v); g.lineTo(S, v); g.stroke(); }
+    // sunta dokusu: çok hafif lekeler ve iki levhanın birleşim çizgisi (gerçek sahada ortada ek yeri var)
+    const id = g.getImageData(0, 0, S, S), d = id.data; let sd = 12345; const rnd = () => ((sd = (sd * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let i = 0; i < d.length; i += 4) { const n = (rnd() - 0.5) * 5; d[i] += n; d[i + 1] += n; d[i + 2] += n; } g.putImageData(id, 0, 0);
+    g.strokeStyle = 'rgba(0,0,0,.10)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.stroke();
+    if (view && view.grid) { g.strokeStyle = 'rgba(0,0,0,.05)'; g.lineWidth = 2; for (let i = 1; i < 10; i++) { const v = i * S / 10; g.beginPath(); g.moveTo(v, 0); g.lineTo(v, S); g.moveTo(0, v); g.lineTo(S, v); g.stroke(); } }
     const k = S / F; for (const z of zones || []) { g.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; g.fillRect(z.x0 * k, S - z.y1 * k, (z.x1 - z.x0) * k, (z.y1 - z.y0) * k); }
     fieldTex.needsUpdate = true;
   }
 
   // ---- Yumurtalar ----
-  const eggGeo = new THREE.CylinderGeometry(RULES.EGG_R, RULES.EGG_R, RULES.EGG_H, 36);
+  // yumurta: kenarları hafif yuvarlatılmış boyalı ahşap/plastik silindir (çap 4 cm, yükseklik 2 cm)
+  const eggGeo = (() => { const r = RULES.EGG_R, hh = RULES.EGG_H / 2, b = 0.0022, pts = [new THREE.Vector2(0, -hh)];
+    for (let i = 0; i <= 6; i++) { const a = -Math.PI / 2 + i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(r - b + Math.cos(a) * b, -hh + b + Math.sin(a) * b)); }
+    for (let i = 0; i <= 6; i++) { const a = i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(r - b + Math.cos(a) * b, hh - b + Math.sin(a) * b)); }
+    pts.push(new THREE.Vector2(0, hh)); const g = new THREE.LatheGeometry(pts, 40); g.computeVertexNormals(); return g; })();
   const penCanvas = document.createElement('canvas'); penCanvas.width = penCanvas.height = 128;
   const penTex = new THREE.CanvasTexture(penCanvas); if ('colorSpace' in penTex) penTex.colorSpace = THREE.SRGBColorSpace;
   let eggMeshes = [], eggMats = null;
@@ -2668,7 +2691,7 @@ function makeView3D(THREE, host) {
     for (const m of eggMeshes) scene.remove(m); eggMeshes = [];
     const col = sim.field.colors; const g = penCanvas.getContext('2d');
     g.fillStyle = col.kirmizi; g.fillRect(0, 0, 128, 64); g.fillStyle = col.mavi; g.fillRect(0, 64, 128, 64); penTex.needsUpdate = true;
-    eggMats = { red: std(col.kirmizi, { roughness: 0.45 }), blue: std(col.mavi, { roughness: 0.45 }), green: std(col.yesil || '#2f8f46', { roughness: 0.45 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
+    eggMats = { red: std(col.kirmizi, { roughness: 0.5 }), blue: std(col.mavi, { roughness: 0.5 }), green: std(col.yesil || '#2f8f46', { roughness: 0.5 }), pen: [std(0x7a3a6a, { roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 }), std(0xffffff, { map: penTex, roughness: 0.45 })] };
     for (const e of sim.eggs) {
       const m = new THREE.Mesh(eggGeo, e.kind === 'penalty' ? eggMats.pen : eggMats[e.kind]); m.castShadow = m.receiveShadow = true; scene.add(m); eggMeshes.push(m);
     }
@@ -2710,7 +2733,8 @@ function makeView3D(THREE, host) {
     v.wheelG = [];
     for (const ax of (rb.axles || [rb.wheelX])) for (const side of ['L', 'R']) {
       const g = new THREE.Group();
-      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 40), std(0x15171b, { roughness: 0.95 })); tire.castShadow = true;
+      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 48, 1), std(0x1b1c1f, { roughness: 0.92 })); tire.castShadow = true;
+      for (let k = 0; k < 18; k++) { const tr = new THREE.Mesh(new THREE.BoxGeometry(wr * 0.16, rb.wheelW * 0.92, 0.0016), std(0x111214, { roughness: 1 })); const a = k / 18 * Math.PI * 2; tr.position.set(Math.cos(a) * (wr + 0.0006), 0, Math.sin(a) * (wr + 0.0006)); tr.rotation.y = -a + Math.PI / 2; tire.add(tr); } // diş deseni
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
       g.add(tire, hub); robot.add(g); if (!v.wheels[side]) v.wheels[side] = g; v.wheelG.push({ g, side, ax });
     }
@@ -2778,13 +2802,14 @@ function makeView3D(THREE, host) {
 
   let curSim = null; const colTmp = new THREE.Color();
   const view = {
-    renderer, camera, cam, onPick: null, onDrag: null,
+    renderer, camera, cam, onPick: null, onDrag: null, _dbg: () => ({ px: Array.from(fieldCanvas.getContext('2d').getImageData(512, 512, 1, 1).data), field: field.visible, fz: field.position.z, mat: field.material.color.getHexString() }),
     setSim(sim) { curSim = sim; paintField(sim.field.colors, sim.zones); buildEggs(sim); clearRobots(); for (const rb of sim.robots) buildRobot(rb); },
     focus: null,
     setMode(m) {
       cam.mode = m;
       if (m === 'ustten') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.4; cam.pol = 0.02; cam.az = -Math.PI / 2; }
       if (m === 'serbest') { cam.target.set(F / 2, F / 2, 0); cam.dist = 3.3; cam.pol = 0.75; cam.az = -Math.PI / 2; }
+      if (m === 'seyirci') { cam.target.set(F / 2, F / 2 + 0.1, -0.05); cam.dist = 3.6; cam.pol = 1.02; cam.az = -Math.PI / 2 - 0.3; } // masanın yanında ayakta duran seyircinin gözü (≈1,6 m)
       if (m === 'takip') { cam.dist = 0.7; cam.pol = 1.0; cam.followOff = 0; cam._init = false; }
     },
     setQuality(q) { const lo = q === 'dusuk'; renderer.setPixelRatio(lo ? 1 : Math.min(2, window.devicePixelRatio || 1)); renderer.shadowMap.enabled = !lo; sun.castShadow = !lo; scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(mm => { mm.needsUpdate = true; }); } }); this.resize(); },
@@ -2803,7 +2828,7 @@ function makeView3D(THREE, host) {
         robot.position.set(s.x, s.y, s.z ?? rb.wheelR);
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
-        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
+        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(opts.rays && wi.slip ? 0x7f1d1d : 0x1b1c1f); }
         if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {
