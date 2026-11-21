@@ -193,7 +193,7 @@ class Robot {
     // 4 tekerli (kızaklı / skid-steer) robot: her yanda iki teker, aynı sürücü kanalından
     this.wheelCount = +T.adet === 4 ? 4 : 2; this.wheelBase = this.wheelCount === 4 ? cm(T.dingil_cm || 12) : 0;
     this.axles = this.wheelCount === 4 ? [this.wheelX + this.wheelBase / 2, this.wheelX - this.wheelBase / 2] : [this.wheelX];
-    this.caster = (M.sarhos_teker === null || this.wheelCount === 4) ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03 };
+    this.caster = (M.sarhos_teker === null || this.wheelCount === 4) ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03, tip: C.tip === 'sarhos' ? 'sarhos' : 'bilye', trail: cm(C.trail_cm ?? 1.2) };
     const com = M.agirlik_merkezi || {};
     const cx = this.caster ? this.caster.x : this.wheelX - 0.05;
     this.comX = com.x_cm != null && com.x_cm !== '' ? cm(com.x_cm) : cx + 0.8 * (this.wheelX - cx);
@@ -201,7 +201,9 @@ class Robot {
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
     { const [xf, xr] = this.wheelCount === 4 ? this.axles : [this.wheelX, this.wheelX]; const ff = this.wheelCount === 4 ? clamp((this.comX - xr) / ((xf - xr) || 1e-6), 0.1, 0.9) : 1;
       this.axleLoad = this.wheelCount === 4 ? [ff, 1 - ff] : [1]; } // her dingile düşen ağırlık oranı (tekerlerdeki toplam yükün)
-    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
+    this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60 / Math.max(0.3, 1 - (mot.surt || 0) / (mot.tork || 1)), /* katalogdaki boşta devir sürtünme dahil ölçülür */ tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
+    // Redüktörlü motorun dönen iç parçaları (rotor) tekerleğe dişli oranının karesiyle yansır: robot daha ağır kalkar, boşta daha uzun kayar
+    { const ratio = mot.oran || clamp(9000 / (mot.rpm || 200), 5, 300), J = (mot.rotorJ || (mot.tork > 5 ? 8e-7 : mot.tork > 2 ? 2.5e-7 : 6e-8)) * ratio * ratio; this.motor.jRefl = J; this.motor.ratio = ratio; }
     { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) ? Math.max(-4, Math.min(4, dn)) : 0 }; }
     { const Pl = M.pil || {}, volt = +Pl.volt || 7.4; const tip = BATTERIES[Pl.tip] ? Pl.tip : (Math.abs(volt - 9) < 0.6 ? 'pil9v' : 'liion'); const B = BATTERIES[tip];
       const n = Math.max(1, Math.round(volt / B.hucre)); const mah = +Pl.mah || B.mah;

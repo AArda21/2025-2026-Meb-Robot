@@ -19,7 +19,7 @@ function makeMatch3D(R) {
     build() {
       if (this.world) { try { this.world.free(); } catch (e) { } }
       const F = RULES.FIELD, E = this.field; const W = new R.World({ x: 0, y: 0, z: -RULES.G }); W.timestep = this.dt;
-      try { if (W.integrationParameters && 'numSolverIterations' in W.integrationParameters) W.integrationParameters.numSolverIterations = 8; } catch (e) { }
+      try { if (W.integrationParameters && 'numSolverIterations' in W.integrationParameters) W.integrationParameters.numSolverIterations = (globalThis.ITERS || 2); /* Rapier 0.12'de çok yineleme + küçük adım kayma sürtünmesini zayıflatıyor (yumurtalar buz gibi kayıyordu) */ } catch (e) { }
       this.world = W; this.eggByCollider = new Map(); this.robotByCollider = new Map(); this.wallColliders = new Set();
       const fb = W.createRigidBody(R.RigidBodyDesc.fixed());
       W.createCollider(fr(R.ColliderDesc.cuboid(F / 2 + 0.1, F / 2 + 0.1, 0.02).setTranslation(F / 2, F / 2, -0.02), 1.0).setCollisionGroups(grp(G_FLOOR, 0xffff)), fb);
@@ -54,11 +54,16 @@ function makeMatch3D(R) {
       rb.wheels = {}; rb.wheelList = [];
       for (const ax of (rb.axles || [rb.wheelX])) for (const [side, sy] of [['L', 1], ['R', -1]]) {
         const lp = [ax, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
-        const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false));
-        addCol(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr)  /* not: bombeli (roundCylinder) lastik denendi; robot duvar dibinde takla atıyordu */.setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0), body);
+        const bdesc = R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false);
+        const Jr = rb.motor.jRefl || 0; if (Jr > 0 && bdesc.setAdditionalMassProperties) bdesc.setAdditionalMassProperties(0, { x: 0, y: 0, z: 0 }, { x: 1e-7, y: Jr, z: 1e-7 }, { x: 0, y: 0, z: 0, w: 1 }); // redüktörden yansıyan rotor ataleti
+        const body = W.createRigidBody(bdesc);
+        // Lastik: zeminle tek noktadan (gerçek lastik izi gibi) değen küre + yumurta/duvar/robotla çarpışan ince silindir.
+        // (Düz silindirin iki kenarı zemine ayrı ayrı sürtüp dönüşü olduğundan çok zorlaştırıyordu.)
+        const wcol = W.createCollider(fr(R.ColliderDesc.ball(wr).setDensity(mw / (4 / 3 * Math.PI * wr * wr * wr)), (rb.muS + rb.muK) / 2, 0).setCollisionGroups(grp(bit, G_FLOOR)), body); rb.colliders.add(wcol.handle); this.robotByCollider.set(wcol.handle, rb);
+        { const side = W.createCollider(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr * 0.985).setDensity(0), E.muRobotEgg, 0.1).setCollisionGroups(grp(bit, 0xffff & ~bit & ~G_FLOOR)), body); rb.colliders.add(side.handle); this.robotByCollider.set(side.handle, rb); }
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
-        const wobj = { body, j, spin: 0, side }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
+        const wobj = { body, j, spin: 0, side, col: wcol, mu0: (rb.muS + rb.muK) / 2 }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
       }
       rb.gates = [];
       for (const p of gates) {
@@ -81,10 +86,19 @@ function makeMatch3D(R) {
         const M = rb.motor, k = M.tStall / M.w0;
         for (const wh of rb.wheelList) { const side = wh.side;
           const { V, mode, duty } = rb.sideVoltage(side);
-          let target = 0, damp = M.tFric * 2;
+          let target = 0, damp = 1e-6; // boşta: motor serbest, sadece dişli sürtünmesi (aşağıda) frenler
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
+          if (rb.kusur && mode === 'drive') damp *= rb.kusur.tork[side];
+          if (wh.col && ((this._fmT = (this._fmT || 0) + 1) % 25 === 0)) { const t = wh.body.translation(); try { wh.col.setFriction(wh.mu0 * SIM.floorMu(this, t.x, t.y)); } catch (e) { } }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp; wh.duty = duty ?? 1;
           const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
+        }
+        if (rb.caster && rb.caster.tip === 'sarhos') { // döner (sarhoş) teker: 2B ile aynı model, şasiye yana itki olarak
+          const C = rb.caster, q = rb.body.rotation(), cp = qRot(q, [C.x, C.y, 0]), t = rb.body.translation(), lv = rb.body.linvel(), av = rb.body.angvel();
+          const vx = lv.x - av.z * cp[1], vy = lv.y + av.z * cp[0], sp = Math.hypot(vx, vy); if (C.phi == null) C.phi = rb.state.th;
+          const hx = Math.cos(C.phi), hy = Math.sin(C.phi), vLat = -vx * hy + vy * hx; if (sp > 0.005) C.phi += Math.max(-40, Math.min(40, vLat / Math.max(0.004, C.trail))) * dt;
+          const lx = -Math.sin(C.phi), ly = Math.cos(C.phi), cr = cp[0] * ly - cp[1] * lx, im = 1 / rb.mass + cr * cr / rb.inertia; const Nc = rb.mass * 9.81 * (1 - rb.loadFrac);
+          const jl = Math.max(-0.6 * Nc * dt, Math.min(0.6 * Nc * dt, -vLat / im)); rb.body.applyImpulseAtPoint({ x: jl * lx, y: jl * ly, z: 0 }, { x: t.x + cp[0], y: t.y + cp[1], z: t.z + cp[2] }, true);
         }
         if (rb.calib && rb.calib.donus) { const q = rb.body.rotation(), up = qRot(q, [0, 0, 1]), av = rb.body.angvel(); const wu = av.x * up[0] + av.y * up[1] + av.z * up[2]; const dw = SIM.calibYaw(rb, wu, dt); if (dw) { const j = dw * rb.inertia; rb.body.applyTorqueImpulse({ x: up[0] * j, y: up[1] * j, z: up[2] * j }, true); } }
       }

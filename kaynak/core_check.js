@@ -33,7 +33,7 @@ function staticChecks(profile) {
   // --- Mekanik ---
   const M = rb.motor, D = rb.driver, g = RULES.G; const Vs = Math.max(0, D.vBat - D.drop);
   const Nw = rb.mass * g * rb.loadFrac / (2 * rb.axles.length); const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
-  const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
+  const vmax = Math.max(0, (Vs / M.vNom) * M.w0 - M.w0 * M.tFric / M.tStall) * rb.wheelR; // sürtünme dahil boşta hız
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
   if (rb.hazne) { const H = rb.hazne, sv = new Set(rb.servos.map(s => s.pin)); const keys = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null);
     const miss = [...new Set(keys.filter(k => !sv.has(k)))]; if (miss.length) add('Mekanik', 'err', `İç hazne ${miss.map(k => keyLabel(k, rb.boards)).join(', ')} pinindeki servoyu kullanıyor ama Devre → Servolar'da o pinde servo yok.`);
@@ -121,7 +121,7 @@ function staticChecks(profile) {
 // Kodu çalıştırmadan motorlara doğrudan sabit PWM verip robotu boş sahanın ortasında sürer.
 function measureMotion(profile, MatchClass, test, calib) {
   const P = deepCopy(profile); P.mekanik = P.mekanik || {}; if (calib) P.mekanik.kalibrasyon = { hiz_carpani: calib.hiz_carpani, donus_direnci: calib.donus_direnci };
-  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100 } });
+  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100, kusur: false } });
   for (const e of m.eggs) { if (e.body && m.world) { try { m.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } e.gone = true; e.x = -9; e.y = -9; }
   const rb = m.robots[0]; rb.runPrograms = () => { }; rb.gain = { L: 1, R: 1 };
   const cmd = { L: 0, R: 0 }; const D = rb.driver;
@@ -353,6 +353,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { BATTERIES, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

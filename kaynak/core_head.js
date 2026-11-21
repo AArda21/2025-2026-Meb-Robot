@@ -67,13 +67,13 @@ const TIRES = {
   ozel: { ad: 'Özel (kendim gireceğim)' },
 };
 const MOTORS = {
-  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.04, akim: 1.5 },
-  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.06, akim: 1.5 },
-  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.015, akim: 0.7 },
-  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.03, akim: 0.7 },
-  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.15, akim: 2.2 },
-  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.25, akim: 2.2 },
-  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 0.35, akim: 3.2 },
+  'TT 1:48 6V': { ad: 'TT sarı motor 1:48 (6V, ~200 rpm)', volt: 6, rpm: 200, tork: 0.8, surt: 0.25, akim: 1.5, oran: 48, rotorJ: 6e-8 },
+  'TT 1:120 6V': { ad: 'TT sarı motor 1:120 (6V, ~100 rpm)', volt: 6, rpm: 100, tork: 1.5, surt: 0.45, akim: 1.5, oran: 120, rotorJ: 6e-8 },
+  'N20 6V 300': { ad: 'N20 mikro redüktörlü (6V, 300 rpm)', volt: 6, rpm: 300, tork: 0.35, surt: 0.08, akim: 0.7, oran: 50, rotorJ: 1e-8 },
+  'N20 6V 100': { ad: 'N20 mikro redüktörlü (6V, 100 rpm)', volt: 6, rpm: 100, tork: 1.0, surt: 0.2, akim: 0.7, oran: 150, rotorJ: 1e-8 },
+  'JGA25-370 12V 280': { ad: 'JGA25-370 (12V, 280 rpm)', volt: 12, rpm: 280, tork: 3.5, surt: 0.5, akim: 2.2, oran: 21, rotorJ: 2.5e-7 },
+  'JGA25-370 12V 130': { ad: 'JGA25-370 (12V, 130 rpm)', volt: 12, rpm: 130, tork: 7.0, surt: 0.9, akim: 2.2, oran: 47, rotorJ: 2.5e-7 },
+  'JGB37-520 12V 107': { ad: 'JGB37-520 (12V, 107 rpm)', volt: 12, rpm: 107, tork: 10, surt: 1.3, akim: 3.2, oran: 56, rotorJ: 8e-7 },
   'ozel': { ad: 'Özel (kendim gireceğim)' },
 };
 const DRIVERS = {

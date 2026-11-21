@@ -125,6 +125,9 @@ const Sensors = {
 // =====================================================================================
 //                                  MAÇ (2B fizik motoru)
 // =====================================================================================
+// Zemin her yerde aynı kaygan değildir (toz, el izi, sunta dokusu): ±%8 yumuşak değişen sürtünme alanı
+function floorMu(m, x, y) { if (!m || !m.field || m.opts.gercek && m.opts.gercek.kusur === false) return 1; const s = (m.field.seed | 0) * 0.37;
+  return 1 + 0.045 * Math.sin(x * 7.1 + s) * Math.cos(y * 5.3 - s * 0.7) + 0.035 * Math.sin((x + y) * 13.7 + s * 1.9); }
 // Kalibrasyon: dönüş direnci (>0 yavaşlatır) ya da dönüş kolaylığı (<0, tekerlerin izin verdiği hızı geçmez). Açısal hız değişimini döndürür.
 function calibYaw(rb, w, dt) {
   const c = rb.calib.donus, a = c * rb.mass * RULES.G * rb.track / 2 * dt / rb.inertia;
@@ -161,7 +164,9 @@ class Match {
     this.placeEggs();
     this.robots = [];
     for (const team of ['red', 'blue']) { const p = (this.opts.profiles || {})[team]; if (!p) continue; const rb = new Robot(p, team, this); rb.reset(this.startPoses[team] || this.defaultPose(team));
-      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark }; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.battery.soc = lvl; rb.battery.V = rb.battery.bos + (rb.battery.dolu - rb.battery.bos) * lvl; rb.batFactor = rb.battery.V / rb.driver.vBat; rb._Iacc = 0; rb.cut = new Set(G.kesik && G.kesik[team] || []);
+      const G = this.opts.gercek || {}; const fark = (G.motor_farki ?? 0) / 100; rb.gain = { L: 1, R: 1 - fark };
+      // Üretim kusurları (her robota sabit, tohumlu): motorlar ve teker çapları birebir aynı olmaz → aynı PWM'de bile hafif sapar
+      if (G.kusur !== false) { const rr = mulberry32(((this.field.seed | 0) * 131 + (team === 'red' ? 7 : 13)) | 0); const j = () => (rr() - 0.5) * 2; rb.gain.L *= 1 + 0.025 * j(); rb.gain.R *= 1 + 0.025 * j(); rb.kusur = { tork: { L: 1 + 0.04 * j(), R: 1 + 0.04 * j() } }; } else rb.kusur = null; const lvl = clamp((G.pil ?? 100) / 100, 0, 1); rb.battery.soc = lvl; rb.battery.V = rb.battery.bos + (rb.battery.dolu - rb.battery.bos) * lvl; rb.batFactor = rb.battery.V / rb.driver.vBat; rb._Iacc = 0; rb.cut = new Set(G.kesik && G.kesik[team] || []);
       this.robots.push(rb); }
     if (this.afterReset) this.afterReset();
   }
@@ -249,10 +254,14 @@ class Match {
       const wxL = rb.axles[ai], wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
       let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
+      if (rb.kusur) tau *= rb.kusur.tork[side];
       if (mode === 'drive') rb._Iacc = (rb._Iacc || 0) + M.iStall * Math.min(1.2, Math.abs(tau) / M.tStall) * (duty ?? 1);
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
+      const fm = floorMu(this, s.x + rx, s.y + ry);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
-      if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }
+      // motorun yansıyan rotor ataleti: itişin bir kısmı rotoru hızlandırmaya gider (yavaşlarken de rotor robotu iter)
+      F *= meff / (meff + (M.jRefl || 0) / (rb.wheelR * rb.wheelR));
+      if (Math.abs(F) > rb.muS * fm * Nw) { F = Math.sign(F) * rb.muK * fm * Nw; slip = true; }
       if (mode !== 'drive' && F * vf < 0 && Math.abs(F * dt) > Math.abs(vf) * meff) F = -vf * meff / dt;
       rb.applyImp(rx, ry, F * fx * dt, F * fy * dt); (rb._Fw || (rb._Fw = {}))[side + ai] = F;
       { const [qx, qy] = rb.pointVel(rx, ry); const v2 = qx * fx + qy * fy; const j = -Math.sign(v2) * Math.min(rb.crr * Nw * dt, Math.abs(v2) * meff); rb.applyImp(rx, ry, j * fx, j * fy); }
@@ -261,7 +270,14 @@ class Match {
      }
       const wi = rb.wheelInfo[side]; wi.V = sV; wi.F = sF; wi.slip = sSlip; wi.rpm = sRpm; wi.mode = sMode; wi.spin = (wi.spin || 0) + sRpm * 2 * Math.PI / 60 * dt;
     }
-    if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
+    if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy);
+      if (rb.caster.tip === 'sarhos') {
+        // döner (sarhoş) teker: tekerin yönü harekete geç döner; ters yöne geçerken robotu yana iter (gerçek robotlardaki "kuyruk sallama")
+        const C = rb.caster; if (C.phi == null) C.phi = s.th; const hx = Math.cos(C.phi), hy = Math.sin(C.phi); const vAlong = qx * hx + qy * hy, vLat = -qx * hy + qy * hx;
+        if (sp > 0.005) C.phi += clamp(vLat / Math.max(0.004, C.trail), -40, 40) * dt; // tekerin dönme ekseni ile değme noktası arası (trail) kadar geride kalır
+        const lx2 = -Math.sin(C.phi), ly2 = Math.cos(C.phi); const jl = clamp(-vLat / rb.invMass(rx, ry, lx2, ly2), -0.6 * Nc * dt, 0.6 * Nc * dt); rb.applyImp(rx, ry, jl * lx2, jl * ly2);
+        const ja = -Math.sign(vAlong) * Math.min(C.crr * Nc * dt, Math.abs(vAlong) / rb.invMass(rx, ry, hx, hy)); rb.applyImp(rx, ry, ja * hx, ja * hy);
+      } else if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
     if (rb.calib && rb.calib.donus) s.w += calibYaw(rb, s.w, dt);
     const acc = {}; // her temas için toplam yanal itki (sınır toplam itkiye uygulanır, tur başına değil)
     for (let it = 0; it < 4; it++) for (let ai = 0; ai < NA; ai++) for (const sy of [1, -1]) {
@@ -269,7 +285,7 @@ class Match {
       const rx = c * ax - n * sy * rb.track / 2, ry = n * ax + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
       // 4 tekerde dönerken tekerler yana kayar: kayma varsa kinetik sürtünme (muK), yoksa statik (muLat)
       // sürtünme dairesi: teker ileri itişte tutunmanın bir kısmını kullanıyorsa yana tutunması o kadar azalır
-      const mu = (NA > 1 && Math.abs(vl) > 0.01 ? rb.muK : rb.muLat) * Nw, Fl = (rb._Fw && rb._Fw[(sy > 0 ? 'L' : 'R') + ai]) || 0;
+      const mu = (NA > 1 && Math.abs(vl) > 0.01 ? rb.muK : rb.muLat) * Nw * floorMu(this, s.x + rx, s.y + ry), Fl = (rb._Fw && rb._Fw[(sy > 0 ? 'L' : 'R') + ai]) || 0;
       const lim = Math.sqrt(Math.max(0, mu * mu - Fl * Fl)) * dt;
       const key = ai * 2 + (sy > 0 ? 0 : 1), a0 = acc[key] || 0, a1 = clamp(a0 - vl / rb.invMass(rx, ry, lx, ly), -lim, lim), j = a1 - a0; acc[key] = a1; rb.applyImp(rx, ry, j * lx, j * ly);
     }
