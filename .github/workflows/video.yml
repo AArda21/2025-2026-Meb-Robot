@@ -19,7 +19,7 @@ jobs:
       - name: İndir
         run: |
           mkdir -p ham && cd ham
-          gdown --id "$(tr -d '[:space:]' < ../test/video_istek.txt)" -O videolar.zip
+          gdown "$(head -1 ../test/video_istek.txt | tr -d '[:space:]')" -O videolar.zip
           ls -la
           7z x -y videolar.zip >/dev/null || unzip -o -q videolar.zip
           rm -f videolar.zip
