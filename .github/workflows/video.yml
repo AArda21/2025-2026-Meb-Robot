@@ -2,11 +2,9 @@ name: video-hazirla
 # Maç videolarını Drive'dan indirir, küçültür ve sadece simülatör geliştiricisinin
 # açabileceği şekilde şifreleyip test-sonuclari dalına koyar.
 on:
-  workflow_dispatch:
-    inputs:
-      dosya_id:
-        description: Drive dosya kimliği (zip)
-        required: true
+  push:
+    branches: [simulator]
+    paths: ['test/video_istek.txt']
 permissions:
   contents: write
 jobs:
@@ -21,7 +19,7 @@ jobs:
       - name: İndir
         run: |
           mkdir -p ham && cd ham
-          gdown --id "${{ github.event.inputs.dosya_id }}" -O videolar.zip
+          gdown --id "$(tr -d '[:space:]' < ../test/video_istek.txt)" -O videolar.zip
           ls -la
           7z x -y videolar.zip >/dev/null || unzip -o -q videolar.zip
           rm -f videolar.zip
