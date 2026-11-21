@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V4.1</title>
+<title>MEB Robot V4.2</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -95,7 +95,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span class="ver">V4.1</span></h1>
+  <h1>MEB Robot <span class="ver">V4.2</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -129,6 +129,11 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
             <label class="f" id="qWrap">Grafik<select id="sQual"><option value="yuksek">Yüksek</option><option value="dusuk">Düşük (hızlı)</option></select></label>
             <label class="f" id="camWrap">Kamera<select id="sCam"><option value="serbest">Serbest</option><option value="ustten">Üstten</option><option value="takip">Robotu takip</option></select></label>
             <button class="btn sm" id="bShuffle">Yumurtaları karıştır</button>
+          </div>
+          <div class="row"><button class="btn sm" id="bEggEdit">✎ Yumurtaları düzenle</button><span class="hint" id="ozelInfo" style="margin:0"></span></div>
+          <div id="eggBar" style="display:none">
+            <div class="row"><label class="f">Eklenecek renk<select id="sEggKind"><option value="red">Kırmızı</option><option value="blue">Mavi</option><option value="green">Yeşil</option><option value="penalty">Ceza (2025)</option></select></label><button class="btn sm" id="bEggRandom">Rastgele dizilime dön</button><button class="btn sm danger" id="bEggClear">Hepsini sil</button></div>
+            <p class="hint">Sahada boş bir yere dokun: yumurta ekle · yumurtaya dokun: sil · sürükle: taşı. Robotu yine sürükleyebilirsin. Dizilim kaydedilir; maçlar bu dizilimle başlar.</p>
           </div>
           <div class="row">
             <label class="f">Kurallar<select id="sKural"><option value="2026">2026 (Antalya): yeşil köşe, 2 dk</option><option value="2025">2025 (Kayseri): ceza yumurtası, 3 dk</option></select></label>

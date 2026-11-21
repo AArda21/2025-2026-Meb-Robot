@@ -159,6 +159,7 @@ class Match {
     if (this.afterReset) this.afterReset();
   }
   placeEggs() {
+    const oz = (this.opts.saha || {}).ozel; if (Array.isArray(oz)) { const F = RULES.FIELD, r = RULES.EGG_R; this.eggs = oz.filter(o => ['red', 'blue', 'green', 'penalty'].includes(o.kind)).map((o, i) => ({ id: i, kind: o.kind, x: clamp(+o.x, r, F - r), y: clamp(+o.y, r, F - r), vx: 0, vy: 0, phi: i * 1.7, still: 0, gone: false, z: RULES.EGG_H / 2 })); return; }
     const rnd = mulberry32(this.field.seed | 0), F = RULES.FIELD, Z = RULES.ZONE; const eggs = [], kinds = [];
     for (let i = 0; i < 10; i++) kinds.push('red'); for (let i = 0; i < 10; i++) kinds.push('blue'); if (this.rules.ceza) kinds.push('penalty'); for (let i = 0; i < this.rules.yesil; i++) kinds.push('green');
     for (const k of kinds) for (let tries = 0; tries < 2000; tries++) {

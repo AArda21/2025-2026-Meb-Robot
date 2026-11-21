@@ -59,7 +59,7 @@ const gercek = () => ({ motor_farki: +$('nFark').value || 0, pil: $('nPil').valu
 async function buildMatch() {
   const red = byId($('selRed').value), blue = byId($('selBlue').value);
   for (const p of [red, blue]) if (p && p._stl === undefined) await attachSTL(p);
-  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek() });
+  match = new MatchClass({ profiles: { red, blue }, saha: { tohum: seed, ozel: ozelSaha }, startPoses, kural: $('sKural').value, yesil_kose: $('sYesil').value, gercek: gercek() });
   match.onSerial = () => { serialDirty = true; };
   if (use3d && view3d) view3d.setSim(match);
   dirty = false; ended = false; rec = []; exitReplay(true); $('result').classList.remove('on'); fillFocus(); serialDirty = true; if (view3d) view3d.focus = focusRobot();
@@ -71,6 +71,7 @@ function fillFocus() {
 const focusRobot = () => match && match.robots[+$('selFocus').value || 0];
 function showStartMsg(txt, ok) { const el = $('startMsg'); el.className = 'msg ' + (txt ? (ok ? 'ok' : 'err') : ''); el.textContent = txt || ''; }
 async function startRun() {
+  if (eggEdit) setEggEdit(false);
   exitReplay(true); await buildMatch();
   if (!match.robots.length) { showStartMsg('Önce en az bir köşeye robot seç.', false); return; }
   const errs = match.compileAll();
@@ -82,7 +83,10 @@ $('bStart').onclick = startRun;
 $('bPause').onclick = () => { if (replay) exitReplay(); if (!match || !match.robots.some(r => r.rts.length)) { startRun(); return; } if (ended) return; running = !running; $('bPause').textContent = running ? '⏸ Duraklat' : '▶ Devam'; };
 $('bReset').onclick = async () => { running = false; $('bPause').textContent = '▶ Devam'; showStartMsg(''); await buildMatch(); };
 $('selRed').onchange = $('selBlue').onchange = async () => { LS.set('mebsim3_red', $('selRed').value); LS.set('mebsim3_blue', $('selBlue').value); running = false; await buildMatch(); };
-$('bShuffle').onclick = async () => { seed = Math.floor(Math.random() * 1e6); LS.set('mebsim3_tohum', seed); running = false; await buildMatch(); toast('Yeni yumurta dizilimi'); };
+$('bEggEdit').onclick = () => setEggEdit(!eggEdit);
+$('bEggRandom').onclick = async () => { ozelSaha = null; saveOzel(); await buildMatch(); if (eggEdit) setEggEdit(true); updateOzelInfo(); toast('Rastgele dizilime dönüldü'); };
+$('bEggClear').onclick = async () => { ozelSaha = []; saveOzel(); ozelSaha = []; await buildMatch(); updateOzelInfo(); };
+$('bShuffle').onclick = async () => { ozelSaha = null; saveOzel(); seed = Math.floor(Math.random() * 1e6); LS.set('mebsim3_tohum', seed); updateOzelInfo(); running = false; await buildMatch(); toast('Yeni yumurta dizilimi'); };
 $('bRotL').onclick = () => rot(15); $('bRotR').onclick = () => rot(-15);
 async function rot(d) { if (running || !match) return; const rb = focusRobot(); if (!rb) return; const s = rb.state; startPoses[rb.team] = { x: s.x, y: s.y, th: s.th + d * Math.PI / 180 }; await buildMatch(); }
 $('sCam').onchange = () => view3d && view3d.setMode($('sCam').value);
@@ -118,7 +122,8 @@ function draw2d() {
     for (const wp of rb.worldParts()) { poly(wp.corners); let fill = wp.p.color; if (wp.p.auto === 'wheel') fill = rb.wheelInfo[wp.p.name.startsWith('Sol') ? 'L' : 'R'].slip ? '#b91c1c' : '#1f2937'; ctx.globalAlpha = wp.p.solid ? 0.95 : 0.6; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke(); }
     if ($('cCirc').checked) for (const c of rb.circuit) { const th = rb.state.th, cc = Math.cos(th), ss = Math.sin(th); const [wx, wy] = rb.toWorld(c.x, c.y); poly([[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + cc * u * c.hx - ss * v * c.hy, wy + ss * u * c.hx + cc * v * c.hy])); ctx.globalAlpha = 0.85; ctx.fillStyle = c.color; ctx.fill(); ctx.globalAlpha = 1; }
     if ($('cRays').checked) for (const s of rb.sensors) { const w = rb.sensorWorld(s);
-      if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(match, rb, s); const L = d == null ? 1.5 : d; ctx.fillStyle = d == null ? 'rgba(76,125,255,.08)' : 'rgba(22,163,74,.16)'; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a - 0.26) * L), Y(w.y + Math.sin(w.a - 0.26) * L)); ctx.lineTo(X(w.x + Math.cos(w.a + 0.26) * L), Y(w.y + Math.sin(w.a + 0.26) * L)); ctx.closePath(); ctx.fill(); }
+      if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(match, rb, s); const L = d == null ? 1.5 : d; ctx.fillStyle = d == null ? 'rgba(76,125,255,.05)' : d < 0.3 ? 'rgba(22,163,74,.18)' : 'rgba(22,163,74,.06)'; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a - 0.26) * L), Y(w.y + Math.sin(w.a - 0.26) * L)); ctx.lineTo(X(w.x + Math.cos(w.a + 0.26) * L), Y(w.y + Math.sin(w.a + 0.26) * L)); ctx.closePath(); ctx.fill();
+        if (d != null) { const hx = X(w.x + Math.cos(w.a) * d), hy = Y(w.y + Math.sin(w.a) * d); ctx.strokeStyle = 'rgba(22,163,74,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(hx, hy); ctx.stroke(); ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(hx, hy, 3, 0, 7); ctx.fill(); } }
       else if (s.type === 'IR_ENGEL' || s.type === 'MZ80') { const hit = Sensors.irObstacle(match, rb, s); ctx.strokeStyle = hit ? '#dc2626' : 'rgba(220,38,38,.3)'; ctx.lineWidth = hit ? 2.5 : 1.2; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a) * s.range), Y(w.y + Math.sin(w.a) * s.range)); ctx.stroke(); } }
     if (rb.led) { const [lx, ly] = rb.toWorld(rb.led.x, rb.led.y); const c = rb.ledColor(); ctx.beginPath(); ctx.arc(X(lx), Y(ly), Math.max(4, SC * 0.012), 0, 7); ctx.fillStyle = c === 'red' ? '#ff3b3b' : c === 'blue' ? '#3b7bff' : c === 'mor' ? '#b84bff' : '#444'; ctx.fill(); }
   }
@@ -127,11 +132,24 @@ function draw2d() {
 // ---------- Sürükle (başlangıç konumu) ----------
 function pickRobot(p) { if (running || !match || !p) return null; let best = null, bd = 0.17; for (const rb of match.robots) { const d = Math.hypot(p[0] - rb.state.x, p[1] - rb.state.y); if (d < bd) { bd = d; best = rb; } } return best; }
 let drag = null;
+// ---------- Yumurta dizilimi düzenleyici ----------
+let ozelSaha = (() => { try { const v = JSON.parse(LS.get('mebsim3_ozel') || 'null'); return Array.isArray(v) ? v : null; } catch (e) { return null; } })(), eggEdit = false, edrag = null;
+const saveOzel = () => { LS.set('mebsim3_ozel', JSON.stringify(ozelSaha || null)); };
+function setEggEdit(on) { eggEdit = on; if (on) { running = false; $('bPause').textContent = '▶ Devam'; if (!ozelSaha && match) { ozelSaha = match.eggs.filter(e => !e.gone).map(e => ({ kind: e.kind, x: +e.x.toFixed(3), y: +e.y.toFixed(3) })); saveOzel(); } if (use3d && view3d) { $('sCam').value = 'ustten'; view3d.setMode('ustten'); } }
+  $('eggBar').style.display = on ? '' : 'none'; $('bEggEdit').classList.toggle('pri', on); $('bEggEdit').textContent = on ? '✓ Düzenlemeyi bitir' : '✎ Yumurtaları düzenle'; updateOzelInfo(); }
+function updateOzelInfo() { const el = $('ozelInfo'); if (!el) return; if (!ozelSaha) { el.textContent = 'Rastgele dizilim (tohum ' + seed + ')'; return; } const c = { red: 0, blue: 0, green: 0, penalty: 0 }; for (const o of ozelSaha) c[o.kind] = (c[o.kind] || 0) + 1; el.textContent = `Özel dizilim: ${c.red} kırmızı, ${c.blue} mavi, ${c.green} yeşil` + (c.penalty ? `, ${c.penalty} ceza` : ''); }
+function eggDown(p) { if (!p || !match) return false; const F = RULES.FIELD; if (p[0] < 0 || p[1] < 0 || p[0] > F || p[1] > F) return false;
+  let best = -1, bd = 0.045; ozelSaha.forEach((o, i) => { const d = Math.hypot(o.x - p[0], o.y - p[1]); if (d < bd) { bd = d; best = i; } });
+  if (best >= 0) { edrag = { i: best, moved: false, x0: p[0], y0: p[1] }; return true; }
+  if (pickRobot(p)) return false;
+  ozelSaha.push({ kind: $('sEggKind').value, x: +p[0].toFixed(3), y: +p[1].toFixed(3) }); saveOzel(); buildMatch(); updateOzelInfo(); return true; }
+function eggMove(p) { if (!edrag || !p) return false; if (Math.hypot(p[0] - edrag.x0, p[1] - edrag.y0) > 0.01) edrag.moved = true; if (edrag.moved) { const o = ozelSaha[edrag.i]; o.x = +p[0].toFixed(3); o.y = +p[1].toFixed(3); const e = match && match.eggs[edrag.i]; if (e) { e.x = o.x; e.y = o.y; if (e.body) e.body.setTranslation({ x: o.x, y: o.y, z: RULES.EGG_H / 2 + 0.0005 }, true); } } return true; }
+function eggUp() { if (!edrag) return false; if (!edrag.moved) ozelSaha.splice(edrag.i, 1); edrag = null; saveOzel(); buildMatch(); updateOzelInfo(); return true; }
 const screenToField = (e) => { const r = cv.getBoundingClientRect(), dpr = cv.width / r.width; return [((e.clientX - r.left) * dpr - OX) / SC, RULES.FIELD - ((e.clientY - r.top) * dpr - OY) / SC]; };
 function dragMove(p) { if (!drag || !p) return; const s = drag.rb.state; s.x = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[0] + drag.dx)); s.y = Math.min(RULES.FIELD - 0.1, Math.max(0.1, p[1] + drag.dy)); startPoses[drag.rb.team] = { x: s.x, y: s.y, th: s.th }; }
-cv.addEventListener('pointerdown', e => { const p = screenToField(e); const rb = pickRobot(p); if (rb) { drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; cv.setPointerCapture(e.pointerId); } });
-cv.addEventListener('pointermove', e => dragMove(screenToField(e)));
-cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointerdown', e => { const p = screenToField(e); if (eggEdit && eggDown(p)) { cv.setPointerCapture(e.pointerId); return; } const rb = pickRobot(p); if (rb) { drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; cv.setPointerCapture(e.pointerId); } });
+cv.addEventListener('pointermove', e => { if (eggMove(screenToField(e))) return; dragMove(screenToField(e)); });
+cv.addEventListener('pointerup', () => { if (eggUp()) return; drag = null; });
 
 // ---------- Göstergeler ----------
 const fmtT = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(1).padStart(4, '0')}`; };
@@ -205,6 +223,7 @@ function renderHistory() { const H = loadHistory(), el = $('gecmis'); if (!el) r
     + `<p class="hint">Galibiyetler: ${Object.entries(ad).map(([n, c]) => `${esc(n)} ${c}`).join(' · ') || '—'}</p>`;
   el.querySelectorAll('[data-h]').forEach(b => b.onclick = () => { const x = H[+b.dataset.h]; seed = x.sd; LS.set('mebsim3_tohum', seed); const fr = profiles.find(p => p.ad === x.r), fb = profiles.find(p => p.ad === x.b); if (fr) $('selRed').value = fr.id; if (fb) $('selBlue').value = fb.id; startRun(); toast('Aynı yumurta dizilimiyle yeniden başlatıldı'); }); }
 $('sQual').onchange = () => { LS.set('mebsim3_grafik', $('sQual').value); if (view3d) view3d.setQuality($('sQual').value); };
+updateOzelInfo();
 $('bGecmisSil').onclick = () => { LS.set('mebsim3_gecmis', '[]'); renderHistory(); };
 renderHistory();
 
@@ -589,9 +608,9 @@ setInterval(() => { if (dirty && !running && match && tab !== 'robotlar') buildM
   $('ovl').textContent = '3B fizik motoru yükleniyor…';
   try {
     libs = await loadLibs(); Match3D = makeMatch3D(libs.RAPIER); view3d = makeView3D(libs.THREE, $('v3')); $('sQual').value = LS.get('mebsim3_grafik') || 'yuksek'; if ($('sQual').value !== 'yuksek') view3d.setQuality($('sQual').value);
-    view3d.onPick = (e) => { const p = view3d.pick(e); const rb = pickRobot(p); if (!rb) return false; drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; e.target.setPointerCapture(e.pointerId); return true; };
-    view3d.onDrag = (e) => { if (!drag) return false; dragMove(view3d.pick(e)); return true; };
-    view3d.renderer.domElement.addEventListener('pointerup', () => { if (drag) { drag = null; buildMatch(); } });
+    view3d.onPick = (e) => { const p = view3d.pick(e); if (eggEdit && eggDown(p)) { e.target.setPointerCapture(e.pointerId); return true; } const rb = pickRobot(p); if (!rb) return false; drag = { rb, dx: rb.state.x - p[0], dy: rb.state.y - p[1] }; e.target.setPointerCapture(e.pointerId); return true; };
+    view3d.onDrag = (e) => { if (edrag) { eggMove(view3d.pick(e)); return true; } if (!drag) return false; dragMove(view3d.pick(e)); return true; };
+    view3d.renderer.domElement.addEventListener('pointerup', () => { if (eggUp()) return; if (drag) { drag = null; buildMatch(); } });
     await setEngine(LS.get('mebsim3_motor') || '3d');
   } catch (err) { console.warn(err); $('sEngine').querySelector('option[value="3d"]').textContent = '3B (yüklenemedi)'; $('sEngine').value = '2d'; toast('3B motor yüklenemedi, 2B ile devam'); }
 })();
