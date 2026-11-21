@@ -66,18 +66,18 @@ yum = {
    {"ad": "Pil 2S 18650", "x": -4.5, "y": 0, "z": 4.6, "uzunluk": 4.2, "genislik": 7.6, "kalinlik": 2, "renk": "#1d4ed8"},
    {"ad": "Mini breadboard", "x": -5, "y": 3.5, "z": 8.9, "uzunluk": 4.5, "genislik": 3.4, "kalinlik": 0.9, "renk": "#d1d5db"}]}}
 eski = {
- "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler, sensör yerleri ve iç hazne (tokat → bizim/yeşil bölme, kapaklar A8/A9) TAHMİNİ.",
+ "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
  "kartlar": [{"id": "mega", "tip": "Mega", "kod": open('/tmp/eski/mega.ino').read()}, {"id": "nano", "tip": "Nano", "kod": open('/tmp/eski/nano.ino').read()}],
  "kart_baglantilari": [["mega:A0", "nano:A0"], ["mega:A1", "nano:A1"], ["mega:A2", "nano:A2"], ["mega:A3", "nano:A3"], ["mega:A4", "nano:A4"]],
  "mekanik": {"kutle_kg": 2.2, "agirlik_merkezi": {"x_cm": N, "z_cm": 6},
-  "tekerlek": {"lastik": "kaucuk", "cap_cm": 7, "genislik_cm": 3, "iz_cm": 22, "x_cm": 0},
-  "sarhos_teker": {"x_cm": -10, "y_cm": 0, "cap_cm": 2},
-  "motor": {"model": "JGA25-370 12V 280"}, "pil": {"volt": 11.1}, "acil_stop": {"x": -6, "y": -6, "z": 12},
+  "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.7, "iz_cm": 23, "x_cm": -2, "adet": 4, "dingil_cm": 14},
+  "sarhos_teker": N,
+  "motor": {"model": "JGA25-370 12V 280"}, "pil": {"volt": 7.4}, "acil_stop": {"x": 6, "y": 8, "z": 14},
   "parcalar": [
-   {"ad": "Gövde", "x": -1, "y": 0, "uzunluk": 24, "genislik": 19, "z0": 2.5, "z1": 12, "renk": "#64748b"},
+   {"ad": "Gövde", "x": -1, "y": 0, "uzunluk": 24, "genislik": 19, "z0": 2.5, "z1": 12, "renk": "#facc15"},
    {"ad": "Ağız sol", "x": 12.5, "y": 6, "uzunluk": 3, "genislik": 1.5, "z0": 0.4, "z1": 6, "renk": "#334155"},
    {"ad": "Ağız sağ", "x": 12.5, "y": -6, "uzunluk": 3, "genislik": 1.5, "z0": 0.4, "z1": 6, "renk": "#334155"},
-   {"ad": "Ağız arka (stoper)", "x": 9.5, "y": 0, "uzunluk": 1, "genislik": 10.5, "z0": 0.3, "z1": 6, "renk": "#1f2937"}], "model3d": N,
+   {"ad": "Ağız arka (stoper)", "x": 9.5, "y": 0, "uzunluk": 1, "genislik": 10.5, "z0": 0.3, "z1": 2.4, "renk": "#1f2937"}], "model3d": N,
   "hazne": {"var": T, "agiz": {"x0": 9, "x1": 16, "y0": -4.5, "y1": 4.5},
    "kurallar": [
     {"servo": "nano:10", "min": 150, "max": 180, "ve": {"servo": "nano:11", "min": 130, "max": 180}, "hedef": "yesil"},

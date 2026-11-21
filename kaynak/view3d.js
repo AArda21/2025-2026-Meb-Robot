@@ -83,11 +83,12 @@ function makeView3D(THREE, host) {
         const m = new THREE.Mesh(g, std(col, { roughness: 0.55, metalness: 0.05, transparent: !!md.seffaf, opacity: md.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
         m.castShadow = m.receiveShadow = true; robot.add(m); v.stl.push(m); }
     }
-    for (const side of ['L', 'R']) {
+    v.wheelG = [];
+    for (const ax of (rb.axles || [rb.wheelX])) for (const side of ['L', 'R']) {
       const g = new THREE.Group();
       const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 40), std(0x15171b, { roughness: 0.95 })); tire.castShadow = true;
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
-      g.add(tire, hub); robot.add(g); v.wheels[side] = g;
+      g.add(tire, hub); robot.add(g); if (!v.wheels[side]) v.wheels[side] = g; v.wheelG.push({ g, side, ax });
     }
     if (rb.caster) { const c = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.004, rb.caster.r), 20, 14), std(0xc0c4cc, { metalness: 0.8, roughness: 0.25 })); c.position.set(rb.caster.x, rb.caster.y, Math.max(0.004, rb.caster.r) - wr); c.castShadow = true; robot.add(c); }
     for (const c of rb.circuit) {
@@ -178,7 +179,7 @@ function makeView3D(THREE, host) {
         robot.position.set(s.x, s.y, s.z ?? rb.wheelR);
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
-        for (const [side, sy] of [['L', 1], ['R', -1]]) { const g = v.wheels[side], wi = rb.wheelInfo[side]; g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
+        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
         if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {

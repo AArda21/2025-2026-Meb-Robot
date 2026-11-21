@@ -185,12 +185,17 @@ class Robot {
     this.mass = +M.kutle_kg || 1.0;
     this.wheelR = cm(T.cap_cm || 6.5) / 2; this.track = cm(T.iz_cm || 15); this.wheelX = cm(T.x_cm || 0); this.wheelW = cm(T.genislik_cm || 2.5);
     this.tire = tire; this.muS = tire.muS; this.muK = tire.muK; this.crr = tire.crr; this.muLat = tire.muS;
-    this.caster = M.sarhos_teker === null ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03 };
+    // 4 tekerli (kızaklı / skid-steer) robot: her yanda iki teker, aynı sürücü kanalından
+    this.wheelCount = +T.adet === 4 ? 4 : 2; this.wheelBase = this.wheelCount === 4 ? cm(T.dingil_cm || 12) : 0;
+    this.axles = this.wheelCount === 4 ? [this.wheelX + this.wheelBase / 2, this.wheelX - this.wheelBase / 2] : [this.wheelX];
+    this.caster = (M.sarhos_teker === null || this.wheelCount === 4) ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03 };
     const com = M.agirlik_merkezi || {};
     const cx = this.caster ? this.caster.x : this.wheelX - 0.05;
     this.comX = com.x_cm != null && com.x_cm !== '' ? cm(com.x_cm) : cx + 0.8 * (this.wheelX - cx);
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
+    { const [xf, xr] = this.wheelCount === 4 ? this.axles : [this.wheelX, this.wheelX]; const ff = this.wheelCount === 4 ? clamp((this.comX - xr) / ((xf - xr) || 1e-6), 0.1, 0.9) : 1;
+      this.axleLoad = this.wheelCount === 4 ? [ff, 1 - ff] : [1]; } // her dingile düşen ağırlık oranı (tekerlerdeki toplam yükün)
     this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
     { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) ? Math.max(-4, Math.min(4, dn)) : 0 }; }
     this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
@@ -202,7 +207,7 @@ class Robot {
       servoPin: pin(p.servo_pin), pivot: p.pivot ? [cm(p.pivot[0]), cm(p.pivot[1])] : null, angOff: p.aci_ofset || 0, dir: p.yon ?? 1, len: cm(p.uzunluk), solid: p.kati ?? true,
     }));
     const auto = [];
-    for (const sy of [1, -1]) auto.push({ name: sy > 0 ? 'Sol teker' : 'Sağ teker', x: this.wheelX, y: sy * this.track / 2, hx: this.wheelR, hy: this.wheelW / 2, z0: 0, z1: this.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
+    for (const ax of this.axles) for (const sy of [1, -1]) auto.push({ name: (sy > 0 ? 'Sol' : 'Sağ') + (this.axles.length > 1 ? (ax > this.wheelX ? ' ön' : ' arka') : '') + ' teker', x: ax, y: sy * this.track / 2, hx: this.wheelR, hy: this.wheelW / 2, z0: 0, z1: this.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
     if (this.caster) auto.push({ name: 'Sarhoş teker', x: this.caster.x, y: this.caster.y, hx: this.caster.r, hy: this.caster.r, z0: 0, z1: this.caster.r * 2, ang: 0, color: '#9ca3af', auto: 'caster', solid: true });
     this.parts = auto.concat(this.parts);
     this.sensors = (D.sensorler || []).map(s => Object.assign({}, s, {

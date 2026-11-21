@@ -32,7 +32,7 @@ function staticChecks(profile) {
   add('Kurallar', rb.stop ? 'ok' : 'warn', rb.stop ? 'Acil stop butonu var' : 'Acil stop butonu tanımlı değil (zorunlu, Mekanik → acil stop)');
   // --- Mekanik ---
   const M = rb.motor, D = rb.driver, g = RULES.G; const Vs = Math.max(0, D.vBat - D.drop);
-  const Nw = rb.mass * g * rb.loadFrac / 2; const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
+  const Nw = rb.mass * g * rb.loadFrac / (2 * rb.axles.length); const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
   const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
   if (rb.hazne) { const H = rb.hazne, sv = new Set(rb.servos.map(s => s.pin)); const keys = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null);
@@ -49,8 +49,9 @@ function staticChecks(profile) {
   if (Fmotor > Ftr) add('Mekanik', 'info', `Tam güçte kalkışta tekerler patinaj yapabilir (motor itişi ${Fmotor.toFixed(1)} N > tutunma ${Ftr.toFixed(1)} N). Lastik: ${rb.tire.ad || 'özel'}.`);
   const pwmMin = Math.ceil(((rb.crr * Nw * rb.wheelR + M.tFric) / (M.tStall * Vs / M.vNom)) * 255);
   add('Mekanik', pwmMin > 120 ? 'warn' : 'info', `Robot yaklaşık PWM ${Math.min(255, pwmMin)} altındaki değerlerde yerinden kıpırdamaz (sürtünme + motor iç direnci).`);
-  const accel = Math.min(Fmotor, Ftr) * 2 / rb.mass; add('Mekanik', 'info', `En fazla ivme ≈ ${accel.toFixed(1)} m/s² → 0'dan tam hıza ≈ ${(vmax / Math.max(accel, 1e-3)).toFixed(2)} sn`);
-  if (!rb.caster) add('Mekanik', 'err', 'Sarhoş teker yok: iki tekerli robot öne/arkaya devrilir.');
+  const accel = Math.min(Fmotor, Ftr) * 2 * rb.axles.length / rb.mass; add('Mekanik', 'info', `En fazla ivme ≈ ${accel.toFixed(1)} m/s² → 0'dan tam hıza ≈ ${(vmax / Math.max(accel, 1e-3)).toFixed(2)} sn`);
+  if (rb.wheelCount === 4) { const r = rb.wheelBase / rb.track; add('Mekanik', r > 1 ? 'warn' : 'info', `4 teker: ön-arka teker arası / iki yan teker arası = ${r.toFixed(2)}. ` + (r > 1 ? 'Bu oran 1\'den büyük: robot yerinde zor döner, tekerler çok kayar.' : r > 0.8 ? 'Dönerken tekerler belirgin kayar; dönüş süreleri iki tekerliye göre uzun olur.' : 'Dönüş için uygun oran.')); }
+  else if (!rb.caster) add('Mekanik', 'err', 'Sarhoş teker yok: iki tekerli robot öne/arkaya devrilir.');
   else {
     const lo = Math.min(rb.caster.x, rb.wheelX), hi = Math.max(rb.caster.x, rb.wheelX);
     if (rb.comX <= lo || rb.comX >= hi) add('Mekanik', 'err', `Ağırlık merkezi (x=${cmS(rb.comX)}) teker ile sarhoş teker arasında değil: robot devrilir.`);

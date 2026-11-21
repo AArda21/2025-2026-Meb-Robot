@@ -51,14 +51,14 @@ function makeMatch3D(R) {
         const cd = R.ColliderDesc.convexHull(new Float32Array(pts)); if (cd) addCol(fr(cd.setDensity(0), E.muRobotEgg, 0.2), ch);
       }
       if (rb.caster) { const cr = Math.max(0.004, rb.caster.r); addCol(fr(R.ColliderDesc.ball(cr).setTranslation(rb.caster.x, rb.caster.y, cr - wr).setDensity(0), 0.02), ch); }
-      rb.wheels = {};
-      for (const [side, sy] of [['L', 1], ['R', -1]]) {
-        const lp = [rb.wheelX, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
+      rb.wheels = {}; rb.wheelList = [];
+      for (const ax of (rb.axles || [rb.wheelX])) for (const [side, sy] of [['L', 1], ['R', -1]]) {
+        const lp = [ax, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
         const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false));
         addCol(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr)  /* not: bombeli (roundCylinder) lastik denendi; robot duvar dibinde takla atıyordu */.setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0), body);
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
-        rb.wheels[side] = { body, j, spin: 0 };
+        const wobj = { body, j, spin: 0, side }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
       }
       rb.gates = [];
       for (const p of gates) {
@@ -79,8 +79,8 @@ function makeMatch3D(R) {
         this.updateServos(rb, dt, rb.servoCmd);
         for (const g of rb.gates) g.j.configureMotorPosition(((g.p.angOff + g.p.dir * (rb.servoCmd[g.p.servoPin] ?? 0)) * Math.PI) / 180, 1.5, 0.05);
         const M = rb.motor, k = M.tStall / M.w0;
-        for (const side of ['L', 'R']) {
-          const { V, mode, duty } = rb.sideVoltage(side); const wh = rb.wheels[side];
+        for (const wh of rb.wheelList) { const side = wh.side;
+          const { V, mode, duty } = rb.sideVoltage(side);
           let target = 0, damp = M.tFric * 2;
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
@@ -99,11 +99,11 @@ function makeMatch3D(R) {
       s.x = t.x; s.y = t.y; s.z = t.z; { const yw = yawOf(q); s.th = s.th == null ? yw : s.th + Math.atan2(Math.sin(yw - s.th), Math.cos(yw - s.th)); } s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
       s.tilt = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.y * q.y)))) * 180 / Math.PI;
       const axle = qRot(q, [0, 1, 0]), fwd = qRot(q, [1, 0, 0]);
-      for (const side of ['L', 'R']) {
-        const wh = rb.wheels[side]; const wa = wh.body.angvel(); const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
-        const wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2];
-        wh.spin += wrel * this.dt; const wi = rb.wheelInfo[side];
-        wi.V = wh.V || 0; wi.F = (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; wi.slip = Math.abs(wrel * rb.wheelR - vf) > 0.04; wi.rpm = wrel * 60 / (2 * Math.PI); wi.mode = wh.mode; wi.spin = wh.spin;
+      for (const side of ['L', 'R']) { const ws = rb.wheelList.filter(w => w.side === side); let F = 0, rpm = 0, slip = false;
+        for (const wh of ws) { const wa = wh.body.angvel(); const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
+          const wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2]; wh.spin += wrel * this.dt;
+          F += (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; rpm += wrel * 60 / (2 * Math.PI) / ws.length; slip = slip || Math.abs(wrel * rb.wheelR - vf) > 0.04; }
+        const wi = rb.wheelInfo[side], w0 = ws[0]; wi.V = w0.V || 0; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = w0.mode; wi.spin = w0.spin;
       }
       for (const g of rb.gates) { let d = (yawOf(g.body.rotation()) - s.th) * 180 / Math.PI; d = ((d % 360) + 540) % 360 - 180; rb.servoAng[g.p.servoPin] = (d - g.p.angOff) / (g.p.dir || 1); rb.servoVel[g.p.servoPin] = 0; }
       if (s.z < -0.2) { rb.body.setTranslation({ x: s.x, y: s.y, z: 0.05 }, true); }

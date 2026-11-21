@@ -147,6 +147,9 @@ class Match {
   get dt() { return 0.001; }
   get engineName() { return '2B'; }
   get matchTime() { return this.rules.sure; }
+  // 2026: bir robot kendi renginden 10 yumurtayı köşesine bırakırsa maç erken biter
+  earlyWinner() { if (!this.rules.erkenBitis) return null; for (const t of ['red', 'blue']) if (this.robotByTeam(t) && this.banked[t].filter(e => e.kind === t).length >= this.rules.erkenBitis) return t; return null; }
+  isOver() { return this.time >= this.matchTime || !!this.earlyWinner(); }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
     this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
@@ -228,25 +231,35 @@ class Match {
   }
   drive2D(rb, dt) {
     const s = rb.state, g = RULES.G, M = rb.motor; const c = Math.cos(s.th), n = Math.sin(s.th), fx = c, fy = n, lx = -n, ly = c;
-    const Nw = rb.mass * g * rb.loadFrac / 2, Nc = rb.mass * g * (1 - rb.loadFrac); const k = M.tStall / M.w0;
-    for (const [side, sy] of [['L', 1], ['R', -1]]) {
-      const wxL = rb.wheelX, wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
+    const Nc = rb.mass * g * (1 - rb.loadFrac); const k = M.tStall / M.w0; const NA = rb.axles.length;
+    for (const [side, sy] of [['L', 1], ['R', -1]]) { let sV = 0, sF = 0, sSlip = false, sRpm = 0, sMode = 'coast';
+     for (let ai = 0; ai < NA; ai++) {
+      const Nw = rb.mass * g * rb.loadFrac * rb.axleLoad[ai] / 2;
+      const wxL = rb.axles[ai], wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
       let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
       if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }
       if (mode !== 'drive' && F * vf < 0 && Math.abs(F * dt) > Math.abs(vf) * meff) F = -vf * meff / dt;
-      rb.applyImp(rx, ry, F * fx * dt, F * fy * dt);
+      rb.applyImp(rx, ry, F * fx * dt, F * fy * dt); (rb._Fw || (rb._Fw = {}))[side + ai] = F;
       { const [qx, qy] = rb.pointVel(rx, ry); const v2 = qx * fx + qy * fy; const j = -Math.sign(v2) * Math.min(rb.crr * Nw * dt, Math.abs(v2) * meff); rb.applyImp(rx, ry, j * fx, j * fy); }
       const rpm = slip ? ((V / M.vNom) * M.w0 - Math.abs(F) * rb.wheelR / k * Math.sign(F)) * 60 / (2 * Math.PI) : wr * 60 / (2 * Math.PI);
-      const wi = rb.wheelInfo[side]; wi.V = V; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = mode; wi.spin = (wi.spin || 0) + rpm * 2 * Math.PI / 60 * dt;
+      sV = V; sF += F; sSlip = sSlip || slip; sRpm += rpm / NA; sMode = mode;
+     }
+      const wi = rb.wheelInfo[side]; wi.V = sV; wi.F = sF; wi.slip = sSlip; wi.rpm = sRpm; wi.mode = sMode; wi.spin = (wi.spin || 0) + sRpm * 2 * Math.PI / 60 * dt;
     }
     if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
     if (rb.calib && rb.calib.donus) s.w += calibYaw(rb, s.w, dt);
-    for (let it = 0; it < 4; it++) for (const sy of [1, -1]) {
-      const rx = c * rb.wheelX - n * sy * rb.track / 2, ry = n * rb.wheelX + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
-      const j = clamp(-vl / rb.invMass(rx, ry, lx, ly), -rb.muLat * Nw * dt, rb.muLat * Nw * dt); rb.applyImp(rx, ry, j * lx, j * ly);
+    const acc = {}; // her temas için toplam yanal itki (sınır toplam itkiye uygulanır, tur başına değil)
+    for (let it = 0; it < 4; it++) for (let ai = 0; ai < NA; ai++) for (const sy of [1, -1]) {
+      const Nw = rb.mass * g * rb.loadFrac * rb.axleLoad[ai] / 2, ax = rb.axles[ai];
+      const rx = c * ax - n * sy * rb.track / 2, ry = n * ax + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
+      // 4 tekerde dönerken tekerler yana kayar: kayma varsa kinetik sürtünme (muK), yoksa statik (muLat)
+      // sürtünme dairesi: teker ileri itişte tutunmanın bir kısmını kullanıyorsa yana tutunması o kadar azalır
+      const mu = (NA > 1 && Math.abs(vl) > 0.01 ? rb.muK : rb.muLat) * Nw, Fl = (rb._Fw && rb._Fw[(sy > 0 ? 'L' : 'R') + ai]) || 0;
+      const lim = Math.sqrt(Math.max(0, mu * mu - Fl * Fl)) * dt;
+      const key = ai * 2 + (sy > 0 ? 0 : 1), a0 = acc[key] || 0, a1 = clamp(a0 - vl / rb.invMass(rx, ry, lx, ly), -lim, lim), j = a1 - a0; acc[key] = a1; rb.applyImp(rx, ry, j * lx, j * ly);
     }
   }
   collideRobotWalls(rb) {

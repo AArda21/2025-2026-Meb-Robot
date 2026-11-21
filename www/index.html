@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V4.2</title>
+<title>MEB Robot V4.3</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -95,7 +95,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span class="ver">V4.2</span></h1>
+  <h1>MEB Robot <span class="ver">V4.3</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -247,7 +247,7 @@ const SIM = (() => {
 'use strict';
 
 const RULESETS = {
-  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true },
+  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true, erkenBitis: 10 },
   '2025': { ad: '2025 (Kayseri) — ceza yumurtası, 3 dk', sure: 180, yesil: 0, ceza: true, ledCeza: false },
 };
 const RULES = { FIELD: 2.5, ZONE: 0.5, WALL_H: 0.08, EGG_R: 0.02, EGG_H: 0.02, MAX_DIM: 0.30, MAX_MASS: 5.0, MATCH_TIME: 180, G: 9.81 };
@@ -788,12 +788,17 @@ class Robot {
     this.mass = +M.kutle_kg || 1.0;
     this.wheelR = cm(T.cap_cm || 6.5) / 2; this.track = cm(T.iz_cm || 15); this.wheelX = cm(T.x_cm || 0); this.wheelW = cm(T.genislik_cm || 2.5);
     this.tire = tire; this.muS = tire.muS; this.muK = tire.muK; this.crr = tire.crr; this.muLat = tire.muS;
-    this.caster = M.sarhos_teker === null ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03 };
+    // 4 tekerli (kızaklı / skid-steer) robot: her yanda iki teker, aynı sürücü kanalından
+    this.wheelCount = +T.adet === 4 ? 4 : 2; this.wheelBase = this.wheelCount === 4 ? cm(T.dingil_cm || 12) : 0;
+    this.axles = this.wheelCount === 4 ? [this.wheelX + this.wheelBase / 2, this.wheelX - this.wheelBase / 2] : [this.wheelX];
+    this.caster = (M.sarhos_teker === null || this.wheelCount === 4) ? null : { x: cm(C.x_cm ?? -8), y: cm(C.y_cm || 0), r: cm(C.cap_cm || 1.5) / 2, crr: 0.03 };
     const com = M.agirlik_merkezi || {};
     const cx = this.caster ? this.caster.x : this.wheelX - 0.05;
     this.comX = com.x_cm != null && com.x_cm !== '' ? cm(com.x_cm) : cx + 0.8 * (this.wheelX - cx);
     this.comZ = cm(com.z_cm ?? 5);
     this.loadFrac = this.caster ? clamp((this.comX - this.caster.x) / ((this.wheelX - this.caster.x) || 1e-6), 0.05, 1) : 1;
+    { const [xf, xr] = this.wheelCount === 4 ? this.axles : [this.wheelX, this.wheelX]; const ff = this.wheelCount === 4 ? clamp((this.comX - xr) / ((xf - xr) || 1e-6), 0.1, 0.9) : 1;
+      this.axleLoad = this.wheelCount === 4 ? [ff, 1 - ff] : [1]; } // her dingile düşen ağırlık oranı (tekerlerdeki toplam yükün)
     this.motor = { name: Mo.model, vNom: mot.volt, w0: mot.rpm * 2 * Math.PI / 60, tStall: mot.tork * 0.0980665, tFric: mot.surt * 0.0980665, rpm: mot.rpm, iStall: mot.akim || 1.5 };
     { const K0 = M.kalibrasyon || {}; const en = this.match && this.match.engineName; const K = (en && K0[en]) || K0; const hz = +K.hiz_carpani; const dn = +K.donus_direnci; this.calib = { hiz: isFinite(hz) && hz > 0 ? hz : 1, donus: isFinite(dn) ? Math.max(-4, Math.min(4, dn)) : 0 }; }
     this.battery = { volt: +((M.pil || {}).volt) || 7.4, mAh: +((M.pil || {}).mah) || 2000 };
@@ -805,7 +810,7 @@ class Robot {
       servoPin: pin(p.servo_pin), pivot: p.pivot ? [cm(p.pivot[0]), cm(p.pivot[1])] : null, angOff: p.aci_ofset || 0, dir: p.yon ?? 1, len: cm(p.uzunluk), solid: p.kati ?? true,
     }));
     const auto = [];
-    for (const sy of [1, -1]) auto.push({ name: sy > 0 ? 'Sol teker' : 'Sağ teker', x: this.wheelX, y: sy * this.track / 2, hx: this.wheelR, hy: this.wheelW / 2, z0: 0, z1: this.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
+    for (const ax of this.axles) for (const sy of [1, -1]) auto.push({ name: (sy > 0 ? 'Sol' : 'Sağ') + (this.axles.length > 1 ? (ax > this.wheelX ? ' ön' : ' arka') : '') + ' teker', x: ax, y: sy * this.track / 2, hx: this.wheelR, hy: this.wheelW / 2, z0: 0, z1: this.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
     if (this.caster) auto.push({ name: 'Sarhoş teker', x: this.caster.x, y: this.caster.y, hx: this.caster.r, hy: this.caster.r, z0: 0, z1: this.caster.r * 2, ang: 0, color: '#9ca3af', auto: 'caster', solid: true });
     this.parts = auto.concat(this.parts);
     this.sensors = (D.sensorler || []).map(s => Object.assign({}, s, {
@@ -1083,6 +1088,9 @@ class Match {
   get dt() { return 0.001; }
   get engineName() { return '2B'; }
   get matchTime() { return this.rules.sure; }
+  // 2026: bir robot kendi renginden 10 yumurtayı köşesine bırakırsa maç erken biter
+  earlyWinner() { if (!this.rules.erkenBitis) return null; for (const t of ['red', 'blue']) if (this.robotByTeam(t) && this.banked[t].filter(e => e.kind === t).length >= this.rules.erkenBitis) return t; return null; }
+  isOver() { return this.time >= this.matchTime || !!this.earlyWinner(); }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
     this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
@@ -1164,25 +1172,35 @@ class Match {
   }
   drive2D(rb, dt) {
     const s = rb.state, g = RULES.G, M = rb.motor; const c = Math.cos(s.th), n = Math.sin(s.th), fx = c, fy = n, lx = -n, ly = c;
-    const Nw = rb.mass * g * rb.loadFrac / 2, Nc = rb.mass * g * (1 - rb.loadFrac); const k = M.tStall / M.w0;
-    for (const [side, sy] of [['L', 1], ['R', -1]]) {
-      const wxL = rb.wheelX, wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
+    const Nc = rb.mass * g * (1 - rb.loadFrac); const k = M.tStall / M.w0; const NA = rb.axles.length;
+    for (const [side, sy] of [['L', 1], ['R', -1]]) { let sV = 0, sF = 0, sSlip = false, sRpm = 0, sMode = 'coast';
+     for (let ai = 0; ai < NA; ai++) {
+      const Nw = rb.mass * g * rb.loadFrac * rb.axleLoad[ai] / 2;
+      const wxL = rb.axles[ai], wyL = sy * rb.track / 2, rx = c * wxL - n * wyL, ry = n * wxL + c * wyL;
       const [pvx, pvy] = rb.pointVel(rx, ry); const vf = pvx * fx + pvy * fy; const { V, mode, duty } = rb.sideVoltage(side); const wr = vf / rb.wheelR;
       let tau = mode === 'drive' ? k * ((V / M.vNom) * M.w0 - wr) : mode === 'brake' ? -k * wr * duty : 0;
       if (Math.abs(wr) > 0.05) tau -= M.tFric * Math.sign(wr); else if (Math.abs(tau) < M.tFric) tau = 0; else tau -= M.tFric * Math.sign(tau);
       let F = tau / rb.wheelR, slip = false; const meff = 1 / rb.invMass(rx, ry, fx, fy);
       if (Math.abs(F) > rb.muS * Nw) { F = Math.sign(F) * rb.muK * Nw; slip = true; }
       if (mode !== 'drive' && F * vf < 0 && Math.abs(F * dt) > Math.abs(vf) * meff) F = -vf * meff / dt;
-      rb.applyImp(rx, ry, F * fx * dt, F * fy * dt);
+      rb.applyImp(rx, ry, F * fx * dt, F * fy * dt); (rb._Fw || (rb._Fw = {}))[side + ai] = F;
       { const [qx, qy] = rb.pointVel(rx, ry); const v2 = qx * fx + qy * fy; const j = -Math.sign(v2) * Math.min(rb.crr * Nw * dt, Math.abs(v2) * meff); rb.applyImp(rx, ry, j * fx, j * fy); }
       const rpm = slip ? ((V / M.vNom) * M.w0 - Math.abs(F) * rb.wheelR / k * Math.sign(F)) * 60 / (2 * Math.PI) : wr * 60 / (2 * Math.PI);
-      const wi = rb.wheelInfo[side]; wi.V = V; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = mode; wi.spin = (wi.spin || 0) + rpm * 2 * Math.PI / 60 * dt;
+      sV = V; sF += F; sSlip = sSlip || slip; sRpm += rpm / NA; sMode = mode;
+     }
+      const wi = rb.wheelInfo[side]; wi.V = sV; wi.F = sF; wi.slip = sSlip; wi.rpm = sRpm; wi.mode = sMode; wi.spin = (wi.spin || 0) + sRpm * 2 * Math.PI / 60 * dt;
     }
     if (rb.caster && Nc > 0) { const rx = c * rb.caster.x - n * rb.caster.y, ry = n * rb.caster.x + c * rb.caster.y; const [qx, qy] = rb.pointVel(rx, ry); const sp = Math.hypot(qx, qy); if (sp > 1e-6) { const ux = qx / sp, uy = qy / sp; const j = Math.min(rb.caster.crr * Nc * dt, sp / rb.invMass(rx, ry, ux, uy)); rb.applyImp(rx, ry, -j * ux, -j * uy); } }
     if (rb.calib && rb.calib.donus) s.w += calibYaw(rb, s.w, dt);
-    for (let it = 0; it < 4; it++) for (const sy of [1, -1]) {
-      const rx = c * rb.wheelX - n * sy * rb.track / 2, ry = n * rb.wheelX + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
-      const j = clamp(-vl / rb.invMass(rx, ry, lx, ly), -rb.muLat * Nw * dt, rb.muLat * Nw * dt); rb.applyImp(rx, ry, j * lx, j * ly);
+    const acc = {}; // her temas için toplam yanal itki (sınır toplam itkiye uygulanır, tur başına değil)
+    for (let it = 0; it < 4; it++) for (let ai = 0; ai < NA; ai++) for (const sy of [1, -1]) {
+      const Nw = rb.mass * g * rb.loadFrac * rb.axleLoad[ai] / 2, ax = rb.axles[ai];
+      const rx = c * ax - n * sy * rb.track / 2, ry = n * ax + c * sy * rb.track / 2; const [pvx, pvy] = rb.pointVel(rx, ry); const vl = pvx * lx + pvy * ly;
+      // 4 tekerde dönerken tekerler yana kayar: kayma varsa kinetik sürtünme (muK), yoksa statik (muLat)
+      // sürtünme dairesi: teker ileri itişte tutunmanın bir kısmını kullanıyorsa yana tutunması o kadar azalır
+      const mu = (NA > 1 && Math.abs(vl) > 0.01 ? rb.muK : rb.muLat) * Nw, Fl = (rb._Fw && rb._Fw[(sy > 0 ? 'L' : 'R') + ai]) || 0;
+      const lim = Math.sqrt(Math.max(0, mu * mu - Fl * Fl)) * dt;
+      const key = ai * 2 + (sy > 0 ? 0 : 1), a0 = acc[key] || 0, a1 = clamp(a0 - vl / rb.invMass(rx, ry, lx, ly), -lim, lim), j = a1 - a0; acc[key] = a1; rb.applyImp(rx, ry, j * lx, j * ly);
     }
   }
   collideRobotWalls(rb) {
@@ -1324,7 +1342,7 @@ function staticChecks(profile) {
   add('Kurallar', rb.stop ? 'ok' : 'warn', rb.stop ? 'Acil stop butonu var' : 'Acil stop butonu tanımlı değil (zorunlu, Mekanik → acil stop)');
   // --- Mekanik ---
   const M = rb.motor, D = rb.driver, g = RULES.G; const Vs = Math.max(0, D.vBat - D.drop);
-  const Nw = rb.mass * g * rb.loadFrac / 2; const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
+  const Nw = rb.mass * g * rb.loadFrac / (2 * rb.axles.length); const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
   const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
   if (rb.hazne) { const H = rb.hazne, sv = new Set(rb.servos.map(s => s.pin)); const keys = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null);
@@ -1341,8 +1359,9 @@ function staticChecks(profile) {
   if (Fmotor > Ftr) add('Mekanik', 'info', `Tam güçte kalkışta tekerler patinaj yapabilir (motor itişi ${Fmotor.toFixed(1)} N > tutunma ${Ftr.toFixed(1)} N). Lastik: ${rb.tire.ad || 'özel'}.`);
   const pwmMin = Math.ceil(((rb.crr * Nw * rb.wheelR + M.tFric) / (M.tStall * Vs / M.vNom)) * 255);
   add('Mekanik', pwmMin > 120 ? 'warn' : 'info', `Robot yaklaşık PWM ${Math.min(255, pwmMin)} altındaki değerlerde yerinden kıpırdamaz (sürtünme + motor iç direnci).`);
-  const accel = Math.min(Fmotor, Ftr) * 2 / rb.mass; add('Mekanik', 'info', `En fazla ivme ≈ ${accel.toFixed(1)} m/s² → 0'dan tam hıza ≈ ${(vmax / Math.max(accel, 1e-3)).toFixed(2)} sn`);
-  if (!rb.caster) add('Mekanik', 'err', 'Sarhoş teker yok: iki tekerli robot öne/arkaya devrilir.');
+  const accel = Math.min(Fmotor, Ftr) * 2 * rb.axles.length / rb.mass; add('Mekanik', 'info', `En fazla ivme ≈ ${accel.toFixed(1)} m/s² → 0'dan tam hıza ≈ ${(vmax / Math.max(accel, 1e-3)).toFixed(2)} sn`);
+  if (rb.wheelCount === 4) { const r = rb.wheelBase / rb.track; add('Mekanik', r > 1 ? 'warn' : 'info', `4 teker: ön-arka teker arası / iki yan teker arası = ${r.toFixed(2)}. ` + (r > 1 ? 'Bu oran 1\'den büyük: robot yerinde zor döner, tekerler çok kayar.' : r > 0.8 ? 'Dönerken tekerler belirgin kayar; dönüş süreleri iki tekerliye göre uzun olur.' : 'Dönüş için uygun oran.')); }
+  else if (!rb.caster) add('Mekanik', 'err', 'Sarhoş teker yok: iki tekerli robot öne/arkaya devrilir.');
   else {
     const lo = Math.min(rb.caster.x, rb.wheelX), hi = Math.max(rb.caster.x, rb.wheelX);
     if (rb.comX <= lo || rb.comX >= hi) add('Mekanik', 'err', `Ağırlık merkezi (x=${cmS(rb.comX)}) teker ile sarhoş teker arasında değil: robot devrilir.`);
@@ -1975,7 +1994,7 @@ const DEFAULT_PROFILES = [
   "id": "eski2025",
   "ad": "Antalya 2026 robotumuz",
   "renk": "#6d28d9",
-  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler, sensör yerleri ve iç hazne (tokat → bizim/yeşil bölme, kapaklar A8/A9) TAHMİNİ.",
+  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
   "kartlar": [
    {
     "id": "mega",
@@ -2018,26 +2037,24 @@ const DEFAULT_PROFILES = [
    },
    "tekerlek": {
     "lastik": "kaucuk",
-    "cap_cm": 7,
-    "genislik_cm": 3,
-    "iz_cm": 22,
-    "x_cm": 0
+    "cap_cm": 6.5,
+    "genislik_cm": 2.7,
+    "iz_cm": 23,
+    "x_cm": -2,
+    "adet": 4,
+    "dingil_cm": 14
    },
-   "sarhos_teker": {
-    "x_cm": -10,
-    "y_cm": 0,
-    "cap_cm": 2
-   },
+   "sarhos_teker": null,
    "motor": {
     "model": "JGA25-370 12V 280"
    },
    "pil": {
-    "volt": 11.1
+    "volt": 7.4
    },
    "acil_stop": {
-    "x": -6,
-    "y": -6,
-    "z": 12
+    "x": 6,
+    "y": 8,
+    "z": 14
    },
    "parcalar": [
     {
@@ -2048,7 +2065,7 @@ const DEFAULT_PROFILES = [
      "genislik": 19,
      "z0": 2.5,
      "z1": 12,
-     "renk": "#64748b"
+     "renk": "#facc15"
     },
     {
      "ad": "Ağız sol",
@@ -2077,7 +2094,7 @@ const DEFAULT_PROFILES = [
      "uzunluk": 1,
      "genislik": 10.5,
      "z0": 0.3,
-     "z1": 6,
+     "z1": 2.4,
      "renk": "#1f2937"
     }
    ],
@@ -2489,14 +2506,14 @@ function makeMatch3D(R) {
         const cd = R.ColliderDesc.convexHull(new Float32Array(pts)); if (cd) addCol(fr(cd.setDensity(0), E.muRobotEgg, 0.2), ch);
       }
       if (rb.caster) { const cr = Math.max(0.004, rb.caster.r); addCol(fr(R.ColliderDesc.ball(cr).setTranslation(rb.caster.x, rb.caster.y, cr - wr).setDensity(0), 0.02), ch); }
-      rb.wheels = {};
-      for (const [side, sy] of [['L', 1], ['R', -1]]) {
-        const lp = [rb.wheelX, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
+      rb.wheels = {}; rb.wheelList = [];
+      for (const ax of (rb.axles || [rb.wheelX])) for (const [side, sy] of [['L', 1], ['R', -1]]) {
+        const lp = [ax, sy * rb.track / 2, 0], wp = qRot(yaw, lp);
         const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(s.x + wp[0], s.y + wp[1], wr + 0.001).setRotation(yaw).setCanSleep(false));
         addCol(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr)  /* not: bombeli (roundCylinder) lastik denendi; robot duvar dibinde takla atıyordu */.setDensity(mw / (Math.PI * wr * wr * rb.wheelW)), (rb.muS + rb.muK) / 2, 0), body);
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
-        rb.wheels[side] = { body, j, spin: 0 };
+        const wobj = { body, j, spin: 0, side }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
       }
       rb.gates = [];
       for (const p of gates) {
@@ -2517,8 +2534,8 @@ function makeMatch3D(R) {
         this.updateServos(rb, dt, rb.servoCmd);
         for (const g of rb.gates) g.j.configureMotorPosition(((g.p.angOff + g.p.dir * (rb.servoCmd[g.p.servoPin] ?? 0)) * Math.PI) / 180, 1.5, 0.05);
         const M = rb.motor, k = M.tStall / M.w0;
-        for (const side of ['L', 'R']) {
-          const { V, mode, duty } = rb.sideVoltage(side); const wh = rb.wheels[side];
+        for (const wh of rb.wheelList) { const side = wh.side;
+          const { V, mode, duty } = rb.sideVoltage(side);
           let target = 0, damp = M.tFric * 2;
           if (mode === 'drive') { target = (V / M.vNom) * M.w0; damp = k; } else if (mode === 'brake') { damp = k * Math.max(duty || 1, 0.05); }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp;
@@ -2537,11 +2554,11 @@ function makeMatch3D(R) {
       s.x = t.x; s.y = t.y; s.z = t.z; { const yw = yawOf(q); s.th = s.th == null ? yw : s.th + Math.atan2(Math.sin(yw - s.th), Math.cos(yw - s.th)); } s.vx = lv.x; s.vy = lv.y; s.w = av.z; s.q = q;
       s.tilt = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.y * q.y)))) * 180 / Math.PI;
       const axle = qRot(q, [0, 1, 0]), fwd = qRot(q, [1, 0, 0]);
-      for (const side of ['L', 'R']) {
-        const wh = rb.wheels[side]; const wa = wh.body.angvel(); const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
-        const wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2];
-        wh.spin += wrel * this.dt; const wi = rb.wheelInfo[side];
-        wi.V = wh.V || 0; wi.F = (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; wi.slip = Math.abs(wrel * rb.wheelR - vf) > 0.04; wi.rpm = wrel * 60 / (2 * Math.PI); wi.mode = wh.mode; wi.spin = wh.spin;
+      for (const side of ['L', 'R']) { const ws = rb.wheelList.filter(w => w.side === side); let F = 0, rpm = 0, slip = false;
+        for (const wh of ws) { const wa = wh.body.angvel(); const wrel = (wa.x - av.x) * axle[0] + (wa.y - av.y) * axle[1] + (wa.z - av.z) * axle[2];
+          const wl = wh.body.linvel(); const vf = wl.x * fwd[0] + wl.y * fwd[1] + wl.z * fwd[2]; wh.spin += wrel * this.dt;
+          F += (wh.damp || 0) * ((wh.target || 0) - wrel) / rb.wheelR; rpm += wrel * 60 / (2 * Math.PI) / ws.length; slip = slip || Math.abs(wrel * rb.wheelR - vf) > 0.04; }
+        const wi = rb.wheelInfo[side], w0 = ws[0]; wi.V = w0.V || 0; wi.F = F; wi.slip = slip; wi.rpm = rpm; wi.mode = w0.mode; wi.spin = w0.spin;
       }
       for (const g of rb.gates) { let d = (yawOf(g.body.rotation()) - s.th) * 180 / Math.PI; d = ((d % 360) + 540) % 360 - 180; rb.servoAng[g.p.servoPin] = (d - g.p.angOff) / (g.p.dir || 1); rb.servoVel[g.p.servoPin] = 0; }
       if (s.z < -0.2) { rb.body.setTranslation({ x: s.x, y: s.y, z: 0.05 }, true); }
@@ -2661,11 +2678,12 @@ function makeView3D(THREE, host) {
         const m = new THREE.Mesh(g, std(col, { roughness: 0.55, metalness: 0.05, transparent: !!md.seffaf, opacity: md.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
         m.castShadow = m.receiveShadow = true; robot.add(m); v.stl.push(m); }
     }
-    for (const side of ['L', 'R']) {
+    v.wheelG = [];
+    for (const ax of (rb.axles || [rb.wheelX])) for (const side of ['L', 'R']) {
       const g = new THREE.Group();
       const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 40), std(0x15171b, { roughness: 0.95 })); tire.castShadow = true;
       const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
-      g.add(tire, hub); robot.add(g); v.wheels[side] = g;
+      g.add(tire, hub); robot.add(g); if (!v.wheels[side]) v.wheels[side] = g; v.wheelG.push({ g, side, ax });
     }
     if (rb.caster) { const c = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.004, rb.caster.r), 20, 14), std(0xc0c4cc, { metalness: 0.8, roughness: 0.25 })); c.position.set(rb.caster.x, rb.caster.y, Math.max(0.004, rb.caster.r) - wr); c.castShadow = true; robot.add(c); }
     for (const c of rb.circuit) {
@@ -2756,7 +2774,7 @@ function makeView3D(THREE, host) {
         robot.position.set(s.x, s.y, s.z ?? rb.wheelR);
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
-        for (const [side, sy] of [['L', 1], ['R', -1]]) { const g = v.wheels[side], wi = rb.wheelInfo[side]; g.position.set(rb.wheelX, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
+        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(wi.slip ? 0x7f1d1d : 0x15171b); }
         if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {
@@ -2997,7 +3015,7 @@ function endMatch() {
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
   const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
   saveHistory(sc, res);
-  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
+  $('result').innerHTML = `<b>Maç bitti (${match.earlyWinner() ? 'erken: ' + (match.earlyWinner() === 'red' ? 'kırmızı' : 'mavi') + ' 10 yumurtayı topladı, ' + fmtT(match.time) : fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
 // ---------- Maç geçmişi ----------
@@ -3029,7 +3047,7 @@ function frame(ts) {
   const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
   if (running && match) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
-    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
+    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.isOver()) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
     if (use3d && !frame._warned && match.time > 6 && realF < 0.55 * sp) { frame._slow = (frame._slow || 0) + dt; if (frame._slow > 4) { frame._warned = true; toast(`3B bu cihazda yavaş (gerçek hızın %${Math.round(realF / sp * 100)}'i). Ayarlardan önce "Grafik: Düşük", yetmezse "Fizik: 2B hızlı" seç.`); } } else frame._slow = 0;
     if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
@@ -3121,7 +3139,8 @@ function renderMekanik(p) {
   const T = M.tekerlek, Mo = M.motor;
   const rerender = () => renderMekanik(p);
   root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
-  const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', 'Teker ekseni x (cm)')));
+  const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', T.adet == 4 ? 'Tekerlerin ortası x (cm)' : 'Teker ekseni x (cm)'), fld(T, 'adet', 'Teker sayısı', { type: 'select', options: { 2: '2 teker + sarhoş teker', 4: '4 teker (hepsi motorlu)' }, def: '2', after: rerender }), ...(T.adet == 4 ? [fld(T, 'dingil_cm', 'Ön-arka teker arası (cm)')] : [])),
+    T.adet == 4 ? h('p', { class: 'hint' }, '4 tekerli robot dönerken tekerler yana kayar (kızaklı dönüş). Ön-arka teker arası büyüdükçe dönmek zorlaşır; simülasyon bunu hesaplar.') : '');
   if (T.lastik === 'ozel') tc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(T, 'mu_statik', 'Statik sürtünme μs'), fld(T, 'mu_kinetik', 'Kayma sürtünmesi μk'), fld(T, 'yuvarlanma', 'Yuvarlanma direnci')));
   else { const t = TIRES[T.lastik || 'kaucuk']; if (t) tc.append(h('p', { class: 'hint' }, `Sunta zeminde: μs ≈ ${t.muS}, μk ≈ ${t.muK}, yuvarlanma ≈ ${t.crr}`)); }
   root.append(tc);
@@ -3359,7 +3378,7 @@ $('bBatch').onclick = async () => {
   for (let i = 0; i < N && !batchStop; i++) {
     const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
     const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk, gercek: gercek() }); const errs = m.compileAll();
-    await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
+    await new Promise(res => { const run = () => { const t0 = performance.now(); while (!m.isOver() && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (!m.isOver() && !batchStop) setTimeout(run, 0); else res(); }; run(); });
     const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
     rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
     renderBatch(A, B, rows, N);

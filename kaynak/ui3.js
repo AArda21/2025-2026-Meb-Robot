@@ -208,7 +208,7 @@ function endMatch() {
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
   const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
   saveHistory(sc, res);
-  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
+  $('result').innerHTML = `<b>Maç bitti (${match.earlyWinner() ? 'erken: ' + (match.earlyWinner() === 'red' ? 'kırmızı' : 'mavi') + ' 10 yumurtayı topladı, ' + fmtT(match.time) : fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
 // ---------- Maç geçmişi ----------
@@ -240,7 +240,7 @@ function frame(ts) {
   const dt = Math.min(0.05, (ts - lastF) / 1000 || 0); lastF = ts;
   if (running && match) {
     const sp = +$('sSpeed').value, sdt = match.dt; acc += dt * sp; let n = Math.floor(acc / sdt); acc -= n * sdt; const t0 = performance.now(), simT0 = match.time;
-    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.time >= match.matchTime) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
+    for (let i = 0; i < n; i++) { match.step(sdt); if (!$('cNoLimit').checked && match.isOver()) { endMatch(); break; } if (performance.now() - t0 > 28) { acc = 0; break; } }
     realF = realF * 0.9 + 0.1 * ((match.time - simT0) / Math.max(1e-3, dt));
     if (use3d && !frame._warned && match.time > 6 && realF < 0.55 * sp) { frame._slow = (frame._slow || 0) + dt; if (frame._slow > 4) { frame._warned = true; toast(`3B bu cihazda yavaş (gerçek hızın %${Math.round(realF / sp * 100)}'i). Ayarlardan önce "Grafik: Düşük", yetmezse "Fizik: 2B hızlı" seç.`); } } else frame._slow = 0;
     if (!rec.length || match.time - rec[rec.length - 1].t >= 0.05) { rec.push(match.snapshot()); if (rec.length > 6000) rec.splice(0, 1000); }
@@ -332,7 +332,8 @@ function renderMekanik(p) {
   const T = M.tekerlek, Mo = M.motor;
   const rerender = () => renderMekanik(p);
   root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
-  const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', 'Teker ekseni x (cm)')));
+  const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', T.adet == 4 ? 'Tekerlerin ortası x (cm)' : 'Teker ekseni x (cm)'), fld(T, 'adet', 'Teker sayısı', { type: 'select', options: { 2: '2 teker + sarhoş teker', 4: '4 teker (hepsi motorlu)' }, def: '2', after: rerender }), ...(T.adet == 4 ? [fld(T, 'dingil_cm', 'Ön-arka teker arası (cm)')] : [])),
+    T.adet == 4 ? h('p', { class: 'hint' }, '4 tekerli robot dönerken tekerler yana kayar (kızaklı dönüş). Ön-arka teker arası büyüdükçe dönmek zorlaşır; simülasyon bunu hesaplar.') : '');
   if (T.lastik === 'ozel') tc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(T, 'mu_statik', 'Statik sürtünme μs'), fld(T, 'mu_kinetik', 'Kayma sürtünmesi μk'), fld(T, 'yuvarlanma', 'Yuvarlanma direnci')));
   else { const t = TIRES[T.lastik || 'kaucuk']; if (t) tc.append(h('p', { class: 'hint' }, `Sunta zeminde: μs ≈ ${t.muS}, μk ≈ ${t.muK}, yuvarlanma ≈ ${t.crr}`)); }
   root.append(tc);
@@ -570,7 +571,7 @@ $('bBatch').onclick = async () => {
   for (let i = 0; i < N && !batchStop; i++) {
     const aRed = i % 2 === 0, sd = 1000 + Math.floor(Math.random() * 1e6);
     const m = new Match({ profiles: aRed ? { red: A, blue: B } : { red: B, blue: A }, saha: { tohum: sd }, kural, yesil_kose: yk, gercek: gercek() }); const errs = m.compileAll();
-    await new Promise(res => { const run = () => { const t0 = performance.now(); while (m.time < m.matchTime && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (m.time < m.matchTime && !batchStop) setTimeout(run, 0); else res(); }; run(); });
+    await new Promise(res => { const run = () => { const t0 = performance.now(); while (!m.isOver() && performance.now() - t0 < 30) m.step(m.dt); bar.style.width = (((i + m.time / m.matchTime) / N) * 100).toFixed(1) + '%'; if (!m.isOver() && !batchStop) setTimeout(run, 0); else res(); }; run(); });
     const r = m.result(), tA = aRed ? 'red' : 'blue', tB = aRed ? 'blue' : 'red';
     rows.push({ i: i + 1, sd, aRed, sA: r.sc[tA], sB: r.sc[tB], ownA: r.sc.detail[tA].own, ownB: r.sc.detail[tB].own, gA: r.sc.detail[tA].green, w: r.winner === tA ? 'A' : r.winner === tB ? 'B' : '-', reason: r.reason, errs: errs.length });
     renderBatch(A, B, rows, N);

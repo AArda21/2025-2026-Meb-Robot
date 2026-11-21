@@ -326,7 +326,7 @@ const DEFAULT_PROFILES = [
   "id": "eski2025",
   "ad": "Antalya 2026 robotumuz",
   "renk": "#6d28d9",
-  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler, sensör yerleri ve iç hazne (tokat → bizim/yeşil bölme, kapaklar A8/A9) TAHMİNİ.",
+  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
   "kartlar": [
    {
     "id": "mega",
@@ -369,26 +369,24 @@ const DEFAULT_PROFILES = [
    },
    "tekerlek": {
     "lastik": "kaucuk",
-    "cap_cm": 7,
-    "genislik_cm": 3,
-    "iz_cm": 22,
-    "x_cm": 0
+    "cap_cm": 6.5,
+    "genislik_cm": 2.7,
+    "iz_cm": 23,
+    "x_cm": -2,
+    "adet": 4,
+    "dingil_cm": 14
    },
-   "sarhos_teker": {
-    "x_cm": -10,
-    "y_cm": 0,
-    "cap_cm": 2
-   },
+   "sarhos_teker": null,
    "motor": {
     "model": "JGA25-370 12V 280"
    },
    "pil": {
-    "volt": 11.1
+    "volt": 7.4
    },
    "acil_stop": {
-    "x": -6,
-    "y": -6,
-    "z": 12
+    "x": 6,
+    "y": 8,
+    "z": 14
    },
    "parcalar": [
     {
@@ -399,7 +397,7 @@ const DEFAULT_PROFILES = [
      "genislik": 19,
      "z0": 2.5,
      "z1": 12,
-     "renk": "#64748b"
+     "renk": "#facc15"
     },
     {
      "ad": "Ağız sol",
@@ -428,7 +426,7 @@ const DEFAULT_PROFILES = [
      "uzunluk": 1,
      "genislik": 10.5,
      "z0": 0.3,
-     "z1": 6,
+     "z1": 2.4,
      "renk": "#1f2937"
     }
    ],

@@ -1,6 +1,6 @@
 {
   "appId": "com.eyup.mebrobotsim",
-  "appName": "MEB Robot V4.2",
+  "appName": "MEB Robot V4.3",
   "webDir": "www",
   "android": {
     "allowMixedContent": false
