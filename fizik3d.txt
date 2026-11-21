@@ -1,0 +1,35 @@
+ILERI_1sn 2B {"ileri_cm":32.9,"yan_cm":1.4,"donus_der":4.3,"hiz_cms":44.2,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":127,"rpmR":132,"yumurta_z_max_cm":1,"sure_ms":195}
+GERI_1sn 2B {"ileri_cm":-18.8,"yan_cm":-0.1,"donus_der":-5.7,"hiz_cms":0.2,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":0,"rpmR":-1,"yumurta_z_max_cm":1,"sure_ms":214}
+SOLA_DON_1sn 2B {"ileri_cm":-4.3,"yan_cm":3.3,"donus_der":161.8,"hiz_cms":11.1,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":-77,"rpmR":123,"yumurta_z_max_cm":1,"sure_ms":136}
+KALKIS_0.25sn 2B {"ileri_cm":5.5,"yan_cm":0,"donus_der":0.6,"hiz_cms":38.5,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":111,"rpmR":115,"yumurta_z_max_cm":1,"sure_ms":36}
+PWM_30 2B {"ileri_cm":0,"yan_cm":0,"donus_der":0,"hiz_cms":0,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":0,"rpmR":0,"yumurta_z_max_cm":1,"sure_ms":224}
+PWM_60 2B {"ileri_cm":0,"yan_cm":0,"donus_der":0,"hiz_cms":0,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":0,"rpmR":0,"yumurta_z_max_cm":1,"sure_ms":190}
+PWM_100 2B {"ileri_cm":6.4,"yan_cm":0.3,"donus_der":3.5,"hiz_cms":5.2,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":14,"rpmR":17,"yumurta_z_max_cm":1,"sure_ms":184}
+PWM_150 2B {"ileri_cm":31.1,"yan_cm":1.7,"donus_der":5.7,"hiz_cms":25.4,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":72,"rpmR":77,"yumurta_z_max_cm":1,"sure_ms":175}
+PWM_255 2B {"ileri_cm":80.1,"yan_cm":7.5,"donus_der":12.7,"hiz_cms":64.9,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":183,"rpmR":198,"yumurta_z_max_cm":1,"sure_ms":200}
+FREN 2B {"ileri_cm":29.7,"yan_cm":1,"donus_der":3.7,"hiz_cms":0,"egim_max":0,"z_aralik":[3.25,3.25],"rpmL":0,"rpmR":0,"yumurta_z_max_cm":1,"sure_ms":48}
+ILERI_1sn 3B {"ileri_cm":33.5,"yan_cm":2.9,"donus_der":7.7,"hiz_cms":47.4,"egim_max":0.6,"z_aralik":[3.12,3.35],"rpmL":138,"rpmR":146,"yumurta_z_max_cm":0.9,"sure_ms":198}
+GERI_1sn 3B {"ileri_cm":-19,"yan_cm":-0.3,"donus_der":-8.6,"hiz_cms":0.1,"egim_max":0.7,"z_aralik":[3.11,3.35],"rpmL":0,"rpmR":0,"yumurta_z_max_cm":0.9,"sure_ms":147}
+SOLA_DON_1sn 3B {"ileri_cm":-3.4,"yan_cm":-0.4,"donus_der":181.4,"hiz_cms":5.9,"egim_max":0.7,"z_aralik":[3.12,3.35],"rpmL":-125,"rpmR":115,"yumurta_z_max_cm":0.9,"sure_ms":147}
+KALKIS_0.25sn 3B {"ileri_cm":4.4,"yan_cm":0.2,"donus_der":2.6,"hiz_cms":35,"egim_max":0.6,"z_aralik":[3.12,3.35],"rpmL":100,"rpmR":110,"yumurta_z_max_cm":0.94,"sure_ms":41}
+PWM_30 3B {"ileri_cm":1.1,"yan_cm":0,"donus_der":0,"hiz_cms":0.7,"egim_max":0.7,"z_aralik":[3.12,3.35],"rpmL":3,"rpmR":3,"yumurta_z_max_cm":0.9,"sure_ms":213}
+PWM_60 3B {"ileri_cm":1.4,"yan_cm":0,"donus_der":0.2,"hiz_cms":0.9,"egim_max":0.7,"z_aralik":[3.12,3.35],"rpmL":3,"rpmR":3,"yumurta_z_max_cm":0.9,"sure_ms":211}
+PWM_100 3B {"ileri_cm":10.9,"yan_cm":0.6,"donus_der":4.5,"hiz_cms":9.4,"egim_max":0.7,"z_aralik":[3.12,3.35],"rpmL":27,"rpmR":30,"yumurta_z_max_cm":0.9,"sure_ms":212}
+PWM_150 3B {"ileri_cm":34.8,"yan_cm":3,"donus_der":8.4,"hiz_cms":29.3,"egim_max":0.6,"z_aralik":[3.12,3.35],"rpmL":85,"rpmR":91,"yumurta_z_max_cm":0.9,"sure_ms":213}
+PWM_255 3B {"ileri_cm":79.3,"yan_cm":15.9,"donus_der":20.6,"hiz_cms":68.5,"egim_max":0.6,"z_aralik":[3.12,3.35],"rpmL":198,"rpmR":212,"yumurta_z_max_cm":0.95,"sure_ms":221}
+FREN 3B {"ileri_cm":28.9,"yan_cm":2.8,"donus_der":8.9,"hiz_cms":0,"egim_max":0.6,"z_aralik":[3.11,3.35],"rpmL":0,"rpmR":0,"yumurta_z_max_cm":0.9,"sure_ms":77}
+MAC YumYum_vs_Rakip 2B {"sure_s":"11.9","puan":[1,-2],"kazanan":"red","neden":"rakip kendi rengini bırakamadı","derleme_hata":0,"hata":null,"olay":3,"egim":[0,0],"duvar":[1,0],"sikisma":[0.6,0.4]}
+MAC YumYum_vs_Rakip 3B {"sure_s":"5.9","puan":[4,0],"kazanan":"red","neden":"rakip kendi rengini bırakamadı","derleme_hata":0,"hata":null,"olay":5,"egim":[0.7,2.1],"duvar":[0,0],"sikisma":[1,0.2]}
+MAC Antalya2026_vs_Rakip 2B {"sure_s":"14.5","puan":[-10,0],"kazanan":null,"neden":"iki robot da kendi rengini bırakamadı","derleme_hata":1,"hata":null,"olay":1,"egim":[0,0],"duvar":[0,0],"sikisma":[0,0.2]}
+MAC Antalya2026_vs_Rakip 3B {"sure_s":"11.1","puan":[-10,1],"kazanan":"blue","neden":"rakip kendi rengini bırakamadı","derleme_hata":1,"hata":null,"olay":2,"egim":[0.1,2.1],"duvar":[0,0],"sikisma":[0,0.2]}
+MAC Strateji_vs_Rakip 2B {"sure_s":"10.8","puan":[0,0],"kazanan":null,"neden":"iki robot da kendi rengini bırakamadı","derleme_hata":0,"hata":null,"olay":1,"egim":[0,0],"duvar":[1,0],"sikisma":[0.7,0.4]}
+MAC Strateji_vs_Rakip 3B {"sure_s":"6.1","puan":[6,2],"kazanan":"red","neden":"daha çok puan","derleme_hata":0,"hata":null,"olay":9,"egim":[0.7,2.1],"duvar":[0,0],"sikisma":[0.2,0.2]}
+KONTROL3B Yum Yum ["info:10 sn'de 324 cm yol aldı, toplam 161° döndü; ortalama hız 32 cm/s.","info:İlk hareket 0.42. saniyede: robot İLERİ gitti.","info:3 yumurtaya dokunup yerinden oynattı. Puan: 0.","warn:[ana] loop() ortalama 19.8 ms, en uzun 799 ms sürdü (460 tur). Bu sürede robot sensörlere bakmıyor; uzun delay() ve zaman aşımı olmayan pulseIn() en sık nedenler."]
+KONTROL3B Antalya 2026 robotumuz ["err:[mega] Derleme hatası: 'yesil' adı iki kez tanımlanmış. Arduino derleyicisi de bu yüzden hata verir (ör. aynı isimde hem Servo hem değişken).","err:10 saniyede robot neredeyse hiç hareket etmedi (4.4 cm). Motor pinleri, sürücü tipi veya kodun loop() içeriğini kontrol et.","info:0 yumurtaya dokunup yerinden oynattı. Puan: -10.","info:İç hazne: 0 yumurta bölmeye alındı, 0 dışarı atıldı, 0 bırakıldı. Şu an: bizim 0/5, yesil 0/2."]
+KONTROL3B Basit rakip ["info:10 sn'de 332 cm yol aldı, toplam 3° döndü; ortalama hız 33 cm/s.","info:İlk hareket 0.23. saniyede: robot İLERİ gitti.","info:3 yumurtaya dokunup yerinden oynattı. Puan: 0.","warn:[ana] loop() ortalama 7.7 ms, en uzun 985 ms sürdü (1290 tur). Bu sürede robot sensörlere bakmıyor; uzun delay() ve zaman aşımı olmayan pulseIn() en sık nedenler."]
+KALIB Yum Yum 2B {"ham_duz":36.8,"ham_don":166,"kal":{"hiz_carpani":1.016,"donus_direnci":-0.053,"notlar":[]},"sonra_duz":38,"sonra_don":180,"ms":2330}
+KALIB Yum Yum 3B {"ham_duz":38.6,"ham_don":184,"kal":{"hiz_carpani":0.991,"donus_direnci":0.001,"notlar":[]},"sonra_duz":38,"sonra_don":180,"ms":1464}
+KALIB Antalya 2026 robotumuz 2B {"ham_duz":39.9,"ham_don":45,"kal":{"hiz_carpani":0.967,"donus_direnci":-4,"notlar":["Gerçek robot, tekerleklerin hızının izin verdiğinden bile hızlı dönüyor (en fazla 37°, ölçülen 180°). İz genişliğini (iki teker arası), teker çapını ve motor devrini kontrol et."]},"sonra_duz":38,"sonra_don":37,"ms":1138}
+KALIB Antalya 2026 robotumuz 3B {"ham_duz":39.9,"ham_don":30,"kal":{"hiz_carpani":0.967,"donus_direnci":-4,"notlar":[]},"sonra_duz":38,"sonra_don":168,"ms":715}
+KALIB Basit rakip 2B {"ham_duz":38.6,"ham_don":210,"kal":{"hiz_carpani":0.992,"donus_direnci":0.016,"notlar":[]},"sonra_duz":38,"sonra_don":180,"ms":1113}
+KALIB Basit rakip 3B {"ham_duz":41.4,"ham_don":233,"kal":{"hiz_carpani":0.95,"donus_direnci":0.026,"notlar":[]},"sonra_duz":38,"sonra_don":180,"ms":737}

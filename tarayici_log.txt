@@ -1,0 +1,8 @@
+[mobil] motor=3d ovl=3B · durdu · 0 cm/s
+[mobil] ovl=3B · ● 1.0× · 4 cm/s sure=1:56.4 K=K 0 M=M 0
+[mobil] dusuk grafik ovl=3B · ● 1.0× · 29 cm/s
+[mobil] kalibrasyon: Eşleştirildi. | 2B: düz 38.0 cm (gerçeğin %100'i), dönüş 180° (gerçeğin %100'i) | 3B: düz 38.0 cm (gerçeğin %100'i), dönüş 180° (gerçeğin %100'i) || Şu anki ayar — 2B: hız ×1.02, dönüş direnci -0.05 · 3B: hız ×0.99, dönüş direnci 0.00
+[masaustu] motor=3d ovl=3B · durdu · 0 cm/s
+[masaustu] ovl=3B · ● 1.0× · 19 cm/s sure=1:56.0 K=K 0 M=M 0
+[masaustu] dusuk grafik ovl=3B · ● 1.0× · 30 cm/s
+[masaustu] kalibrasyon: Eşleştirildi. | 2B: düz 38.0 cm (gerçeğin %100'i), dönüş 180° (gerçeğin %100'i) | 3B: düz 38.0 cm (gerçeğin %100'i), dönüş 180° (gerçeğin %100'i) || Şu anki ayar — 2B: hız ×1.02, dönüş direnci -0.05 · 3B: hız ×0.99, dönüş direnci 0.00
