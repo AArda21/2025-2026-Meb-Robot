@@ -35,6 +35,11 @@ function staticChecks(profile) {
   const Nw = rb.mass * g * rb.loadFrac / 2; const Fmotor = M.tStall * (Vs / M.vNom) / rb.wheelR; const Ftr = rb.muS * Nw;
   const vmax = (Vs / M.vNom) * M.w0 * rb.wheelR;
   add('Mekanik', 'info', `Teorik en yüksek hız ≈ ${(vmax * 100).toFixed(0)} cm/s (pil ${D.vBat} V − sürücü kaybı ${D.drop} V = motora ${Vs.toFixed(1)} V)`);
+  if (rb.hazne) { const H = rb.hazne, sv = new Set(rb.servos.map(s => s.pin)); const keys = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null);
+    const miss = [...new Set(keys.filter(k => !sv.has(k)))]; if (miss.length) add('Mekanik', 'err', `İç hazne ${miss.map(k => keyLabel(k, rb.boards)).join(', ')} pinindeki servoyu kullanıyor ama Devre → Servolar'da o pinde servo yok.`);
+    else add('Mekanik', 'ok', `İç hazne: ${H.bolmeler.map(b => `${b.ad} (${b.kap} yumurta)`).join(', ') || 'bölme yok'}; ${H.kurallar.length} ayırma kuralı.`);
+    if (!H.bolmeler.some(b => b.kapak != null)) add('Mekanik', 'warn', 'İç haznede kapaklı bölme yok: alınan yumurtalar hiç bırakılamaz.');
+    for (const b of H.bolmeler) if (!H.kurallar.some(k => k.hedef === b.ad)) add('Mekanik', 'warn', `'${b.ad}' bölmesine yumurta gönderen kural yok.`); }
   { const K = (profile.mekanik || {}).kalibrasyon || {}; if (!K['2B'] && !K['3B'] && !K.hiz_carpani) add('Mekanik', 'info', 'Gerçek robotla eşleştirilmemiş: Robotlar → Mekanik → "Gerçek robotla eşleştir" ile 1 dakikalık ölçüm yaparsan simülasyon gerçeğe çok daha yakın olur.'); else add('Mekanik', 'ok', 'Gerçek robot ölçümüyle eşleştirilmiş (kalibre).'); }
   if (Vs > M.vNom * 1.5) add('Mekanik', 'warn', `Motorlara ${Vs.toFixed(1)} V gidiyor, motor ${M.vNom} V'luk: çok aşırı gerilim, motor ısınır/ömrü kısalır.`);
   else if (Vs < M.vNom * 0.6) add('Mekanik', 'warn', `Motorlara sadece ${Vs.toFixed(1)} V gidiyor (motor ${M.vNom} V): robot yavaş ve güçsüz olur.`);
@@ -220,7 +225,8 @@ function runTrial(profile, MatchClass, opts = {}) {
       if (st.driveT > 0.5 && st.slipT / st.driveT > 0.2) add('Hareket', 'warn', `Sürüş süresinin %${(st.slipT / st.driveT * 100).toFixed(0)}'inde tekerler patinaj yaptı.`);
       if (st.wallHits) add('Hareket', st.wallHits > 4 ? 'warn' : 'info', `Duvara ${st.wallHits} kez çarptı.`);
       if (st.maxTilt > 25) add('Hareket', 'err', `Robot ${st.maxTilt.toFixed(0)}° eğildi — devrilme!`); else if (st.maxTilt > 8) add('Hareket', 'warn', `Robot hareket ederken ${st.maxTilt.toFixed(0)}° eğiliyor.`);
-      const moved = m.eggs.filter((e, i) => e.gone || Math.hypot(e.x - eggs0[i][0], e.y - eggs0[i][1]) > 0.03).length; add('Hareket', 'info', `${moved} yumurtaya dokunup yerinden oynattı. Puan: ${m.score()[team]}.`);
+      const moved = m.eggs.filter((e, i) => e.gone || Math.hypot(e.x - eggs0[i][0], e.y - eggs0[i][1]) > 0.03).length; add('Hareket', 'info', `${moved} yumurtaya dokunup yerinden oynattı. Puan: ${m.score()[team]}.`); if (rb.hazne) { const ev = m.events.map(e => e.txt); const al = ev.filter(t => /bölmesine alındı/.test(t)).length, at = ev.filter(t => /dışarı attı/.test(t)).length, bir = ev.filter(t => /bölmesinden yumurta bıraktı/.test(t)).length, dolu = ev.filter(t => /dolu/.test(t)).length;
+        add('Hareket', 'info', `İç hazne: ${al} yumurta bölmeye alındı, ${at} dışarı atıldı, ${bir} bırakıldı${dolu ? `, ${dolu} kez bölme doluydu` : ''}. Şu an: ${rb.hazne.bolmeler.map(b => `${b.ad} ${b.icerik.length}/${b.kap}`).join(', ')}.`); }
       { const st2 = rb.stats; const avgI = st2.ampT ? st2.amp / st2.ampT : 0; const per2 = avgI * 120 / 3.6; const cap = rb.battery.mAh;
         add('Mekanik', per2 * 3 > cap ? 'warn' : 'info', `Akım: ortalama ≈ ${avgI.toFixed(2)} A, en yüksek ≈ ${st2.ampPeak.toFixed(1)} A. 2 dakikalık maç ≈ ${per2.toFixed(0)} mAh harcar; ${cap} mAh pil ≈ ${Math.floor(cap / Math.max(per2, 1))} maç dayanır (yaklaşık).`); }
       const led = rb.ledColor(), tn = team === 'red' ? 'Kırmızı' : 'Mavi'; const cn = { red: 'KIRMIZI', blue: 'MAVİ', mor: 'MOR' };

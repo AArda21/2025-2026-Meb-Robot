@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V4.0</title>
+<title>MEB Robot V4.1</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -15,7 +15,9 @@
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:clip}
 button,select,input,textarea{font:inherit;color:inherit}
 header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:6}
-header h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1{font-size:16px;margin:0;font-weight:700;white-space:nowrap;flex-shrink:0}
+header h1 .ver{color:var(--accent);font-size:12px;font-weight:700;margin-left:2px}
+@media (max-width:400px){header h1{font-size:15px}}
 .hud{margin-left:auto;display:flex;gap:6px;font-variant-numeric:tabular-nums}
 .chip{padding:3px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-weight:650;font-size:13px;white-space:nowrap}
 .chip.r{color:var(--red);border-color:#f2c4c7}.chip.b{color:var(--blue);border-color:#c7cfe6}
@@ -93,7 +95,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span style="color:var(--accent)">V4.0</span></h1>
+  <h1>MEB Robot <span class="ver">V4.1</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -221,6 +223,8 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
   <li><b>Kalibrasyon</b>: renk sensörü (TCS3200) ve zemin sensörü (TCRT5000) için gerçek robotta ölçtüğün değerleri gir; simülasyon bu değerleri kullanır, kodundaki renk formülünü her renk için hesaplar.</li></ul>
   <h3>Gerçek robotla eşleştirme</h3>
   <p>Robotlar → Mekanik → <b>Gerçek robotla eşleştir</b>: uygulamanın verdiği kısa ölçüm kodunu robota yükle, robotun 1 sn'de kaç cm gittiğini ve kaç derece döndüğünü ölçüp yaz, "Otomatik eşleştir"e bas. Böylece simülasyondaki <code>delay()</code> süreleri gerçek robottaki gibi aynı mesafe ve açıyı verir.</p>
+  <h3>İç hazne (ayıklayıcı)</h3>
+  <p>Robotun ağzına giren yumurtayı bir servoyla bölmelere ayırıyorsa (bizim / yeşil / dışarı), Robotlar → Mekanik → <b>İç hazne</b> kutusunda hangi servo açısında yumurtanın nereye gittiğini ve hangi kapak açılınca bölmenin boşaldığını yaz. Simülasyon yumurtayı bölmede saklar, kapak açılınca arkadan bırakır; Saha'daki "Hazne" kutusu içeriği gösterir.</p>
   <h3>3. Kontrol raporu</h3>
   <p>Kontrol sekmesi kurallara uygunluğu (30×30×30 cm, 5 kg, LED, acil stop), mekanik sorunları (sürtünen teker, iç içe geçen parça, devrilme, kapak çarpması), devre hatalarını (pin çakışması, PWM olmayan pin, servo/PWM çakışması, sürücü akım sınırı) ve kodu (derleme, eksik noktalı virgül, kullanılmayan pin, yanlış pin modu) denetler. Sonra robotu 15 sn tek başına sürüp ne yaptığını anlatır ve yolunu çizer. Kırmızı ✕ büyük ihtimalle gerçek robotta sorun çıkarır.</p>
   <h3>4. Toplu maç</h3>

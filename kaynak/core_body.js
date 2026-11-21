@@ -211,6 +211,15 @@ class Robot {
       pin: pin(s.pin), trig: pin(s.trig), echo: pin(s.echo), dpin: pin(s.dijital_pin), s0: pin(s.s0), s1: pin(s.s1), s2: pin(s.s2), s3: pin(s.s3), out: pin(s.out),
     }));
     this.servos = (D.servolar || []).map(s => ({ name: s.ad || 'servo', pin: pin(s.pin), speed: s.hiz_derece_s || 450, angle: s.baslangic_aci ?? 90 }));
+    { // İç hazne / ayıklayıcı (ör. ağza giren yumurtayı tokat servosuyla bölmelere ayıran robotlar)
+      const Hz = M.hazne; this.hazne = null;
+      if (Hz && Hz.var !== false && Hz.agiz) { const A = Hz.agiz, rng = (r) => r ? { min: r.min ?? 0, max: r.max ?? 180 } : null;
+        this.hazne = { agiz: { x0: cm(Math.min(A.x0, A.x1)), x1: cm(Math.max(A.x0, A.x1)), y0: cm(Math.min(A.y0, A.y1)), y1: cm(Math.max(A.y0, A.y1)) },
+          kurallar: (Hz.kurallar || []).map(k => ({ servo: pin(k.servo), r: rng(k), ve: k.ve ? { servo: pin(k.ve.servo), r: rng(k.ve) } : null, hedef: k.hedef || 'disari' })).filter(k => k.servo != null),
+          bolmeler: (Hz.bolmeler || []).map(bm => ({ ad: bm.ad || 'bölme', kap: bm.kapasite ?? 5, kapak: pin(bm.kapak), r: rng({ min: bm.acik_min ?? 60, max: bm.acik_max ?? 180 }), cx: cm(bm.cikis ? bm.cikis.x : -12), cy: cm(bm.cikis ? bm.cikis.y : 0), aralik: bm.aralik_ms ?? 250, icerik: [], sonCikis: -9 })),
+          disari: { x: cm(Hz.disari ? Hz.disari.x : 0), y: cm(Hz.disari ? Hz.disari.y : -14), v: (Hz.disari && Hz.disari.hiz_cms != null ? Hz.disari.hiz_cms : 40) / 100 } };
+      }
+    }
     const L = D.led; this.led = L ? { type: L.tip === 'NeoPixel' ? 'neo' : 'two', r: pin(L.kirmizi_pin), b: pin(L.mavi_pin), pin: pin(L.pin), x: cm(L.x || 0), y: cm(L.y || 0), z: cm(L.z ?? 9) } : null;
     this.circuit = (D.yerlesim || []).map(c => ({ name: c.ad, x: cm(c.x), y: cm(c.y), z: cm(c.z ?? 8), hx: cm(c.uzunluk) / 2, hy: cm(c.genislik) / 2, h: cm(c.kalinlik ?? 1.2), color: c.renk || '#0f766e' }));
     this.stop = M.acil_stop ? { x: cm(M.acil_stop.x), y: cm(M.acil_stop.y), z: cm(M.acil_stop.z ?? 8) } : null;

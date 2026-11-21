@@ -197,10 +197,32 @@ class Match {
     for (const rb of this.robots) rb._wp = null;
     this.time += dt; this.afterStep(dt);
   }
+  // İç hazne: ağızdaki yumurtayı servo açısına göre bölmeye alır / dışarı atar; bölme kapağı açılınca bırakır
+  servoNow(rb, k) { const st = rb.servoCmd || rb.servoAng; const v = st && st[k]; if (v != null) return v; const sv = rb.servos.find(s => s.pin === k); return sv ? sv.angle : null; }
+  hopper(dt) {
+    for (const rb of this.robots) { const Hz = rb.hazne; if (!Hz) continue; const s = rb.state, c = Math.cos(s.th), n = Math.sin(s.th);
+      const inR = (k, r) => { const a = this.servoNow(rb, k); return a != null && a >= r.min && a <= r.max; };
+      const toW = (lx, ly) => [s.x + c * lx - n * ly, s.y + n * lx + c * ly];
+      for (const e of this.eggs) { if (e.gone) continue; const dx = e.x - s.x, dy = e.y - s.y; const lx = c * dx + n * dy, ly = -n * dx + c * dy;
+        if (lx < Hz.agiz.x0 || lx > Hz.agiz.x1 || ly < Hz.agiz.y0 || ly > Hz.agiz.y1) continue;
+        const k = Hz.kurallar.find(k => inR(k.servo, k.r) && (!k.ve || inR(k.ve.servo, k.ve.r))); if (!k) continue;
+        if (k.hedef === 'disari') { const [wx, wy] = toW(Hz.disari.x, Hz.disari.y); const L = Math.hypot(Hz.disari.x, Hz.disari.y) || 1; this.placeEgg(e, wx, wy, (c * Hz.disari.x - n * Hz.disari.y) / L * Hz.disari.v, (n * Hz.disari.x + c * Hz.disari.y) / L * Hz.disari.v); e.toucher = rb.team; this.events.push({ t: this.time, txt: `${rb.name}: ağızdaki yumurtayı dışarı attı` }); continue; }
+        const bm = Hz.bolmeler.find(b => b.ad === k.hedef); if (!bm) continue;
+        if (bm.icerik.length >= bm.kap) { if (!bm._doluT || this.time - bm._doluT > 3) { bm._doluT = this.time; this.events.push({ t: this.time, txt: `${rb.name}: '${bm.ad}' bölmesi dolu (${bm.kap}), yumurta ağızda kaldı` }); } continue; }
+        this.storeEgg(e, rb, bm); this.events.push({ t: this.time, txt: `${rb.name}: yumurta '${bm.ad}' bölmesine alındı (${bm.icerik.length}/${bm.kap})` });
+      }
+      for (const bm of Hz.bolmeler) { if (!bm.icerik.length || bm.kapak == null || !inR(bm.kapak, bm.r) || this.time - bm.sonCikis < bm.aralik / 1000) continue;
+        const e = bm.icerik.shift(); bm.sonCikis = this.time; const [wx, wy] = toW(bm.cx, bm.cy); const L = Math.hypot(bm.cx, bm.cy) || 1;
+        this.placeEgg(e, wx, wy, (c * bm.cx - n * bm.cy) / L * 0.15, (n * bm.cx + c * bm.cy) / L * 0.15); e.toucher = rb.team; e.stored = null; this.events.push({ t: this.time, txt: `${rb.name}: '${bm.ad}' bölmesinden yumurta bıraktı` }); }
+    }
+  }
+  storeEgg(e, rb, bm) { e.gone = true; e.stored = { team: rb.team, bolme: bm.ad }; e.vx = e.vy = 0; bm.icerik.push(e); }
+  placeEgg(e, x, y, vx, vy) { const F = RULES.FIELD, r = RULES.EGG_R; e.x = clamp(x, r, F - r); e.y = clamp(y, r, F - r); e.vx = vx; e.vy = vy; e.gone = false; e.still = 0; e.stored = null; }
   afterStep(dt) {
     for (const e of this.eggs) { if (e.gone || Math.hypot(e.vx, e.vy) < 0.01) continue; let best = null, bd = 0.25; for (const rb of this.robots) { const d = Math.hypot(e.x - rb.state.x, e.y - rb.state.y); if (d < bd) { bd = d; best = rb; } } if (best) e.toucher = best.team; }
     if (this.rules.ledCeza) for (const rb of this.robots) { if (rb.ledColor() === rb.team) { rb.ledOffT = 0; rb.ledPenActive = false; } else { rb.ledOffT = (rb.ledOffT || 0) + dt; if (rb.ledOffT > 5 && !rb.ledPenActive) { rb.ledPenActive = true; rb.ledPens = (rb.ledPens || 0) + 1; this.events.push({ t: this.time, txt: `${rb.name}: köşe LED'i 5 sn'den uzun yanmadı → −10 ceza` }); } } }
     for (const rb of this.robots) { const s = rb.state; this.stepStats(rb, dt); if (rb.trail.length === 0 || this.time - rb.trail[rb.trail.length - 1][2] > 0.05) { rb.trail.push([s.x, s.y, this.time, s.th]); if (rb.trail.length > 4000) rb.trail.shift(); } }
+    this.hopper(dt);
     this.referee(dt);
   }
   drive2D(rb, dt) {

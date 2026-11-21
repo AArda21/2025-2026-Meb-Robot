@@ -326,7 +326,7 @@ const DEFAULT_PROFILES = [
   "id": "eski2025",
   "ad": "Antalya 2026 robotumuz",
   "renk": "#6d28d9",
-  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler ve sensör yerleri TAHMİNİ.",
+  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mekanik ölçüler, sensör yerleri ve iç hazne (tokat → bizim/yeşil bölme, kapaklar A8/A9) TAHMİNİ.",
   "kartlar": [
    {
     "id": "mega",
@@ -420,9 +420,82 @@ const DEFAULT_PROFILES = [
      "z0": 0.4,
      "z1": 6,
      "renk": "#334155"
+    },
+    {
+     "ad": "Ağız arka (stoper)",
+     "x": 9.5,
+     "y": 0,
+     "uzunluk": 1,
+     "genislik": 10.5,
+     "z0": 0.3,
+     "z1": 6,
+     "renk": "#1f2937"
     }
    ],
-   "model3d": null
+   "model3d": null,
+   "hazne": {
+    "var": true,
+    "agiz": {
+     "x0": 9,
+     "x1": 16,
+     "y0": -4.5,
+     "y1": 4.5
+    },
+    "kurallar": [
+     {
+      "servo": "nano:10",
+      "min": 150,
+      "max": 180,
+      "ve": {
+       "servo": "nano:11",
+       "min": 130,
+       "max": 180
+      },
+      "hedef": "yesil"
+     },
+     {
+      "servo": "nano:10",
+      "min": 150,
+      "max": 180,
+      "hedef": "bizim"
+     },
+     {
+      "servo": "nano:10",
+      "min": 0,
+      "max": 30,
+      "hedef": "disari"
+     }
+    ],
+    "bolmeler": [
+     {
+      "ad": "bizim",
+      "kapasite": 5,
+      "kapak": "mega:A8",
+      "acik_min": 60,
+      "acik_max": 180,
+      "cikis": {
+       "x": -15,
+       "y": 3
+      }
+     },
+     {
+      "ad": "yesil",
+      "kapasite": 2,
+      "kapak": "mega:A9",
+      "acik_min": 80,
+      "acik_max": 180,
+      "cikis": {
+       "x": -15,
+       "y": -4
+      }
+     }
+    ],
+    "disari": {
+     "x": 4,
+     "y": -14,
+     "hiz_cms": 40
+    }
+   }
   },
   "devre": {
    "surucu": {

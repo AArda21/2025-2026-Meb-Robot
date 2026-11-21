@@ -27,12 +27,7 @@ function makeMatch3D(R) {
       for (const [cx, cy, hx, hy] of [[-t / 2, F / 2, t / 2, F / 2 + t], [F + t / 2, F / 2, t / 2, F / 2 + t], [F / 2, -t / 2, F / 2 + t, t / 2], [F / 2, F + t / 2, F / 2 + t, t / 2]])
         this.wallColliders.add(W.createCollider(fr(R.ColliderDesc.cuboid(hx, hy, H / 2).setTranslation(cx, cy, H / 2), E.muWall, 0.15).setCollisionGroups(grp(G_WORLD, 0xffff)), fb).handle);
       const r = RULES.EGG_R, hh = RULES.EGG_H / 2, vol = Math.PI * r * r * RULES.EGG_H, qx90 = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
-      for (const e of this.eggs) {
-        const q = qMul(qYaw(e.phi), qx90);
-        const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(e.x, e.y, hh + 0.0005).setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.2));
-        const col = W.createCollider(fr(R.ColliderDesc.cylinder(hh, r).setDensity(E.eggMass / vol), E.muEggFloor, 0.2).setCollisionGroups(grp(G_WORLD, 0xffff)), body);
-        e.body = body; e.q = q; this.eggByCollider.set(col.handle, e);
-      }
+      for (const e of this.eggs) this.addEggBody(e);
       this.robots.forEach((rb, i) => this.buildRobot(rb, i));
     }
     buildRobot(rb, idx) {
@@ -113,6 +108,15 @@ function makeMatch3D(R) {
       for (const g of rb.gates) { let d = (yawOf(g.body.rotation()) - s.th) * 180 / Math.PI; d = ((d % 360) + 540) % 360 - 180; rb.servoAng[g.p.servoPin] = (d - g.p.angOff) / (g.p.dir || 1); rb.servoVel[g.p.servoPin] = 0; }
       if (s.z < -0.2) { rb.body.setTranslation({ x: s.x, y: s.y, z: 0.05 }, true); }
     }
+    addEggBody(e) {
+      const W = this.world, E = this.field, r = RULES.EGG_R, hh = RULES.EGG_H / 2, vol = Math.PI * r * r * RULES.EGG_H, qx90 = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+      const q = qMul(qYaw(e.phi || 0), qx90);
+      const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(e.x, e.y, hh + 0.0005).setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.2));
+      if (e.vx || e.vy) body.setLinvel({ x: e.vx || 0, y: e.vy || 0, z: 0 }, true);
+      const col = W.createCollider(fr(R.ColliderDesc.cylinder(hh, r).setDensity(E.eggMass / vol), E.muEggFloor, 0.2).setCollisionGroups(grp(G_WORLD, 0xffff)), body);
+      e.body = body; e.q = q; this.eggByCollider.set(col.handle, e);
+    }
+    placeEgg(e, x, y, vx, vy) { super.placeEgg(e, x, y, vx, vy); if (e.body) { try { this.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } this.addEggBody(e); }
     syncEggs() {
       for (const e of this.eggs) {
         if (!e.body) continue; const p = e.body.translation(), v = e.body.linvel(), q = e.body.rotation();
