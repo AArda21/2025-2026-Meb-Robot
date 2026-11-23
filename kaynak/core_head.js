@@ -4,7 +4,7 @@ const SIM = (() => {
 'use strict';
 
 const RULESETS = {
-  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true, erkenBitis: 10 },
+  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true },
   '2025': { ad: '2025 (Kayseri) — ceza yumurtası, 3 dk', sure: 180, yesil: 0, ceza: true, ledCeza: false },
 };
 // Pil tipleri: hücre gerilimi (dolu/boş), iç direnç (Ω, hücre başına), varsayılan kapasite

@@ -248,6 +248,11 @@ class Robot {
     }
     let minX = 1, maxX = -1, minY = 1, maxY = -1;
     for (const p of this.parts) if (p.servoPin == null) { minX = Math.min(minX, p.x - p.hx); maxX = Math.max(maxX, p.x + p.hx); minY = Math.min(minY, p.y - p.hy); maxY = Math.max(maxY, p.y + p.hy); }
+    const drag = M.hava_cda_cm2;
+    const height = Math.max(0.01, ...this.parts.map(p => p.z1 || 0));
+    // CdA ölçümü yoksa dış ölçülerden elde edilen kaba bir ön alan tahmini kullanılır.
+    this.dragArea = drag != null && drag !== '' && Number.isFinite(+drag) && +drag >= 0
+      ? +drag / 10000 : Math.max(0, maxY - minY) * height;
     this.inertia = this.mass * ((maxX - minX) ** 2 + (maxY - minY) ** 2) / 12 || 0.005;
     this.radius = 0.02 + Math.max(0.1, ...this.parts.map(p => p.servoPin != null && p.pivot ? Math.hypot(p.pivot[0], p.pivot[1]) + p.len : Math.hypot(Math.abs(p.x) + p.hx, Math.abs(p.y) + p.hy)));
   }

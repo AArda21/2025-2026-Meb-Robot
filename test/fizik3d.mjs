@@ -3,7 +3,7 @@ import fs from 'fs'; import vm from 'vm'; import path from 'path';
 const K = path.resolve('kaynak'); const read = (f) => fs.readFileSync(path.join(K, f), 'utf8');
 const RAPIER = (await import('@dimforge/rapier3d-compat')).default; await RAPIER.init();
 const ctx = { console, Math, Date, setTimeout, performance, TextDecoder, atob: (s) => Buffer.from(s, 'base64').toString('binary') }; vm.createContext(ctx);
-vm.runInContext(['core_head.js', '_transpiler.js', 'core_body.js', 'core_sim.js', 'core_check.js'].map(read).join('\n') + '\n;globalThis.SIM = SIM;', ctx);
+vm.runInContext(read('core3.js') + '\n;globalThis.SIM = SIM;', ctx);
 vm.runInContext(read('profiles.js') + '\n;globalThis.DEFAULT_PROFILES = DEFAULT_PROFILES;', ctx);
 vm.runInContext(read('physics3d.js') + '\n;globalThis.makeMatch3D = makeMatch3D;', ctx);
 const SIM = ctx.SIM, P = ctx.DEFAULT_PROFILES, M3 = ctx.makeMatch3D(RAPIER);

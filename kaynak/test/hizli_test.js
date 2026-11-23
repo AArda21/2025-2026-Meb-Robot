@@ -63,4 +63,27 @@ const zeminSatiri = (yuzey, v) => 'MEBOLCUM ' + zemin.etiket + ' ' + yuzey + ' '
 const zdata = SIM.sensorOlcumleriniOku([zeminSatiri(1, 0), zeminSatiri(1, 10), zeminSatiri(1, 1024),
   zeminSatiri(4, 1023), zeminSatiri(5, 12)].join('\n'), zemin);
 ok(zdata.kirmizi === 5 && zdata.beyaz === 1023 && !('bos' in zdata), 'zemin ölçümü aralık veya medyan hatası');
+// 8) Yarış süresi, doğru bırakıcı ve video örneklerinin zaman karşılaştırması.
+const rules26 = new SIM.Match({ kural: '2026', profiles: { red: P[0], blue: P[2] }, saha: { ozel: [] } });
+rules26.banked.red = Array.from({ length: 10 }, () => ({ kind: 'red', by: 'red' }));
+ok(!rules26.isOver(), '2026 maçı on yumurtada erken bitti');
+rules26.time = 120;
+ok(rules26.isOver(), '2026 maçı 120 saniyede bitmedi');
+rules26.banked.red = [{ kind: 'red', by: 'blue' }];
+rules26.banked.blue = [{ kind: 'blue', by: 'blue' }];
+ok(rules26.result().winner === 'blue', 'rakibin bıraktığı yumurta yeterlilik koşulunu sağladı');
+rules26.banked.red.push({ kind: 'red', by: 'red' });
+rules26.banked.blue.push({ kind: 'blue', by: 'red' });
+rules26.firstDrop = { by: 'blue', zone: 'red' };
+ok(rules26.result().winner === 'blue', 'eşitlikte bırakıcı yerine köşe sahibi kazandı');
+rules26.eggs = [{ x: 0.1, y: 0.1, vx: 0.1, vy: 0, kind: 'red', toucher: 'red' }];
+ok(rules26.score().red === 2, 'hareketli yumurta puanlandı');
+
+const aero = SIM.airImpulse({ mass: 1, dragArea: 0.03 }, 0.5, 0, 1);
+ok(Math.abs(aero.x + 0.0045) < 1e-10 && aero.y === 0, 'karesel hava sürüklemesi yanlış');
+const iz = SIM.hareketIziniOku('0;0\r\n1,25;20\r\n2;100');
+const fark = SIM.hareketIziniKarsilastir(P[0], SIM.Match, 'duz', 200, iz);
+ok(fark.sonuclar[0].sim === 0 && fark.sonuclar[1].sim > 20 && fark.rmse > 0, 'ara zaman örnekleri karşılaştırılmadı');
+ok(Math.abs(fark.gercekYari - 1.53125) < 1e-9, 'yarı mesafe zamanı doğrusal süre varsayımıyla hesaplandı');
+reddet(() => SIM.hareketIziniOku('0;0\n1;20\n1;30'), 'tekrarlanan video zamanları kabul edildi');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

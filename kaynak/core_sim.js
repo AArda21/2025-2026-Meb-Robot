@@ -126,6 +126,12 @@ const Sensors = {
 //                                  MAÇ (2B fizik motoru)
 // =====================================================================================
 // Zemin her yerde aynı kaygan değildir (toz, el izi, sunta dokusu): ±%8 yumuşak değişen sürtünme alanı
+// Hava durgun kabul edilir. Sürükleme itkisi hızın ters yönündedir.
+function airImpulse(rb, vx, vy, dt) {
+  const speed = Math.hypot(vx, vy);
+  const f = Math.min(rb.mass, 0.5 * 1.2 * rb.dragArea * speed * dt);
+  return { x: -vx * f, y: -vy * f };
+}
 function floorMu(m, x, y) { if (!m || !m.field || m.opts.gercek && m.opts.gercek.kusur === false) return 1; const s = (m.field.seed | 0) * 0.37;
   return 1 + 0.045 * Math.sin(x * 7.1 + s) * Math.cos(y * 5.3 - s * 0.7) + 0.035 * Math.sin((x + y) * 13.7 + s * 1.9); }
 // Kalibrasyon: dönüş direnci (>0 yavaşlatır) ya da dönüş kolaylığı (<0, tekerlerin izin verdiği hızı geçmez). Açısal hız değişimini döndürür.
@@ -154,9 +160,7 @@ class Match {
   get dt() { return 0.001; }
   get engineName() { return '2B'; }
   get matchTime() { return this.rules.sure; }
-  // 2026: bir robot kendi renginden 10 yumurtayı köşesine bırakırsa maç erken biter
-  earlyWinner() { if (!this.rules.erkenBitis) return null; for (const t of ['red', 'blue']) if (this.robotByTeam(t) && this.banked[t].filter(e => e.kind === t).length >= this.rules.erkenBitis) return t; return null; }
-  isOver() { return this.time >= this.matchTime || !!this.earlyWinner(); }
+  isOver() { return this.time >= this.matchTime; }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
     this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
@@ -202,7 +206,10 @@ class Match {
   step(dt) {
     this.useRng();
     for (const rb of this.robots) rb.runPrograms(this.time);
-    for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt); }
+    for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt);
+      const j = airImpulse(rb, rb.state.vx, rb.state.vy, dt);
+      rb.applyImp(0, 0, j.x, j.y);
+    }
     const E = this.field, g = RULES.G;
     for (const rb of this.robots) { const s = rb.state; s.x += s.vx * dt; s.y += s.vy * dt; s.th += s.w * dt; }
     for (const e of this.eggs) { if (e.gone) continue; const sp = Math.hypot(e.vx, e.vy); if (sp > 0) { const dv = Math.min(sp, E.muEggFloor * g * dt); e.vx -= e.vx / sp * dv; e.vy -= e.vy / sp * dv; } e.x += e.vx * dt; e.y += e.vy * dt; }
@@ -239,7 +246,6 @@ class Match {
     if (B.V < B.nom * 0.68 && !rb._brownWarn) { rb._brownWarn = true; this.events.push({ t: this.time, txt: `${rb.name}: pil gerilimi ${B.V.toFixed(1)} V'a düştü (${B.I.toFixed(1)} A çekiliyor) — Arduino resetlenebilir, motorlar güçsüz kalır` }); } }
   afterStep(dt) {
     for (const rb of this.robots) this.updateBattery(rb, dt);
-    for (const e of this.eggs) { if (e.gone || Math.hypot(e.vx, e.vy) < 0.01) continue; let best = null, bd = 0.25; for (const rb of this.robots) { const d = Math.hypot(e.x - rb.state.x, e.y - rb.state.y); if (d < bd) { bd = d; best = rb; } } if (best) e.toucher = best.team; }
     if (this.rules.ledCeza) for (const rb of this.robots) { if (rb.ledColor() === rb.team) { rb.ledOffT = 0; rb.ledPenActive = false; } else { rb.ledOffT = (rb.ledOffT || 0) + dt; if (rb.ledOffT > 5 && !rb.ledPenActive) { rb.ledPenActive = true; rb.ledPens = (rb.ledPens || 0) + 1; this.events.push({ t: this.time, txt: `${rb.name}: köşe LED'i 5 sn'den uzun yanmadı → −10 ceza` }); } } }
     for (const rb of this.robots) { const s = rb.state; this.stepStats(rb, dt); if (rb.trail.length === 0 || this.time - rb.trail[rb.trail.length - 1][2] > 0.05) { rb.trail.push([s.x, s.y, this.time, s.th]); if (rb.trail.length > 4000) rb.trail.shift(); } }
     this.hopper(dt);
@@ -320,7 +326,7 @@ class Match {
         const rx = cpx - s.x, ry = cpy - s.y; let [vrx, vry] = rb.pointVel(rx, ry); if (wp.piv && wp.wS) { vrx += -wp.wS * (cpy - wp.piv[1]); vry += wp.wS * (cpx - wp.piv[0]); }
         const pinned = (e.x - r < 0.001 && nx < -0.3) || (e.x + r > F - 0.001 && nx > 0.3) || (e.y - r < 0.001 && ny < -0.3) || (e.y + r > F - 0.001 && ny > 0.3); const invE = pinned ? 0 : 1 / me;
         const rvx = e.vx - vrx, rvy = e.vy - vry, vn = rvx * nx + rvy * ny;
-        if (vn < 0) { const j = -(1 + E.eRobotEgg) * vn / (invE + rb.invMass(rx, ry, nx, ny)); e.vx += j * nx * invE; e.vy += j * ny * invE; rb.applyImp(rx, ry, -j * nx, -j * ny);
+        if (vn < 0) { if (!pinned && vn < -0.001) e.toucher = rb.team; const j = -(1 + E.eRobotEgg) * vn / (invE + rb.invMass(rx, ry, nx, ny)); e.vx += j * nx * invE; e.vy += j * ny * invE; rb.applyImp(rx, ry, -j * nx, -j * ny);
           const tx = -ny, ty = nx, vt = rvx * tx + rvy * ty; const jt = clamp(-vt / (invE + rb.invMass(rx, ry, tx, ty)), -E.muRobotEgg * j, E.muRobotEgg * j); e.vx += jt * tx * invE; e.vy += jt * ty * invE; rb.applyImp(rx, ry, -jt * tx, -jt * ty); }
         if (pinned) { s.x -= nx * pen; s.y -= ny * pen; } else { const w = me / (me + rb.mass); e.x += nx * pen * (1 - w); e.y += ny * pen * (1 - w); s.x -= nx * pen * w; s.y -= ny * pen * w; }
       }
@@ -362,17 +368,17 @@ class Match {
     if (!this.field.refereeCollect) return;
     for (const e of this.eggs) {
       if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R);
-      if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
+      if (z && Math.hypot(e.vx, e.vy, e.vz || 0) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop && e.by) this.firstDrop = { t: this.time, by: e.by, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
       else e.still = 0;
     }
   }
   result() {
-    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].own > 0;
+    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].self > 0;
     if (teams.length < 2) { const t = teams[0]; return { sc, winner: t && ok(t) ? t : null, reason: t && ok(t) ? 'tek robot' : 'kendi rengi yok' }; }
     const [a, b] = teams; let w = null, reason = '';
     if (ok(a) && !ok(b)) { w = a; reason = 'rakip kendi rengini bırakamadı'; } else if (ok(b) && !ok(a)) { w = b; reason = 'rakip kendi rengini bırakamadı'; }
     else if (!ok(a) && !ok(b)) { reason = 'iki robot da kendi rengini bırakamadı'; }
-    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop ? this.firstDrop.zone : null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
+    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop?.by || null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
     return { sc, winner: w, reason };
   }
   snapshot() {
@@ -384,13 +390,13 @@ class Match {
     this.eggs.forEach((e, i) => { const v = s.e[i]; e._hidden = !v; if (v) { e.x = v[0]; e.y = v[1]; e.z = v[2]; e.phi = v[3]; e.q = v[4] ? { x: v[4][0], y: v[4][1], z: v[4][2], w: v[4][3] } : e.q; } });
   }
   score() {
-    const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
+    const sc = { red: 0, blue: 0, detail: { red: { own: 0, self: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, self: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
     const add = (zone, e) => {
       if (zone === 'green') { if (e.kind === 'green' && e.by && sc.detail[e.by]) { sc[e.by] += 2; sc.detail[e.by].green++; } return; }
-      const d = sc.detail[zone]; if (!d) return; if (e.kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (e.kind === zone) { sc[zone] += 1; d.own++; } else if (!e.by || e.by === zone) { sc[zone] -= 2; d.wrong++; } else { d.planted = (d.planted || 0) + 1; }
+      const d = sc.detail[zone]; if (!d) return; if (e.kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (e.kind === zone) { sc[zone] += 1; d.own++; if (e.by === zone) d.self++; } else if (!e.by || e.by === zone) { sc[zone] -= 2; d.wrong++; } else { d.planted = (d.planted || 0) + 1; }
     };
     for (const z of Object.keys(this.banked)) for (const e of this.banked[z]) add(z, e);
-    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && !this.eggUnderRobot(e)) add(z, Object.assign({ by: e.toucher }, e)); }
+    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && Math.hypot(e.vx, e.vy, e.vz || 0) < 0.005 && !this.eggUnderRobot(e)) add(z, Object.assign({ by: e.toucher }, e)); }
     for (const rb of this.robots) if (rb.ledPens) { sc[rb.team] -= 10 * rb.ledPens; sc.detail[rb.team].led = rb.ledPens; }
     return sc;
   }

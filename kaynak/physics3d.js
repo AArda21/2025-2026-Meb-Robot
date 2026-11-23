@@ -33,8 +33,11 @@ function makeMatch3D(R) {
     buildRobot(rb, idx) {
       const W = this.world, E = this.field, s = rb.state, wr = rb.wheelR, yaw = qYaw(s.th);
       const bit = 0x0010 << idx, RG = grp(bit, 0xffff & ~bit); rb.colliders = new Set(); rb.servoCmd = Object.assign({}, rb.servoAng);
-      const mw = 0.045, gates = rb.parts.filter(p => p.servoPin != null && p.pivot), mg = 0.02;
-      const mBody = Math.max(0.2, rb.mass - 2 * mw - gates.length * mg);
+      const gates = rb.parts.filter(p => p.servoPin != null && p.pivot);
+      // Tekerlekler ve kapaklar, profilde girilen toplam kütleye dahildir.
+      const scale = Math.min(1, rb.mass * 0.5 / (rb.wheelCount * 0.045 + gates.length * 0.02));
+      const mw = 0.045 * scale, mg = 0.02 * scale;
+      const mBody = rb.mass - rb.wheelCount * mw - gates.length * mg;
       const L = 0.2, Wd = 0.17, Hh = 0.08;
       const bd = R.RigidBodyDesc.dynamic().setTranslation(s.x, s.y, wr + 0.001).setRotation(yaw).setCanSleep(false)
         .setAdditionalMassProperties(mBody, { x: rb.comX, y: 0, z: rb.comZ - wr }, { x: mBody * (Wd * Wd + Hh * Hh) / 12, y: mBody * (L * L + Hh * Hh) / 12, z: mBody * (L * L + Wd * Wd) / 12 }, { x: 0, y: 0, z: 0, w: 1 });
@@ -63,7 +66,7 @@ function makeMatch3D(R) {
         { const side = W.createCollider(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr * 0.985).setDensity(0), E.muRobotEgg, 0.1).setCollisionGroups(grp(bit, 0xffff & ~bit & ~G_FLOOR)), body); rb.colliders.add(side.handle); this.robotByCollider.set(side.handle, rb); }
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
-        const wobj = { body, j, spin: 0, side, col: wcol, mu0: (rb.muS + rb.muK) / 2 }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
+        const wobj = { body, j, spin: 0, side, ax, col: wcol, mu0: (rb.muS + rb.muK) / 2 }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
       }
       rb.gates = [];
       for (const p of gates) {
@@ -83,6 +86,9 @@ function makeMatch3D(R) {
       for (const rb of this.robots) {
         this.updateServos(rb, dt, rb.servoCmd);
         for (const g of rb.gates) g.j.configureMotorPosition(((g.p.angOff + g.p.dir * (rb.servoCmd[g.p.servoPin] ?? 0)) * Math.PI) / 180, 1.5, 0.05);
+        const velocity = rb.body.linvel();
+        const air = SIM.airImpulse(rb, velocity.x, velocity.y, dt);
+        rb.body.applyImpulse({ ...air, z: 0 }, true);
         const M = rb.motor, k = M.tStall / M.w0;
         for (const wh of rb.wheelList) { const side = wh.side;
           const { V, mode, duty } = rb.sideVoltage(side);
@@ -91,7 +97,20 @@ function makeMatch3D(R) {
           if (rb.kusur && mode === 'drive') damp *= rb.kusur.tork[side];
           if (wh.col && ((this._fmT = (this._fmT || 0) + 1) % 25 === 0)) { const t = wh.body.translation(); try { wh.col.setFriction(wh.mu0 * SIM.floorMu(this, t.x, t.y)); } catch (e) { } }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp; wh.duty = duty ?? 1;
-          const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
+          // 2B ile aynı yuvarlanma katsayısı. Teker havadayken zemin direnci uygulanmaz.
+          const q = rb.body.rotation(), axis = qRot(q, [0, 1, 0]);
+          const wa = wh.body.angvel(), ca = rb.body.angvel();
+          const wr = (wa.x - ca.x) * axis[0] + (wa.y - ca.y) * axis[1] + (wa.z - ca.z) * axis[2];
+          if (Math.abs(wr) > 0.3) {
+            const onFloor = wh.body.translation().z <= rb.wheelR + 0.002;
+            const load = rb.mass * RULES.G * rb.loadFrac * rb.axleLoad[rb.axles.indexOf(wh.ax)] / 2;
+            const rolling = onFloor ? rb.crr * load * rb.wheelR : 0;
+            const j = -Math.sign(wr) * Math.min((M.tFric + rolling) * dt,
+              Math.abs(wr) * (M.jRefl + rb.mass * rb.wheelR ** 2 / rb.wheelCount));
+            const impulse = { x: axis[0] * j, y: axis[1] * j, z: axis[2] * j };
+            wh.body.applyTorqueImpulse(impulse, true);
+            rb.body.applyTorqueImpulse({ x: -impulse.x, y: -impulse.y, z: -impulse.z }, true);
+          }
         }
         if (rb.caster && rb.caster.tip === 'sarhos') { // döner (sarhoş) teker: 2B ile aynı model, şasiye yana itki olarak
           const C = rb.caster, q = rb.body.rotation(), cp = qRot(q, [C.x, C.y, 0]), t = rb.body.translation(), lv = rb.body.linvel(), av = rb.body.angvel();
@@ -128,13 +147,28 @@ function makeMatch3D(R) {
       const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(e.x, e.y, hh + 0.0005).setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.2));
       if (e.vx || e.vy) body.setLinvel({ x: e.vx || 0, y: e.vy || 0, z: 0 }, true);
       const col = W.createCollider(fr(R.ColliderDesc.cylinder(hh, r).setDensity(E.eggMass / vol), E.muEggFloor, 0.2).setCollisionGroups(grp(G_WORLD, 0xffff)), body);
-      e.body = body; e.q = q; this.eggByCollider.set(col.handle, e);
+      e.body = body; e.collider = col; e.q = q; this.eggByCollider.set(col.handle, e);
     }
     placeEgg(e, x, y, vx, vy) { super.placeEgg(e, x, y, vx, vy); if (e.body) { try { this.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } this.addEggBody(e); }
     syncEggs() {
       for (const e of this.eggs) {
         if (!e.body) continue; const p = e.body.translation(), v = e.body.linvel(), q = e.body.rotation();
-        e.x = p.x; e.y = p.y; e.z = p.z; e.vx = v.x; e.vy = v.y; e.q = q; const ax = qRot(q, [1, 0, 0]); e.phi = Math.atan2(ax[1], ax[0]);
+        e.x = p.x; e.y = p.y; e.z = p.z; e.vx = v.x; e.vy = v.y; e.vz = v.z; e.q = q; const ax = qRot(q, [1, 0, 0]); e.phi = Math.atan2(ax[1], ax[0]);
+        if (Math.hypot(v.x, v.y) >= 0.005) {
+          let impulse = 0;
+          this.world.contactPairsWith(e.collider, other => {
+            const rb = this.robotByCollider.get(other.handle);
+            if (!rb) return;
+            this.world.contactPair(e.collider, other, manifold => {
+              const normal = manifold.normal();
+              if (Math.abs(normal.z) > 0.8) return;
+              for (let i = 0; i < manifold.numContacts(); i++) {
+                const j = manifold.contactImpulse(i);
+                if (j > impulse) { impulse = j; e.toucher = rb.team; }
+              }
+            });
+          });
+        }
         if (p.z < -0.05 || p.x < -0.05 || p.y < -0.05 || p.x > RULES.FIELD + 0.05 || p.y > RULES.FIELD + 0.05) { e.body.setTranslation({ x: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.x)), y: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.y)), z: 0.02 }, true); e.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
       }
     }

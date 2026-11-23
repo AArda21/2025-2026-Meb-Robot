@@ -251,7 +251,7 @@ const SIM = (() => {
 'use strict';
 
 const RULESETS = {
-  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true, erkenBitis: 10 },
+  '2026': { ad: '2026 (Antalya) — yeşil köşe, 2 dk', sure: 120, yesil: 3, ceza: false, ledCeza: true },
   '2025': { ad: '2025 (Kayseri) — ceza yumurtası, 3 dk', sure: 180, yesil: 0, ceza: true, ledCeza: false },
 };
 // Pil tipleri: hücre gerilimi (dolu/boş), iç direnç (Ω, hücre başına), varsayılan kapasite
@@ -863,6 +863,11 @@ class Robot {
     }
     let minX = 1, maxX = -1, minY = 1, maxY = -1;
     for (const p of this.parts) if (p.servoPin == null) { minX = Math.min(minX, p.x - p.hx); maxX = Math.max(maxX, p.x + p.hx); minY = Math.min(minY, p.y - p.hy); maxY = Math.max(maxY, p.y + p.hy); }
+    const drag = M.hava_cda_cm2;
+    const height = Math.max(0.01, ...this.parts.map(p => p.z1 || 0));
+    // CdA ölçümü yoksa dış ölçülerden elde edilen kaba bir ön alan tahmini kullanılır.
+    this.dragArea = drag != null && drag !== '' && Number.isFinite(+drag) && +drag >= 0
+      ? +drag / 10000 : Math.max(0, maxY - minY) * height;
     this.inertia = this.mass * ((maxX - minX) ** 2 + (maxY - minY) ** 2) / 12 || 0.005;
     this.radius = 0.02 + Math.max(0.1, ...this.parts.map(p => p.servoPin != null && p.pivot ? Math.hypot(p.pivot[0], p.pivot[1]) + p.len : Math.hypot(Math.abs(p.x) + p.hx, Math.abs(p.y) + p.hy)));
   }
@@ -1089,6 +1094,12 @@ const Sensors = {
 //                                  MAÇ (2B fizik motoru)
 // =====================================================================================
 // Zemin her yerde aynı kaygan değildir (toz, el izi, sunta dokusu): ±%8 yumuşak değişen sürtünme alanı
+// Hava durgun kabul edilir. Sürükleme itkisi hızın ters yönündedir.
+function airImpulse(rb, vx, vy, dt) {
+  const speed = Math.hypot(vx, vy);
+  const f = Math.min(rb.mass, 0.5 * 1.2 * rb.dragArea * speed * dt);
+  return { x: -vx * f, y: -vy * f };
+}
 function floorMu(m, x, y) { if (!m || !m.field || m.opts.gercek && m.opts.gercek.kusur === false) return 1; const s = (m.field.seed | 0) * 0.37;
   return 1 + 0.045 * Math.sin(x * 7.1 + s) * Math.cos(y * 5.3 - s * 0.7) + 0.035 * Math.sin((x + y) * 13.7 + s * 1.9); }
 // Kalibrasyon: dönüş direnci (>0 yavaşlatır) ya da dönüş kolaylığı (<0, tekerlerin izin verdiği hızı geçmez). Açısal hız değişimini döndürür.
@@ -1117,9 +1128,7 @@ class Match {
   get dt() { return 0.001; }
   get engineName() { return '2B'; }
   get matchTime() { return this.rules.sure; }
-  // 2026: bir robot kendi renginden 10 yumurtayı köşesine bırakırsa maç erken biter
-  earlyWinner() { if (!this.rules.erkenBitis) return null; for (const t of ['red', 'blue']) if (this.robotByTeam(t) && this.banked[t].filter(e => e.kind === t).length >= this.rules.erkenBitis) return t; return null; }
-  isOver() { return this.time >= this.matchTime || !!this.earlyWinner(); }
+  isOver() { return this.time >= this.matchTime; }
   defaultPose(team) { const F = RULES.FIELD; return team === 'red' ? { x: 0.25, y: 0.25, th: Math.PI / 4 } : { x: F - 0.25, y: F - 0.25, th: Math.PI * 5 / 4 }; }
   reset() {
     this._rng = mulberry32(((this.field.seed | 0) * 7919 + 17) | 0);
@@ -1165,7 +1174,10 @@ class Match {
   step(dt) {
     this.useRng();
     for (const rb of this.robots) rb.runPrograms(this.time);
-    for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt); }
+    for (const rb of this.robots) { this.updateServos(rb, dt, rb.servoAng); this.drive2D(rb, dt);
+      const j = airImpulse(rb, rb.state.vx, rb.state.vy, dt);
+      rb.applyImp(0, 0, j.x, j.y);
+    }
     const E = this.field, g = RULES.G;
     for (const rb of this.robots) { const s = rb.state; s.x += s.vx * dt; s.y += s.vy * dt; s.th += s.w * dt; }
     for (const e of this.eggs) { if (e.gone) continue; const sp = Math.hypot(e.vx, e.vy); if (sp > 0) { const dv = Math.min(sp, E.muEggFloor * g * dt); e.vx -= e.vx / sp * dv; e.vy -= e.vy / sp * dv; } e.x += e.vx * dt; e.y += e.vy * dt; }
@@ -1202,7 +1214,6 @@ class Match {
     if (B.V < B.nom * 0.68 && !rb._brownWarn) { rb._brownWarn = true; this.events.push({ t: this.time, txt: `${rb.name}: pil gerilimi ${B.V.toFixed(1)} V'a düştü (${B.I.toFixed(1)} A çekiliyor) — Arduino resetlenebilir, motorlar güçsüz kalır` }); } }
   afterStep(dt) {
     for (const rb of this.robots) this.updateBattery(rb, dt);
-    for (const e of this.eggs) { if (e.gone || Math.hypot(e.vx, e.vy) < 0.01) continue; let best = null, bd = 0.25; for (const rb of this.robots) { const d = Math.hypot(e.x - rb.state.x, e.y - rb.state.y); if (d < bd) { bd = d; best = rb; } } if (best) e.toucher = best.team; }
     if (this.rules.ledCeza) for (const rb of this.robots) { if (rb.ledColor() === rb.team) { rb.ledOffT = 0; rb.ledPenActive = false; } else { rb.ledOffT = (rb.ledOffT || 0) + dt; if (rb.ledOffT > 5 && !rb.ledPenActive) { rb.ledPenActive = true; rb.ledPens = (rb.ledPens || 0) + 1; this.events.push({ t: this.time, txt: `${rb.name}: köşe LED'i 5 sn'den uzun yanmadı → −10 ceza` }); } } }
     for (const rb of this.robots) { const s = rb.state; this.stepStats(rb, dt); if (rb.trail.length === 0 || this.time - rb.trail[rb.trail.length - 1][2] > 0.05) { rb.trail.push([s.x, s.y, this.time, s.th]); if (rb.trail.length > 4000) rb.trail.shift(); } }
     this.hopper(dt);
@@ -1283,7 +1294,7 @@ class Match {
         const rx = cpx - s.x, ry = cpy - s.y; let [vrx, vry] = rb.pointVel(rx, ry); if (wp.piv && wp.wS) { vrx += -wp.wS * (cpy - wp.piv[1]); vry += wp.wS * (cpx - wp.piv[0]); }
         const pinned = (e.x - r < 0.001 && nx < -0.3) || (e.x + r > F - 0.001 && nx > 0.3) || (e.y - r < 0.001 && ny < -0.3) || (e.y + r > F - 0.001 && ny > 0.3); const invE = pinned ? 0 : 1 / me;
         const rvx = e.vx - vrx, rvy = e.vy - vry, vn = rvx * nx + rvy * ny;
-        if (vn < 0) { const j = -(1 + E.eRobotEgg) * vn / (invE + rb.invMass(rx, ry, nx, ny)); e.vx += j * nx * invE; e.vy += j * ny * invE; rb.applyImp(rx, ry, -j * nx, -j * ny);
+        if (vn < 0) { if (!pinned && vn < -0.001) e.toucher = rb.team; const j = -(1 + E.eRobotEgg) * vn / (invE + rb.invMass(rx, ry, nx, ny)); e.vx += j * nx * invE; e.vy += j * ny * invE; rb.applyImp(rx, ry, -j * nx, -j * ny);
           const tx = -ny, ty = nx, vt = rvx * tx + rvy * ty; const jt = clamp(-vt / (invE + rb.invMass(rx, ry, tx, ty)), -E.muRobotEgg * j, E.muRobotEgg * j); e.vx += jt * tx * invE; e.vy += jt * ty * invE; rb.applyImp(rx, ry, -jt * tx, -jt * ty); }
         if (pinned) { s.x -= nx * pen; s.y -= ny * pen; } else { const w = me / (me + rb.mass); e.x += nx * pen * (1 - w); e.y += ny * pen * (1 - w); s.x -= nx * pen * w; s.y -= ny * pen * w; }
       }
@@ -1325,17 +1336,17 @@ class Match {
     if (!this.field.refereeCollect) return;
     for (const e of this.eggs) {
       if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R);
-      if (z && Math.hypot(e.vx, e.vy) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop) this.firstDrop = { t: this.time, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
+      if (z && Math.hypot(e.vx, e.vy, e.vz || 0) < 0.005 && !this.eggUnderRobot(e)) { e.still += dt; if (e.still >= 1) { e.gone = true; e.zone = z; e.by = e.toucher || null; (this.banked[z] = this.banked[z] || []).push(e); if (!this.firstDrop && e.by) this.firstDrop = { t: this.time, by: e.by, zone: z }; this.events.push({ t: this.time, txt: `${{ penalty: 'Ceza', red: 'Kırmızı', blue: 'Mavi', green: 'Yeşil' }[e.kind]} yumurta ${{ red: 'kırmızı', blue: 'mavi', green: 'yeşil' }[z]} köşede — hakem aldı` }); } }
       else e.still = 0;
     }
   }
   result() {
-    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].own > 0;
+    const sc = this.score(), teams = this.robots.map(r => r.team); const ok = (t) => sc.detail[t].self > 0;
     if (teams.length < 2) { const t = teams[0]; return { sc, winner: t && ok(t) ? t : null, reason: t && ok(t) ? 'tek robot' : 'kendi rengi yok' }; }
     const [a, b] = teams; let w = null, reason = '';
     if (ok(a) && !ok(b)) { w = a; reason = 'rakip kendi rengini bırakamadı'; } else if (ok(b) && !ok(a)) { w = b; reason = 'rakip kendi rengini bırakamadı'; }
     else if (!ok(a) && !ok(b)) { reason = 'iki robot da kendi rengini bırakamadı'; }
-    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop ? this.firstDrop.zone : null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
+    else if (sc[a] !== sc[b]) { w = sc[a] > sc[b] ? a : b; reason = 'daha çok puan'; } else { w = this.firstDrop?.by || null; if (w !== a && w !== b) w = null; reason = 'eşitlik — ilk yumurtayı bırakan'; }
     return { sc, winner: w, reason };
   }
   snapshot() {
@@ -1347,13 +1358,13 @@ class Match {
     this.eggs.forEach((e, i) => { const v = s.e[i]; e._hidden = !v; if (v) { e.x = v[0]; e.y = v[1]; e.z = v[2]; e.phi = v[3]; e.q = v[4] ? { x: v[4][0], y: v[4][1], z: v[4][2], w: v[4][3] } : e.q; } });
   }
   score() {
-    const sc = { red: 0, blue: 0, detail: { red: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
+    const sc = { red: 0, blue: 0, detail: { red: { own: 0, self: 0, wrong: 0, pen: 0, green: 0, led: 0 }, blue: { own: 0, self: 0, wrong: 0, pen: 0, green: 0, led: 0 } } };
     const add = (zone, e) => {
       if (zone === 'green') { if (e.kind === 'green' && e.by && sc.detail[e.by]) { sc[e.by] += 2; sc.detail[e.by].green++; } return; }
-      const d = sc.detail[zone]; if (!d) return; if (e.kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (e.kind === zone) { sc[zone] += 1; d.own++; } else if (!e.by || e.by === zone) { sc[zone] -= 2; d.wrong++; } else { d.planted = (d.planted || 0) + 1; }
+      const d = sc.detail[zone]; if (!d) return; if (e.kind === 'penalty') { sc[zone] -= 3; d.pen++; } else if (e.kind === zone) { sc[zone] += 1; d.own++; if (e.by === zone) d.self++; } else if (!e.by || e.by === zone) { sc[zone] -= 2; d.wrong++; } else { d.planted = (d.planted || 0) + 1; }
     };
     for (const z of Object.keys(this.banked)) for (const e of this.banked[z]) add(z, e);
-    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && !this.eggUnderRobot(e)) add(z, Object.assign({ by: e.toucher }, e)); }
+    for (const e of this.eggs) { if (e.gone) continue; const z = this.zoneOf(e.x, e.y, RULES.EGG_R); if (z && Math.hypot(e.vx, e.vy, e.vz || 0) < 0.005 && !this.eggUnderRobot(e)) add(z, Object.assign({ by: e.toucher }, e)); }
     for (const rb of this.robots) if (rb.ledPens) { sc[rb.team] -= 10 * rb.ledPens; sc.detail[rb.team].led = rb.ledPens; }
     return sc;
   }
@@ -1607,15 +1618,76 @@ function staticChecks(profile) {
 // Kodu çalıştırmadan motorlara doğrudan sabit PWM verip robotu boş sahanın ortasında sürer.
 function measureMotion(profile, MatchClass, test, calib) {
   const P = deepCopy(profile); P.mekanik = P.mekanik || {}; if (calib) P.mekanik.kalibrasyon = { hiz_carpani: calib.hiz_carpani, donus_direnci: calib.donus_direnci };
-  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100, kusur: false } });
-  for (const e of m.eggs) { if (e.body && m.world) { try { m.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } e.gone = true; e.x = -9; e.y = -9; }
+  const F = RULES.FIELD;
+  const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1, ozel: [] }, startPoses: { red: { x: test.baslangicX ?? F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100, kusur: false } });
   const rb = m.robots[0]; rb.runPrograms = () => { }; rb.gain = { L: 1, R: 1 };
   const cmd = { L: 0, R: 0 }; const D = rb.driver;
   rb.sideVoltage = (side) => { const Vs = Math.max(0, D.vBat * (rb.batFactor || 1) - D.drop); const u = cmd[side]; if (!u) return { V: 0, mode: 'brake', duty: 1 }; return { V: Math.sign(u) * Math.min(1, Math.abs(u) / 255) * Vs * rb.calib.hiz, mode: 'drive', duty: Math.min(1, Math.abs(u) / 255) }; };
   const s0 = { x: rb.state.x, y: rb.state.y, th: rb.state.th }; const T = +test.sure || 1;
   cmd.L = test.tip === 'don' ? -test.pwm : test.pwm; cmd.R = test.pwm;
-  while (m.time < T) m.step(m.dt); cmd.L = cmd.R = 0; const tEnd = m.time; while (m.time < tEnd + 1) m.step(m.dt);
-  const s = rb.state; return { mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100, ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100, aci_der: (s.th - s0.th) * 180 / Math.PI };
+  const point = () => {
+    const s = rb.state;
+    return { sure: m.time, mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100,
+      ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100,
+      aci_der: (s.th - s0.th) * 180 / Math.PI };
+  };
+  try {
+    if (test.ornekler) {
+      let previous = point();
+      return test.ornekler.map(time => {
+        while (m.time + 1e-10 < time) { previous = point(); m.step(m.dt); }
+        const next = point();
+        const k = next.sure > previous.sure ? clamp((time - previous.sure) / (next.sure - previous.sure), 0, 1) : 0;
+        return test.tip === 'don'
+          ? previous.aci_der + (next.aci_der - previous.aci_der) * k
+          : previous.ileri_cm + (next.ileri_cm - previous.ileri_cm) * k;
+      });
+    }
+    while (m.time < T) m.step(m.dt);
+    cmd.L = cmd.R = 0;
+    const tEnd = m.time;
+    while (m.time < tEnd + 1) m.step(m.dt);
+    return point();
+  } finally {
+    if (m.world) m.world.free();
+  }
+}
+
+// Sabit komutla çekilmiş videodan zaman-konum veya zaman-açı örnekleri.
+function hareketIziniOku(metin) {
+  const iz = [];
+  for (const [i, line] of metin.split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    const parts = line.trim().split(/[;\t]/).map(p => p.trim().replace(',', '.'));
+    if (parts.length !== 2 || !parts.every(p => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(p)))
+      throw new Error((i + 1) + '. satırda süre ve ölçüm yaz. Örnek: 0,5;18');
+    const [sure, deger] = parts.map(Number);
+    if (!Number.isFinite(deger) || !Number.isFinite(sure) || sure < 0 || sure > 15 || (iz.length && sure <= iz.at(-1).sure))
+      throw new Error('Süreler 0–15 saniye arasında ve artan sırada olmalı.');
+    iz.push({ sure, deger });
+  }
+  if (iz.length < 3 || iz.length > 300 || iz[0].sure !== 0 || iz[0].deger !== 0)
+    throw new Error('0;0 ile başla ve toplam 3–300 ölçüm satırı gir.');
+  return iz;
+}
+
+function hareketIziniKarsilastir(p, Engine, tip, pwm, iz, pil = 100) {
+  if (!Number.isInteger(pwm) || pwm < 1 || pwm > 255 || !Number.isFinite(pil) || pil < 0 || pil > 100)
+    throw new Error('PWM 1–255, pil %0–100 arasında olmalı.');
+  const degerler = measureMotion(p, Engine, { tip, pwm, pil, baslangicX: tip === 'don' ? RULES.FIELD / 2 : 0.35,
+    ornekler: iz.map(s => s.sure) });
+  const sonuclar = iz.map(({ sure, deger }, i) => ({ sure, gercek: deger, sim: degerler[i] }));
+  const rmse = Math.sqrt(sonuclar.reduce((toplam, s) => toplam + (s.sim - s.gercek) ** 2, 0) / sonuclar.length);
+  const yari = sonuclar.at(-1).gercek / 2;
+  const gecis = alan => {
+    const yon = Math.sign(yari);
+    if (!yon) return null;
+    const i = sonuclar.findIndex(s => s[alan] * yon >= yari * yon);
+    if (i < 1) return null;
+    const a = sonuclar[i - 1], b = sonuclar[i];
+    return a.sure + (b.sure - a.sure) * (yari - a[alan]) / (b[alan] - a[alan]);
+  };
+  return { sonuclar, rmse, yari, gercekYari: gecis('gercek'), simYari: gecis('sim') };
 }
 function autoCalibrate(profile, MatchClass, real) {
   const out = { hiz_carpani: 1, donus_direnci: 0, notlar: [] }; const bis = (lo, hi, f, target, inc) => { for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const v = f(mid); if ((v < target) === inc) lo = mid; else hi = mid; } return (lo + hi) / 2; };
@@ -1839,7 +1911,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { airImpulse, hareketIziniOku, hareketIziniKarsilastir, hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -2665,8 +2737,11 @@ function makeMatch3D(R) {
     buildRobot(rb, idx) {
       const W = this.world, E = this.field, s = rb.state, wr = rb.wheelR, yaw = qYaw(s.th);
       const bit = 0x0010 << idx, RG = grp(bit, 0xffff & ~bit); rb.colliders = new Set(); rb.servoCmd = Object.assign({}, rb.servoAng);
-      const mw = 0.045, gates = rb.parts.filter(p => p.servoPin != null && p.pivot), mg = 0.02;
-      const mBody = Math.max(0.2, rb.mass - 2 * mw - gates.length * mg);
+      const gates = rb.parts.filter(p => p.servoPin != null && p.pivot);
+      // Tekerlekler ve kapaklar, profilde girilen toplam kütleye dahildir.
+      const scale = Math.min(1, rb.mass * 0.5 / (rb.wheelCount * 0.045 + gates.length * 0.02));
+      const mw = 0.045 * scale, mg = 0.02 * scale;
+      const mBody = rb.mass - rb.wheelCount * mw - gates.length * mg;
       const L = 0.2, Wd = 0.17, Hh = 0.08;
       const bd = R.RigidBodyDesc.dynamic().setTranslation(s.x, s.y, wr + 0.001).setRotation(yaw).setCanSleep(false)
         .setAdditionalMassProperties(mBody, { x: rb.comX, y: 0, z: rb.comZ - wr }, { x: mBody * (Wd * Wd + Hh * Hh) / 12, y: mBody * (L * L + Hh * Hh) / 12, z: mBody * (L * L + Wd * Wd) / 12 }, { x: 0, y: 0, z: 0, w: 1 });
@@ -2695,7 +2770,7 @@ function makeMatch3D(R) {
         { const side = W.createCollider(fr(R.ColliderDesc.cylinder(rb.wheelW / 2, wr * 0.985).setDensity(0), E.muRobotEgg, 0.1).setCollisionGroups(grp(bit, 0xffff & ~bit & ~G_FLOOR)), body); rb.colliders.add(side.handle); this.robotByCollider.set(side.handle, rb); }
         const j = W.createImpulseJoint(R.JointData.revolute({ x: lp[0], y: lp[1], z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), ch, body, true);
         if (j.configureMotorModel && R.MotorModel) j.configureMotorModel(R.MotorModel.ForceBased);
-        const wobj = { body, j, spin: 0, side, col: wcol, mu0: (rb.muS + rb.muK) / 2 }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
+        const wobj = { body, j, spin: 0, side, ax, col: wcol, mu0: (rb.muS + rb.muK) / 2 }; rb.wheelList.push(wobj); if (!rb.wheels[side]) rb.wheels[side] = wobj;
       }
       rb.gates = [];
       for (const p of gates) {
@@ -2715,6 +2790,9 @@ function makeMatch3D(R) {
       for (const rb of this.robots) {
         this.updateServos(rb, dt, rb.servoCmd);
         for (const g of rb.gates) g.j.configureMotorPosition(((g.p.angOff + g.p.dir * (rb.servoCmd[g.p.servoPin] ?? 0)) * Math.PI) / 180, 1.5, 0.05);
+        const velocity = rb.body.linvel();
+        const air = SIM.airImpulse(rb, velocity.x, velocity.y, dt);
+        rb.body.applyImpulse({ ...air, z: 0 }, true);
         const M = rb.motor, k = M.tStall / M.w0;
         for (const wh of rb.wheelList) { const side = wh.side;
           const { V, mode, duty } = rb.sideVoltage(side);
@@ -2723,7 +2801,20 @@ function makeMatch3D(R) {
           if (rb.kusur && mode === 'drive') damp *= rb.kusur.tork[side];
           if (wh.col && ((this._fmT = (this._fmT || 0) + 1) % 25 === 0)) { const t = wh.body.translation(); try { wh.col.setFriction(wh.mu0 * SIM.floorMu(this, t.x, t.y)); } catch (e) { } }
           wh.j.configureMotorVelocity(target, damp); wh.mode = mode; wh.V = V; wh.target = target; wh.damp = damp; wh.duty = duty ?? 1;
-          const wi = rb.wheelInfo[side]; const wr = (wi.rpm || 0) * 2 * Math.PI / 60; if (Math.abs(wr) > 0.3 && M.tFric > 0) { const q = rb.body.rotation(); const ax = qRot(q, [0, 1, 0]); const j = -Math.sign(wr) * M.tFric * dt; wh.body.applyTorqueImpulse({ x: ax[0] * j, y: ax[1] * j, z: ax[2] * j }, true); rb.body.applyTorqueImpulse({ x: -ax[0] * j, y: -ax[1] * j, z: -ax[2] * j }, true); }
+          // 2B ile aynı yuvarlanma katsayısı. Teker havadayken zemin direnci uygulanmaz.
+          const q = rb.body.rotation(), axis = qRot(q, [0, 1, 0]);
+          const wa = wh.body.angvel(), ca = rb.body.angvel();
+          const wr = (wa.x - ca.x) * axis[0] + (wa.y - ca.y) * axis[1] + (wa.z - ca.z) * axis[2];
+          if (Math.abs(wr) > 0.3) {
+            const onFloor = wh.body.translation().z <= rb.wheelR + 0.002;
+            const load = rb.mass * RULES.G * rb.loadFrac * rb.axleLoad[rb.axles.indexOf(wh.ax)] / 2;
+            const rolling = onFloor ? rb.crr * load * rb.wheelR : 0;
+            const j = -Math.sign(wr) * Math.min((M.tFric + rolling) * dt,
+              Math.abs(wr) * (M.jRefl + rb.mass * rb.wheelR ** 2 / rb.wheelCount));
+            const impulse = { x: axis[0] * j, y: axis[1] * j, z: axis[2] * j };
+            wh.body.applyTorqueImpulse(impulse, true);
+            rb.body.applyTorqueImpulse({ x: -impulse.x, y: -impulse.y, z: -impulse.z }, true);
+          }
         }
         if (rb.caster && rb.caster.tip === 'sarhos') { // döner (sarhoş) teker: 2B ile aynı model, şasiye yana itki olarak
           const C = rb.caster, q = rb.body.rotation(), cp = qRot(q, [C.x, C.y, 0]), t = rb.body.translation(), lv = rb.body.linvel(), av = rb.body.angvel();
@@ -2760,13 +2851,28 @@ function makeMatch3D(R) {
       const body = W.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(e.x, e.y, hh + 0.0005).setRotation(q).setCcdEnabled(true).setLinearDamping(0.05).setAngularDamping(0.2));
       if (e.vx || e.vy) body.setLinvel({ x: e.vx || 0, y: e.vy || 0, z: 0 }, true);
       const col = W.createCollider(fr(R.ColliderDesc.cylinder(hh, r).setDensity(E.eggMass / vol), E.muEggFloor, 0.2).setCollisionGroups(grp(G_WORLD, 0xffff)), body);
-      e.body = body; e.q = q; this.eggByCollider.set(col.handle, e);
+      e.body = body; e.collider = col; e.q = q; this.eggByCollider.set(col.handle, e);
     }
     placeEgg(e, x, y, vx, vy) { super.placeEgg(e, x, y, vx, vy); if (e.body) { try { this.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } this.addEggBody(e); }
     syncEggs() {
       for (const e of this.eggs) {
         if (!e.body) continue; const p = e.body.translation(), v = e.body.linvel(), q = e.body.rotation();
-        e.x = p.x; e.y = p.y; e.z = p.z; e.vx = v.x; e.vy = v.y; e.q = q; const ax = qRot(q, [1, 0, 0]); e.phi = Math.atan2(ax[1], ax[0]);
+        e.x = p.x; e.y = p.y; e.z = p.z; e.vx = v.x; e.vy = v.y; e.vz = v.z; e.q = q; const ax = qRot(q, [1, 0, 0]); e.phi = Math.atan2(ax[1], ax[0]);
+        if (Math.hypot(v.x, v.y) >= 0.005) {
+          let impulse = 0;
+          this.world.contactPairsWith(e.collider, other => {
+            const rb = this.robotByCollider.get(other.handle);
+            if (!rb) return;
+            this.world.contactPair(e.collider, other, manifold => {
+              const normal = manifold.normal();
+              if (Math.abs(normal.z) > 0.8) return;
+              for (let i = 0; i < manifold.numContacts(); i++) {
+                const j = manifold.contactImpulse(i);
+                if (j > impulse) { impulse = j; e.toucher = rb.team; }
+              }
+            });
+          });
+        }
         if (p.z < -0.05 || p.x < -0.05 || p.y < -0.05 || p.x > RULES.FIELD + 0.05 || p.y > RULES.FIELD + 0.05) { e.body.setTranslation({ x: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.x)), y: Math.min(RULES.FIELD - 0.03, Math.max(0.03, p.y)), z: 0.02 }, true); e.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
       }
     }
@@ -3232,7 +3338,7 @@ function endMatch() {
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
   const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
   saveHistory(sc, res);
-  $('result').innerHTML = `<b>Maç bitti (${match.earlyWinner() ? 'erken: ' + (match.earlyWinner() === 'red' ? 'kırmızı' : 'mavi') + ' 10 yumurtayı topladı, ' + fmtT(match.time) : fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
+  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.time)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
 // ---------- Maç geçmişi ----------
@@ -3356,7 +3462,7 @@ function renderMekanik(p) {
   M.tekerlek = M.tekerlek || {}; M.motor = M.motor || {}; M.pil = M.pil || {}; M.agirlik_merkezi = M.agirlik_merkezi || {}; M.acil_stop = M.acil_stop || null;
   const T = M.tekerlek, Mo = M.motor;
   const rerender = () => renderMekanik(p);
-  root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
+  root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M, 'hava_cda_cm2', 'Hava direnci CdA (cm², boş = tahmin)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
   const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', T.adet == 4 ? 'Tekerlerin ortası x (cm)' : 'Teker ekseni x (cm)'), fld(T, 'adet', 'Teker sayısı', { type: 'select', options: { 2: '2 teker + sarhoş teker', 4: '4 teker (hepsi motorlu)' }, def: '2', after: rerender }), ...(T.adet == 4 ? [fld(T, 'dingil_cm', 'Ön-arka teker arası (cm)')] : [])),
     T.adet == 4 ? h('p', { class: 'hint' }, '4 tekerli robot dönerken tekerler yana kayar (kızaklı dönüş). Ön-arka teker arası büyüdükçe dönmek zorlaşır; simülasyon bunu hesaplar.') : '');
   if (T.lastik === 'ozel') tc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(T, 'mu_statik', 'Statik sürtünme μs'), fld(T, 'mu_kinetik', 'Kayma sürtünmesi μk'), fld(T, 'yuvarlanma', 'Yuvarlanma direnci')));
@@ -3371,7 +3477,7 @@ function renderMekanik(p) {
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
-  root.append(calibCard(p, M, rerender));
+  root.append(calibCard(p, M, rerender), videoIzCard(p));
   root.append(hazneCard(p, M));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
@@ -3792,6 +3898,44 @@ function robotunuTanit(source, yeni = false) {
   title.nextElementSibling.focus();
 }
 
+function videoIzCard(p) {
+  const source = h('textarea', { class: 'short', 'aria-label': 'Videodan ölçülen hareket', placeholder: '0;0\n0,5;18\n1;39' });
+  const type = h('select', {}, h('option', { value: 'duz' }, 'İleri (cm)'), h('option', { value: 'don' }, 'Yerinde sola dönüş (°)'));
+  const pwm = h('input', { type: 'number', min: 1, max: 255, value: 200 });
+  const battery = h('input', { type: 'number', min: 0, max: 100, value: 100 });
+  const out = h('div', { class: 'msg', role: 'status' });
+  const log = h('pre', { class: 'scroll', style: 'max-height:220px;overflow:auto' });
+  const compare = h('button', { class: 'btn sm', on: { click: () => {
+    out.className = 'msg ok';
+    out.textContent = 'Hesaplanıyor…';
+    log.textContent = '';
+    setTimeout(() => {
+      try {
+        if (!pwm.value || !battery.value) throw new Error('PWM ve pil doluluğunu gir.');
+        const iz = SIM.hareketIziniOku(source.value);
+        const unit = type.value === 'don' ? '°' : 'cm';
+        const fmt = x => x.toFixed(2).replace('.', ',');
+        const times = x => x == null ? 'ulaşmadı' : fmt(x) + ' sn';
+        const engines = [['2B', Match], ...(Match3D ? [['3B', Match3D]] : [])];
+        const logs = [];
+        out.textContent = engines.map(([name, Engine]) => {
+          const r = SIM.hareketIziniKarsilastir(p, Engine, type.value, +pwm.value, iz, +battery.value);
+          logs.push(name + ' · süre / gerçek / simülasyon\n' + r.sonuclar.map(s => [s.sure, s.gercek, s.sim].map(fmt).join(' / ')).join('\n'));
+          return name + ' · Karesel ortalama hata ' + fmt(r.rmse) + ' ' + unit +
+            ' · ' + fmt(r.yari) + ' ' + unit + ' eşiği: gerçek ' + times(r.gercekYari) + ', simülasyon ' + times(r.simYari);
+        }).join('\n');
+        log.textContent = logs.join('\n\n');
+      } catch (e) {
+        out.className = 'msg err';
+        out.textContent = e.message;
+      }
+    }, 30);
+  } } }, 'Video ölçümlerini karşılaştır');
+  return card('Video ile hareket karşılaştırması',
+    h('p', { class: 'hint' }, 'Sabit PWM ile duruştan başlayan, yumurtasız ve duvara değmeyen tek denemeyi kullan. İlk satır 0;0. Sonraki her satıra saniye ve başlangıca göre cm veya dereceyi noktalı virgülle ayırarak yaz. Düz denemede simülasyon 35 cm çizgisinden başlar.'),
+    h('div', { class: 'fields' }, h('label', { class: 'f' }, 'Deneme', type), h('label', { class: 'f' }, 'PWM', pwm),
+      h('label', { class: 'f' }, 'Başlangıç pil doluluğu (%)', battery)), source, compare, out, log);
+}
 function calibCard(p, M, rerender) {
   const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
   const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';

@@ -209,7 +209,7 @@ function endMatch() {
     return `<div><b style="color:${t === 'red' ? 'var(--red)' : 'var(--blue)'}">${esc(rb.name)}: ${sc[t]} puan</b> — ${parts.join(', ')}${d.own ? '' : ' · <span class="bad">kendi köşesine kendi renginde yumurta yok → kaybeder</span>'}</div>`; };
   const res = match.result(); const win = match.robots.length === 2 ? (res.winner ? `<div>Kazanan: <b>${esc(match.robotByTeam(res.winner).name)}</b> (${res.reason})</div>` : `<div>${res.reason}</div>`) : '';
   saveHistory(sc, res);
-  $('result').innerHTML = `<b>Maç bitti (${match.earlyWinner() ? 'erken: ' + (match.earlyWinner() === 'red' ? 'kırmızı' : 'mavi') + ' 10 yumurtayı topladı, ' + fmtT(match.time) : fmtT(match.matchTime)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
+  $('result').innerHTML = `<b>Maç bitti (${fmtT(match.time)})</b>${line('red')}${line('blue')}${win}`; $('result').innerHTML += '<div class="row"><button class="btn sm" onclick="document.getElementById(\'bReplay\').click()">⏪ Tekrar izle</button></div>'; $('result').classList.add('on');
 }
 
 // ---------- Maç geçmişi ----------
@@ -333,7 +333,7 @@ function renderMekanik(p) {
   M.tekerlek = M.tekerlek || {}; M.motor = M.motor || {}; M.pil = M.pil || {}; M.agirlik_merkezi = M.agirlik_merkezi || {}; M.acil_stop = M.acil_stop || null;
   const T = M.tekerlek, Mo = M.motor;
   const rerender = () => renderMekanik(p);
-  root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
+  root.append(card('Gövde', h('div', { class: 'fields' }, fld(M, 'kutle_kg', 'Toplam kütle (kg)'), fld(M, 'hava_cda_cm2', 'Hava direnci CdA (cm², boş = tahmin)'), fld(M.agirlik_merkezi, 'z_cm', 'Ağırlık merkezi yüksekliği (cm)'), fld(M.agirlik_merkezi, 'x_cm', 'Ağırlık merkezi x (cm, boş = otomatik)'))));
   const tc = card('Tekerlekler', h('div', { class: 'fields' }, fld(T, 'lastik', 'Lastik', { type: 'select', options: Object.fromEntries(Object.entries(TIRES).map(([k, v]) => [k, v.ad])), def: 'kaucuk', after: rerender }), fld(T, 'cap_cm', 'Çap (cm)'), fld(T, 'genislik_cm', 'Genişlik (cm)'), fld(T, 'iz_cm', 'İki teker arası (cm)'), fld(T, 'x_cm', T.adet == 4 ? 'Tekerlerin ortası x (cm)' : 'Teker ekseni x (cm)'), fld(T, 'adet', 'Teker sayısı', { type: 'select', options: { 2: '2 teker + sarhoş teker', 4: '4 teker (hepsi motorlu)' }, def: '2', after: rerender }), ...(T.adet == 4 ? [fld(T, 'dingil_cm', 'Ön-arka teker arası (cm)')] : [])),
     T.adet == 4 ? h('p', { class: 'hint' }, '4 tekerli robot dönerken tekerler yana kayar (kızaklı dönüş). Ön-arka teker arası büyüdükçe dönmek zorlaşır; simülasyon bunu hesaplar.') : '');
   if (T.lastik === 'ozel') tc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(T, 'mu_statik', 'Statik sürtünme μs'), fld(T, 'mu_kinetik', 'Kayma sürtünmesi μk'), fld(T, 'yuvarlanma', 'Yuvarlanma direnci')));
@@ -348,7 +348,7 @@ function renderMekanik(p) {
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
-  root.append(calibCard(p, M, rerender));
+  root.append(calibCard(p, M, rerender), videoIzCard(p));
   root.append(hazneCard(p, M));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
@@ -401,6 +401,44 @@ const HAZNE_ORNEK = { var: true, agiz: { x0: 9, x1: 16, y0: -4.5, y1: 4.5 },
   kurallar: [{ servo: '10', min: 150, max: 180, hedef: 'bizim' }, { servo: '10', min: 0, max: 30, hedef: 'disari' }],
   bolmeler: [{ ad: 'bizim', kapasite: 5, kapak: '9', acik_min: 60, acik_max: 180, cikis: { x: -15, y: 0 } }], disari: { x: 4, y: -14, hiz_cms: 40 } };
 /*ROBOT_TANIT*/
+function videoIzCard(p) {
+  const source = h('textarea', { class: 'short', 'aria-label': 'Videodan ölçülen hareket', placeholder: '0;0\n0,5;18\n1;39' });
+  const type = h('select', {}, h('option', { value: 'duz' }, 'İleri (cm)'), h('option', { value: 'don' }, 'Yerinde sola dönüş (°)'));
+  const pwm = h('input', { type: 'number', min: 1, max: 255, value: 200 });
+  const battery = h('input', { type: 'number', min: 0, max: 100, value: 100 });
+  const out = h('div', { class: 'msg', role: 'status' });
+  const log = h('pre', { class: 'scroll', style: 'max-height:220px;overflow:auto' });
+  const compare = h('button', { class: 'btn sm', on: { click: () => {
+    out.className = 'msg ok';
+    out.textContent = 'Hesaplanıyor…';
+    log.textContent = '';
+    setTimeout(() => {
+      try {
+        if (!pwm.value || !battery.value) throw new Error('PWM ve pil doluluğunu gir.');
+        const iz = SIM.hareketIziniOku(source.value);
+        const unit = type.value === 'don' ? '°' : 'cm';
+        const fmt = x => x.toFixed(2).replace('.', ',');
+        const times = x => x == null ? 'ulaşmadı' : fmt(x) + ' sn';
+        const engines = [['2B', Match], ...(Match3D ? [['3B', Match3D]] : [])];
+        const logs = [];
+        out.textContent = engines.map(([name, Engine]) => {
+          const r = SIM.hareketIziniKarsilastir(p, Engine, type.value, +pwm.value, iz, +battery.value);
+          logs.push(name + ' · süre / gerçek / simülasyon\n' + r.sonuclar.map(s => [s.sure, s.gercek, s.sim].map(fmt).join(' / ')).join('\n'));
+          return name + ' · Karesel ortalama hata ' + fmt(r.rmse) + ' ' + unit +
+            ' · ' + fmt(r.yari) + ' ' + unit + ' eşiği: gerçek ' + times(r.gercekYari) + ', simülasyon ' + times(r.simYari);
+        }).join('\n');
+        log.textContent = logs.join('\n\n');
+      } catch (e) {
+        out.className = 'msg err';
+        out.textContent = e.message;
+      }
+    }, 30);
+  } } }, 'Video ölçümlerini karşılaştır');
+  return card('Video ile hareket karşılaştırması',
+    h('p', { class: 'hint' }, 'Sabit PWM ile duruştan başlayan, yumurtasız ve duvara değmeyen tek denemeyi kullan. İlk satır 0;0. Sonraki her satıra saniye ve başlangıca göre cm veya dereceyi noktalı virgülle ayırarak yaz. Düz denemede simülasyon 35 cm çizgisinden başlar.'),
+    h('div', { class: 'fields' }, h('label', { class: 'f' }, 'Deneme', type), h('label', { class: 'f' }, 'PWM', pwm),
+      h('label', { class: 'f' }, 'Başlangıç pil doluluğu (%)', battery)), source, compare, out, log);
+}
 function calibCard(p, M, rerender) {
   const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
   const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';

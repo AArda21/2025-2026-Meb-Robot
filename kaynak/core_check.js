@@ -121,15 +121,76 @@ function staticChecks(profile) {
 // Kodu çalıştırmadan motorlara doğrudan sabit PWM verip robotu boş sahanın ortasında sürer.
 function measureMotion(profile, MatchClass, test, calib) {
   const P = deepCopy(profile); P.mekanik = P.mekanik || {}; if (calib) P.mekanik.kalibrasyon = { hiz_carpani: calib.hiz_carpani, donus_direnci: calib.donus_direnci };
-  const F = RULES.FIELD; const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1 }, startPoses: { red: { x: F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100, kusur: false } });
-  for (const e of m.eggs) { if (e.body && m.world) { try { m.world.removeRigidBody(e.body); } catch (er) { } e.body = null; } e.gone = true; e.x = -9; e.y = -9; }
+  const F = RULES.FIELD;
+  const m = new MatchClass({ profiles: { red: P }, saha: { tohum: 1, ozel: [] }, startPoses: { red: { x: test.baslangicX ?? F / 2, y: F / 2, th: 0 } }, kural: '2025', gercek: { motor_farki: 0, pil: test.pil ?? 100, kusur: false } });
   const rb = m.robots[0]; rb.runPrograms = () => { }; rb.gain = { L: 1, R: 1 };
   const cmd = { L: 0, R: 0 }; const D = rb.driver;
   rb.sideVoltage = (side) => { const Vs = Math.max(0, D.vBat * (rb.batFactor || 1) - D.drop); const u = cmd[side]; if (!u) return { V: 0, mode: 'brake', duty: 1 }; return { V: Math.sign(u) * Math.min(1, Math.abs(u) / 255) * Vs * rb.calib.hiz, mode: 'drive', duty: Math.min(1, Math.abs(u) / 255) }; };
   const s0 = { x: rb.state.x, y: rb.state.y, th: rb.state.th }; const T = +test.sure || 1;
   cmd.L = test.tip === 'don' ? -test.pwm : test.pwm; cmd.R = test.pwm;
-  while (m.time < T) m.step(m.dt); cmd.L = cmd.R = 0; const tEnd = m.time; while (m.time < tEnd + 1) m.step(m.dt);
-  const s = rb.state; return { mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100, ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100, aci_der: (s.th - s0.th) * 180 / Math.PI };
+  const point = () => {
+    const s = rb.state;
+    return { sure: m.time, mesafe_cm: Math.hypot(s.x - s0.x, s.y - s0.y) * 100,
+      ileri_cm: ((s.x - s0.x) * Math.cos(s0.th) + (s.y - s0.y) * Math.sin(s0.th)) * 100,
+      aci_der: (s.th - s0.th) * 180 / Math.PI };
+  };
+  try {
+    if (test.ornekler) {
+      let previous = point();
+      return test.ornekler.map(time => {
+        while (m.time + 1e-10 < time) { previous = point(); m.step(m.dt); }
+        const next = point();
+        const k = next.sure > previous.sure ? clamp((time - previous.sure) / (next.sure - previous.sure), 0, 1) : 0;
+        return test.tip === 'don'
+          ? previous.aci_der + (next.aci_der - previous.aci_der) * k
+          : previous.ileri_cm + (next.ileri_cm - previous.ileri_cm) * k;
+      });
+    }
+    while (m.time < T) m.step(m.dt);
+    cmd.L = cmd.R = 0;
+    const tEnd = m.time;
+    while (m.time < tEnd + 1) m.step(m.dt);
+    return point();
+  } finally {
+    if (m.world) m.world.free();
+  }
+}
+
+// Sabit komutla çekilmiş videodan zaman-konum veya zaman-açı örnekleri.
+function hareketIziniOku(metin) {
+  const iz = [];
+  for (const [i, line] of metin.split(/\r?\n/).entries()) {
+    if (!line.trim()) continue;
+    const parts = line.trim().split(/[;\t]/).map(p => p.trim().replace(',', '.'));
+    if (parts.length !== 2 || !parts.every(p => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(p)))
+      throw new Error((i + 1) + '. satırda süre ve ölçüm yaz. Örnek: 0,5;18');
+    const [sure, deger] = parts.map(Number);
+    if (!Number.isFinite(deger) || !Number.isFinite(sure) || sure < 0 || sure > 15 || (iz.length && sure <= iz.at(-1).sure))
+      throw new Error('Süreler 0–15 saniye arasında ve artan sırada olmalı.');
+    iz.push({ sure, deger });
+  }
+  if (iz.length < 3 || iz.length > 300 || iz[0].sure !== 0 || iz[0].deger !== 0)
+    throw new Error('0;0 ile başla ve toplam 3–300 ölçüm satırı gir.');
+  return iz;
+}
+
+function hareketIziniKarsilastir(p, Engine, tip, pwm, iz, pil = 100) {
+  if (!Number.isInteger(pwm) || pwm < 1 || pwm > 255 || !Number.isFinite(pil) || pil < 0 || pil > 100)
+    throw new Error('PWM 1–255, pil %0–100 arasında olmalı.');
+  const degerler = measureMotion(p, Engine, { tip, pwm, pil, baslangicX: tip === 'don' ? RULES.FIELD / 2 : 0.35,
+    ornekler: iz.map(s => s.sure) });
+  const sonuclar = iz.map(({ sure, deger }, i) => ({ sure, gercek: deger, sim: degerler[i] }));
+  const rmse = Math.sqrt(sonuclar.reduce((toplam, s) => toplam + (s.sim - s.gercek) ** 2, 0) / sonuclar.length);
+  const yari = sonuclar.at(-1).gercek / 2;
+  const gecis = alan => {
+    const yon = Math.sign(yari);
+    if (!yon) return null;
+    const i = sonuclar.findIndex(s => s[alan] * yon >= yari * yon);
+    if (i < 1) return null;
+    const a = sonuclar[i - 1], b = sonuclar[i];
+    return a.sure + (b.sure - a.sure) * (yari - a[alan]) / (b[alan] - a[alan]);
+  };
+  return { sonuclar, rmse, yari, gercekYari: gecis('gercek'), simYari: gecis('sim') };
 }
 function autoCalibrate(profile, MatchClass, real) {
   const out = { hiz_carpani: 1, donus_direnci: 0, notlar: [] }; const bis = (lo, hi, f, target, inc) => { for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const v = f(mid); if ((v < target) === inc) lo = mid; else hi = mid; } return (lo + hi) / 2; };
@@ -353,6 +414,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { airImpulse, hareketIziniOku, hareketIziniKarsilastir, hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;
