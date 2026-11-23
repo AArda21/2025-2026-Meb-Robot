@@ -353,6 +353,6 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

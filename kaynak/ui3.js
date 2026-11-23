@@ -264,7 +264,8 @@ document.querySelectorAll('#seg button').forEach(b => b.onclick = () => { seg = 
 $('selProfile').onchange = renderEditor;
 $('pName').oninput = () => { curProfile().ad = $('pName').value; saveProfiles(); fillProfileSelects(); };
 $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfiles(); };
-$('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
+$('bNew').onclick = () => robotunuTanit(DEFAULT_PROFILES[0], true);
+$('bWizard').onclick = () => robotunuTanit(curProfile());
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
 $('bUndo').onclick = () => { if (!undoStack.length) { toast('Geri alınacak değişiklik yok'); return; } const cur = $('selProfile').value; const prev = undoStack.pop(); try { const restored = JSON.parse(prev); for (const p of restored) { const old = byId(p.id); if (old && old._stl !== undefined) Object.defineProperty(p, '_stl', { value: old._stl, writable: true, configurable: true, enumerable: false }); } profiles = restored; lastSaved = prev; LS.set('mebsim3_profiller', prev); fillProfileSelects(); if (byId(cur)) $('selProfile').value = cur; renderEditor(); dirty = true; toast('Son değişiklik geri alındı'); } catch (e) { toast('Geri alınamadı'); } };
@@ -348,7 +349,7 @@ function renderMekanik(p) {
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
   root.append(calibCard(p, M, rerender));
-  root.append(hazneCard(p, M, rerender));
+  root.append(hazneCard(p, M));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
   root.append(st);
@@ -399,17 +400,7 @@ function renderMekanik(p) {
 const HAZNE_ORNEK = { var: true, agiz: { x0: 9, x1: 16, y0: -4.5, y1: 4.5 },
   kurallar: [{ servo: '10', min: 150, max: 180, hedef: 'bizim' }, { servo: '10', min: 0, max: 30, hedef: 'disari' }],
   bolmeler: [{ ad: 'bizim', kapasite: 5, kapak: '9', acik_min: 60, acik_max: 180, cikis: { x: -15, y: 0 } }], disari: { x: 4, y: -14, hiz_cms: 40 } };
-function hazneCard(p, M, rerender) {
-  const ta = h('textarea', { class: 'short', style: 'height:200px' }); ta.value = M.hazne ? JSON.stringify(M.hazne, null, 1) : ''; const msg = h('div', { class: 'msg' });
-  const apply = () => { const v = ta.value.trim(); if (!v) { delete M.hazne; saveProfiles(); msg.className = 'msg ok'; msg.textContent = 'İç hazne kapatıldı.'; return; }
-    try { const o = JSON.parse(v); if (!o.agiz) throw new Error('"agiz" (ağız bölgesi) eksik'); M.hazne = o; const rb = new SIM.Robot(p, 'red', { robots: [], eggs: [], zoneOf: () => null }); const H = rb.hazne;
-      const svPins = new Set(rb.servos.map(s => s.pin)); const bad = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null && !svPins.has(k));
-      saveProfiles(); msg.className = bad.length ? 'msg err' : 'msg ok'; msg.textContent = `Kaydedildi: ${H.kurallar.length} kural, ${H.bolmeler.length} bölme.` + (bad.length ? `\nDİKKAT: ${bad.map(k => SIM.keyLabel ? SIM.keyLabel(k, rb.boards) : k).join(', ')} pininde tanımlı servo yok (Devre → Servolar).` : ''); }
-    catch (e) { msg.className = 'msg err'; msg.textContent = 'Hata: ' + e.message; } };
-  return card('İç hazne / ayıklayıcı (gelişmiş)',
-    h('p', { class: 'hint' }, 'Ağzına giren yumurtayı servo (tokat) ile bölmelere ayıran ya da dışarı atan robotlar için. "agiz": yumurtanın ağızda sayıldığı bölge (cm, x ileri, y sola). "kurallar": hangi servo hangi açı aralığına gelince ağızdaki yumurta nereye gider (bölme adı ya da "disari"); "ve" ile ikinci bir servo şartı eklenebilir. "bolmeler": kapasite, kapak servosu, kapağın açık sayıldığı açı ve yumurtanın bırakıldığı nokta. Boş bırakırsan iç hazne yok sayılır.'),
-    ta, h('div', { class: 'row' }, h('button', { class: 'btn pri sm', on: { click: apply } }, 'Uygula'), h('button', { class: 'btn sm', on: { click: () => { ta.value = JSON.stringify(HAZNE_ORNEK, null, 1); } } }, 'Örnek doldur')), msg);
-}
+/*ROBOT_TANIT*/
 function calibCard(p, M, rerender) {
   const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
   const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';
@@ -494,10 +485,14 @@ function renderDevre(p) {
     if (t === 'TCRT5000') extra.push(fld(s, 'esik', 'Dijital eşik'));
     if (t === 'TCS3200') extra.push(fld(s, 'bakis', 'Bakış', { type: 'select', options: { asagi: 'Aşağı (zemin)', ileri: 'İleri (yumurta)' } }), fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'olcek', 'Ölçek % (S0/S1 yoksa)'));
     if (t === 'BUTON') extra.push(fld(s, 'deger', 'Değer', { type: 'select', options: { HIGH: 'Hep HIGH', LOW: 'Hep LOW', KIRMIZIDA_HIGH: 'Kırmızı köşede HIGH', MAVIDE_HIGH: 'Mavi köşede HIGH' } }));
-    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? calEditor(s, t) : null;
+    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? h('div', {}, calEditor(s, t)) : null;
+    const automatic = calBox ? sensorOlcumKutusu(p, i, () => {
+      saveProfiles();
+      calBox.replaceChildren(calEditor(s, t));
+    }) : null;
     list.append(h('div', { class: 'item' }, h('div', { class: 'top' }, fld(s, 'tip', 'Tip', { type: 'select', options: Object.fromEntries(Object.entries(SENSOR_TYPES).map(([k, v]) => [k, v.ad])), after: rerender }), fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }),
       h('button', { class: 'btn sm danger', style: 'margin-left:auto', on: { click: () => { D.sensorler.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')),
-      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), calBox));
+      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), automatic, calBox));
   });
   const addSel = h('select', {}, ...Object.entries(SENSOR_TYPES).map(([k, v]) => h('option', { value: k }, v.ad)));
   root.append(card('Sensörler', h('p', { class: 'hint' }, 'Konum robot merkezine göre cm (x ileri, y sola). Açı: 0 = ileri, + = sola.'), list, h('div', { class: 'row' }, addSel, h('button', { class: 'btn sm', on: { click: () => { D.sensorler.push({ tip: addSel.value, ad: SENSOR_TYPES[addSel.value].ad, x: 8, y: 0, z: 2, aci: 0 }); saveProfiles(); rerender(); } } }, '+ Sensör ekle'))));

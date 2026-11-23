@@ -101,7 +101,7 @@ Gerçek robot ölçümleri gelince simülasyon kendi robotuna oturacak:
 
 ## 7. Yapılacaklar listesi (sahibin onayladığı, sırasıyla)
 
-1. **"Robotunu tanıt" sihirbazı**: resimli adım adım ölçü girişi; iç hazne ayarı görsel (şu an JSON). **Sensörleri otomatik kalibre etme**: robota "sensör okuma kodu" yüklenir, Seri Monitör çıktısı yapıştırılınca kalibrasyon dolar.
+1. **"Robotunu tanıt" sihirbazı (YAPILDI)**: Gövde ve teker ölçüleri canlı çizimle giriliyor. Hazne ağzı, bölme çıkışları ve servo kuralları görsel formdan ayarlanıyor. TCS3200 ve TCRT5000 için karta uygun kod üretiliyor ve Seri Monitör örneklerinden yüzey başına medyan ölçümler profile aktarılıyor.
 2. **Gerçek / simülasyon karşılaştırması**: gerçek robotun Seri logu ile aynı durum simülasyonda oynatılır, ayrıştığı yer gösterilir. PC sürümünde USB (Web Serial) ile canlı sensör izleme.
 3. **Adım adım kod çalıştırma** (çalışan satırı vurgulama, durdurma noktası) ve **otomatik ayar bulucu** (koddaki işaretli sayıları toplu maçla optimize etme).
 4. **İki robotu karşılaştırma raporu**: aynı yumurta dizilimlerinde, rakipsiz 20–30 maç; puan, yanlış yumurta, sıkışma, süre.

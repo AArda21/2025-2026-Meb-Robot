@@ -91,6 +91,10 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 .pathsvg{width:100%;max-width:360px;aspect-ratio:1/1;border:1px solid var(--line);border-radius:8px;background:#f6f5f1}
 .progress{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin:8px 0}.progress>div{height:100%;background:var(--accent);width:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.robot-sihirbaz { width:min(680px, calc(100% - 24px)); max-height:calc(100% - 24px); box-sizing:border-box; overflow:auto; color:inherit; background:var(--panel, #fff); border:1px solid #8799aa; border-radius:14px; padding:16px; }
+.robot-sihirbaz::backdrop { background:#0a1521b8; }
+.robot-cizim { display:block; width:100%; max-width:620px; height:auto; border-radius:10px; margin:8px 0; }
+.robot-sihirbaz > .row:last-child { position:sticky; bottom:-16px; background:inherit; padding:8px 0; }
 </style>
 </head>
 <body>
@@ -167,7 +171,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
     <div class="card">
       <div class="row" style="margin-top:0">
         <label class="f" style="flex:1 1 200px">Robot profili<select id="selProfile"></select></label>
-        <button class="btn sm" id="bNew">+ Yeni</button><button class="btn sm" id="bDup">Çoğalt</button>
+        <button class="btn sm" id="bNew">+ Yeni robot</button><button class="btn sm" id="bWizard">Robotunu tanıt</button><button class="btn sm" id="bDup">Çoğalt</button>
         <button class="btn sm" id="bExport">Dışa aktar</button><label class="btn sm">İçe aktar<input type="file" id="fImport" accept=".json,.txt" hidden></label>
         <button class="btn sm" id="bUndo" title="Son değişikliği geri al">↶ Geri al</button>
         <button class="btn sm" id="bDefaults" title="Uygulamadaki en güncel örnek robotları ekler">Hazır örnekler</button>
@@ -225,7 +229,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
   <ul><li><b>Robotlar → Kod</b>: Arduino kodunu yapıştır ya da .ino dosyasını aç. İki Arduino varsa (Mega + Nano) ikinci kartı ekle ve aradaki telleri yaz.</li>
   <li><b>Mekanik</b>: kütle, lastik türü, motor modeli, pil, teker ölçüleri. En iyisi 3D modeli yüklemek: Fusion 360 / Tinkercad / SolidWorks'ten <b>OBJ</b> veya <b>GLB</b> olarak dışa aktar; parçalara anlamlı ad ver ("Arduino Uno", "HC-SR04", "Sol teker", "Acil stop"). Uygulama her parçanın ne olduğunu tahmin eder, <b>Yerleşimi modelden uygula</b> ile sensör, kart ve teker yerlerini modelden alır.</li>
   <li><b>Devre</b>: motor sürücüsü, sensörler, servolar ve LED'in hangi pinlere bağlı olduğu. Fritzing'de <i>Dosya → Dışa Aktar → XML Netlist</i> dosyasını yüklersen şema ile pinler karşılaştırılır.</li>
-  <li><b>Kalibrasyon</b>: renk sensörü (TCS3200) ve zemin sensörü (TCRT5000) için gerçek robotta ölçtüğün değerleri gir; simülasyon bu değerleri kullanır, kodundaki renk formülünü her renk için hesaplar.</li></ul>
+  <li><b>Robotunu tanıt</b> ile ölçüleri çizimden takip ederek gir ve iç hazneyi ayarla. TCS3200 ve TCRT5000 için ölçüm kodunu oluştur, Seri Monitör çıktısını yapıştır ve ölçümleri aktar.</li></ul>
   <h3>Gerçek robotla eşleştirme</h3>
   <p>Robotlar → Mekanik → <b>Gerçek robotla eşleştir</b>: uygulamanın verdiği kısa ölçüm kodunu robota yükle, robotun 1 sn'de kaç cm gittiğini ve kaç derece döndüğünü ölçüp yaz, "Otomatik eşleştir"e bas. Böylece simülasyondaki <code>delay()</code> süreleri gerçek robottaki gibi aynı mesafe ve açıyı verir.</p>
   <h3>İç hazne (ayıklayıcı)</h3>
@@ -1354,6 +1358,132 @@ class Match {
     return sc;
   }
 }
+// Profil düzenleyicisi ve hızlı testler aynı doğrulamayı kullanır.
+function hazneTaslagi(hazne) {
+  const H = deepCopy(hazne || {});
+  H.var = !!hazne && H.var !== false;
+  H.agiz = { x0: 9, x1: 15, y0: -4, y1: 4, ...H.agiz };
+  H.bolmeler = (H.bolmeler || []).map(b => ({
+    kapasite: 5, acik_min: 60, acik_max: 180, aralik_ms: 250, ...b,
+    cikis: { x: -12, y: 0, ...b.cikis },
+  }));
+  const acilar = k => ({ ...k, min: k.min ?? 0, max: k.max ?? 180 });
+  H.kurallar = (H.kurallar || []).map(k => ({
+    ...acilar(k), hedef: k.hedef || 'disari', ve: k.ve ? acilar(k.ve) : null,
+  }));
+  H.disari = { x: 0, y: -14, hiz_cms: 40, ...H.disari };
+  return H;
+}
+
+function hazneDogrula(H, profile) {
+  if (!H.var) return;
+  const A = H.agiz;
+  if (![A.x0, A.x1, A.y0, A.y1].every(Number.isFinite) || A.x0 === A.x1 || A.y0 === A.y1)
+    throw new Error('Ağız için sıfırdan büyük en ve boy gir.');
+  const boards = profile.kartlar || [];
+  const pins = new Set((profile.devre?.servolar || []).map(s => resolvePin(s.pin, boards)));
+  pins.delete(null);
+  const servo = pin => pins.has(resolvePin(pin, boards));
+  const aci = (min, max) => Number.isFinite(min) && Number.isFinite(max) && min >= 0 && max <= 180 && min <= max;
+  const adlar = new Set(['disari']);
+  for (const b of H.bolmeler) {
+    if (!b.ad?.trim() || adlar.has(b.ad)) throw new Error('Her bölmeye farklı bir ad ver.');
+    adlar.add(b.ad);
+    if (!Number.isInteger(b.kapasite) || b.kapasite < 1 || !Number.isFinite(b.aralik_ms) || b.aralik_ms < 0)
+      throw new Error(b.ad + ' bölmesinin kapasitesini ve çıkış aralığını kontrol et.');
+    if ((b.kapak != null && !servo(b.kapak)) || !aci(b.acik_min, b.acik_max))
+      throw new Error(b.ad + ' bölmesinin kapak servosunu ve açılarını kontrol et.');
+    if (![b.cikis.x, b.cikis.y].every(Number.isFinite)) throw new Error(b.ad + ' bölmesinin çıkış konumunu gir.');
+  }
+  for (const [i, k] of H.kurallar.entries()) {
+    if (!adlar.has(k.hedef) || [k, k.ve].filter(Boolean).some(s => !servo(s.servo) || !aci(s.min, s.max)))
+      throw new Error((i + 1) + '. kuralın servosunu, açılarını ve hedefini kontrol et.');
+  }
+  if (![H.disari.x, H.disari.y, H.disari.hiz_cms].every(Number.isFinite) || H.disari.hiz_cms < 0)
+    throw new Error('Dışarı atma konumunu ve hızını kontrol et.');
+}
+
+function sensorOlcumPlani(profile, index) {
+  const s = profile.devre?.sensorler?.[index];
+  const t = String(s?.tip || '').toUpperCase();
+  const renk = t === 'TCS3200';
+  if (!renk && t !== 'TCRT5000') throw new Error('Bu sensörün ölçüm kalibrasyonu desteklenmiyor.');
+  const boards = profile.kartlar?.length ? profile.kartlar : [{ id: 'ana', tip: 'Uno' }];
+  const olcekli = renk && [s.s0, s.s1].some(v => v != null && v !== '');
+  const alanlar = renk ? ['s2', 's3', 'out', ...(olcekli ? ['s0', 's1'] : [])] : ['pin'];
+  const keys = alanlar.map(k => {
+    const key = resolvePin(s[k], boards);
+    if (key == null || !Number.isInteger(key) || key < 0) throw new Error(k.toUpperCase() + ' pinini Devre bölümünde kontrol et.');
+    return key;
+  });
+  const bi = Math.floor(keys[0] / 100);
+  const kart = boards[bi];
+  const pinler = keys.map(k => k % 100);
+  const B = boardOf(kart?.tip);
+  if (!kart || keys.some(k => Math.floor(k / 100) !== bi)) throw new Error('Ölçüm için sensör pinleri aynı Arduino kartında olmalı.');
+  if (pinler.some(n => !(renk ? B.digital : B.analog).includes(n) || (renk && n < 2)) || new Set(pinler).size !== pinler.length)
+    throw new Error('Sensör pinlerini kontrol et. Seri bağlantı için D0 ve D1 boş kalmalı.');
+  const yuzeyler = CAL_COLORS.filter(([k]) => renk || k !== 'bos');
+  const etiket = [t, index + 1, bi + 1, ...pinler].join(':');
+  const [a, b, c, d, e] = pinler;
+  const hazirlik = renk
+    ? ['pinMode(' + a + ', OUTPUT);', 'pinMode(' + b + ', OUTPUT);', 'pinMode(' + c + ', INPUT);',
+      ...(olcekli ? ['pinMode(' + d + ', OUTPUT);', 'pinMode(' + e + ', OUTPUT);', 'digitalWrite(' + d + ', HIGH);', 'digitalWrite(' + e + ', LOW);'] : [])]
+    : [];
+  const okuma = renk
+    ? [[0, 0], [1, 1], [0, 1], [1, 0]].flatMap(([s2, s3], i) => [
+      'digitalWrite(' + a + ', ' + (s2 ? 'HIGH' : 'LOW') + ');',
+      'digitalWrite(' + b + ', ' + (s3 ? 'HIGH' : 'LOW') + ');',
+      'delay(20);',
+      'unsigned long v' + i + ' = pulseIn(' + c + ', LOW, 30000);',
+    ])
+    : ['int v0 = analogRead(A' + (a - B.A0) + ');'];
+  const degerler = renk ? [0, 1, 2, 3] : [0];
+  const kod = [
+    '// Sensör ölçümü. Seri Monitör: 9600 baud.',
+    'void setup() {', '  Serial.begin(9600);', ...hazirlik.map(l => '  ' + l), '}',
+    'void loop() {',
+    '  if (!Serial.available()) return;',
+    '  int i = Serial.read() - \'1\';',
+    '  if (i < 0 || i >= ' + yuzeyler.length + ') return;',
+    '  for (int ornek = 0; ornek < 5; ornek++) {',
+    ...okuma.map(l => '    ' + l),
+    ...(renk ? ['    if (!v0 || !v1 || !v2 || !v3) { Serial.println("Sinyal yok"); continue; }'] : []),
+    '    Serial.print("MEBOLCUM ' + etiket + ' ");',
+    '    Serial.print(i + 1);',
+    ...degerler.flatMap(j => ['    Serial.print(\' \');', '    Serial.print(v' + j + ');']),
+    '    Serial.println();',
+    '    delay(50);',
+    '  }',
+    '}',
+  ].join('\n');
+  return { kart, renk, yuzeyler, etiket, kod };
+}
+
+function sensorOlcumleriniOku(metin, plan) {
+  const gruplar = new Map();
+  for (const satir of metin.split(/\r?\n/)) {
+    const parca = satir.match(/\bMEBOLCUM\s+(\S+)\s+(\d+)\s+([\d ]+)\s*$/);
+    if (!parca || parca[1] !== plan.etiket) continue;
+    const yuzey = plan.yuzeyler[Number(parca[2]) - 1];
+    const v = parca[3].trim().split(/\s+/).map(Number);
+    const gecerli = v.length === (plan.renk ? 4 : 1) && v.every(n =>
+      Number.isInteger(n) && (plan.renk ? n > 0 && n <= 30000 : n >= 0 && n <= 1023));
+    if (!yuzey || !gecerli) continue;
+    const [k] = yuzey;
+    if (!gruplar.has(k)) gruplar.set(k, []);
+    gruplar.get(k).push(v);
+  }
+  if (!gruplar.size) throw new Error('Bu sensör için geçerli ölçüm bulunamadı. Kodun Seri Monitör çıktısını yapıştır.');
+  const medyan = arr => {
+    arr.sort((a, b) => a - b);
+    const i = Math.floor(arr.length / 2);
+    return arr.length % 2 ? arr[i] : Math.round((arr[i - 1] + arr[i]) / 2);
+  };
+  return Object.fromEntries([...gruplar].map(([k, rows]) => [
+    k, plan.renk ? [0, 1, 2, 3].map(i => medyan(rows.map(r => r[i]))) : medyan(rows.map(r => r[0])),
+  ]));
+}
 
 // =====================================================================================
 //                                  KONTROL RAPORU
@@ -1709,7 +1839,7 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+return { hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 
 
@@ -3157,7 +3287,8 @@ document.querySelectorAll('#seg button').forEach(b => b.onclick = () => { seg = 
 $('selProfile').onchange = renderEditor;
 $('pName').oninput = () => { curProfile().ad = $('pName').value; saveProfiles(); fillProfileSelects(); };
 $('pDesc').oninput = () => { curProfile().aciklama = $('pDesc').value; saveProfiles(); };
-$('bNew').onclick = () => { const p = deepCopy(DEFAULT_PROFILES[0]); p.id = newId(); p.ad = 'Yeni robot'; p.mekanik.model3d = null; profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); toast('Yeni profil (Yum Yum örneğinden)'); };
+$('bNew').onclick = () => robotunuTanit(DEFAULT_PROFILES[0], true);
+$('bWizard').onclick = () => robotunuTanit(curProfile());
 $('bDup').onclick = async () => { const s = curProfile(); const p = deepCopy(s); p.id = newId(); p.ad = s.ad + ' (kopya)'; const raw = await idb.get(s.id); if (raw) await idb.put(p.id, raw); profiles.push(p); saveProfiles(); fillProfileSelects(); $('selProfile').value = p.id; renderEditor(); };
 $('bDel').onclick = () => { if (profiles.length < 2) { toast('Son profil silinemez'); return; } const p = curProfile(); if ($('bDel').dataset.arm !== p.id) { $('bDel').dataset.arm = p.id; $('bDel').textContent = 'Emin misin? Tekrar bas'; setTimeout(() => { $('bDel').dataset.arm = ''; $('bDel').textContent = 'Sil'; }, 3000); return; } profiles = profiles.filter(x => x !== p); idb.del(p.id); saveProfiles(); fillProfileSelects(); $('bDel').textContent = 'Sil'; renderEditor(); toast(p.ad + ' silindi'); };
 $('bUndo').onclick = () => { if (!undoStack.length) { toast('Geri alınacak değişiklik yok'); return; } const cur = $('selProfile').value; const prev = undoStack.pop(); try { const restored = JSON.parse(prev); for (const p of restored) { const old = byId(p.id); if (old && old._stl !== undefined) Object.defineProperty(p, '_stl', { value: old._stl, writable: true, configurable: true, enumerable: false }); } profiles = restored; lastSaved = prev; LS.set('mebsim3_profiller', prev); fillProfileSelects(); if (byId(cur)) $('selProfile').value = cur; renderEditor(); dirty = true; toast('Son değişiklik geri alındı'); } catch (e) { toast('Geri alınamadı'); } };
@@ -3241,7 +3372,7 @@ function renderMekanik(p) {
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
   root.append(calibCard(p, M, rerender));
-  root.append(hazneCard(p, M, rerender));
+  root.append(hazneCard(p, M));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
   root.append(st);
@@ -3292,17 +3423,375 @@ function renderMekanik(p) {
 const HAZNE_ORNEK = { var: true, agiz: { x0: 9, x1: 16, y0: -4.5, y1: 4.5 },
   kurallar: [{ servo: '10', min: 150, max: 180, hedef: 'bizim' }, { servo: '10', min: 0, max: 30, hedef: 'disari' }],
   bolmeler: [{ ad: 'bizim', kapasite: 5, kapak: '9', acik_min: 60, acik_max: 180, cikis: { x: -15, y: 0 } }], disari: { x: 4, y: -14, hiz_cms: 40 } };
-function hazneCard(p, M, rerender) {
-  const ta = h('textarea', { class: 'short', style: 'height:200px' }); ta.value = M.hazne ? JSON.stringify(M.hazne, null, 1) : ''; const msg = h('div', { class: 'msg' });
-  const apply = () => { const v = ta.value.trim(); if (!v) { delete M.hazne; saveProfiles(); msg.className = 'msg ok'; msg.textContent = 'İç hazne kapatıldı.'; return; }
-    try { const o = JSON.parse(v); if (!o.agiz) throw new Error('"agiz" (ağız bölgesi) eksik'); M.hazne = o; const rb = new SIM.Robot(p, 'red', { robots: [], eggs: [], zoneOf: () => null }); const H = rb.hazne;
-      const svPins = new Set(rb.servos.map(s => s.pin)); const bad = [...H.kurallar.map(k => k.servo), ...H.kurallar.filter(k => k.ve).map(k => k.ve.servo), ...H.bolmeler.map(b => b.kapak)].filter(k => k != null && !svPins.has(k));
-      saveProfiles(); msg.className = bad.length ? 'msg err' : 'msg ok'; msg.textContent = `Kaydedildi: ${H.kurallar.length} kural, ${H.bolmeler.length} bölme.` + (bad.length ? `\nDİKKAT: ${bad.map(k => SIM.keyLabel ? SIM.keyLabel(k, rb.boards) : k).join(', ')} pininde tanımlı servo yok (Devre → Servolar).` : ''); }
-    catch (e) { msg.className = 'msg err'; msg.textContent = 'Hata: ' + e.message; } };
-  return card('İç hazne / ayıklayıcı (gelişmiş)',
-    h('p', { class: 'hint' }, 'Ağzına giren yumurtayı servo (tokat) ile bölmelere ayıran ya da dışarı atan robotlar için. "agiz": yumurtanın ağızda sayıldığı bölge (cm, x ileri, y sola). "kurallar": hangi servo hangi açı aralığına gelince ağızdaki yumurta nereye gider (bölme adı ya da "disari"); "ve" ile ikinci bir servo şartı eklenebilir. "bolmeler": kapasite, kapak servosu, kapağın açık sayıldığı açı ve yumurtanın bırakıldığı nokta. Boş bırakırsan iç hazne yok sayılır.'),
-    ta, h('div', { class: 'row' }, h('button', { class: 'btn pri sm', on: { click: apply } }, 'Uygula'), h('button', { class: 'btn sm', on: { click: () => { ta.value = JSON.stringify(HAZNE_ORNEK, null, 1); } } }, 'Örnek doldur')), msg);
+
+function taslakAlan(obj, key, label, opt = {}) {
+  let input;
+  if (opt.options) {
+    input = h('select', {}, ...opt.options.map(([value, title]) => h('option', { value }, title)));
+  } else {
+    input = h('input', { type: opt.text ? 'text' : 'number', step: 'any', required: opt.required });
+  }
+  input.value = obj[key] ?? opt.def ?? '';
+  input.oninput = () => {
+    obj[key] = opt.text || opt.options ? input.value : num(input.value);
+    if (opt.change) opt.change();
+  };
+  return h('label', { class: 'f' }, label, input);
 }
+
+function robotCizimi(parent, M, body, hazne, teker) {
+  const canvas = h('canvas', { width: 620, height: 320, class: 'robot-cizim', role: 'img',
+    'aria-label': 'Robotun üstten görünümü. Ön sağda, robotun solu yukarıda.' });
+  parent.append(canvas);
+  const draw = () => {
+    const { width, height } = canvas;
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    const T = M.tekerlek || {};
+    const x0 = +body.x || 0, y0 = +body.y || 0;
+    const L = +body.uzunluk || 19, W = +(body.genislik ?? body.uzunluk) || 14;
+    const d = +T.cap_cm || 6.5, w = +T.genislik_cm || 2.5, track = +T.iz_cm || 15;
+    const ax = +T.x_cm || 0, base = +T.adet === 4 ? (+T.dingil_cm || 12) / 2 : 0;
+    const H = hazne?.var ? hazne : null;
+    const A = H?.agiz;
+    const pts = H ? [H.disari, ...H.bolmeler.map(b => b.cikis)] : [];
+    const scale = Math.min(520 / (2 * Math.max(10, Math.abs(x0) + L / 2, Math.abs(ax) + base + d / 2,
+      Math.abs(A?.x0 || 0), Math.abs(A?.x1 || 0), ...pts.map(p => Math.abs(p.x || 0)))),
+    230 / (2 * Math.max(8, Math.abs(y0) + W / 2, (track + w) / 2, Math.abs(A?.y0 || 0),
+      Math.abs(A?.y1 || 0), ...pts.map(p => Math.abs(p.y || 0)))));
+    const px = x => width / 2 + x * scale;
+    const py = y => height / 2 - y * scale;
+    const rect = (x, y, l, b, color) => {
+      g.fillStyle = color;
+      g.fillRect(px(x - l / 2), py(y + b / 2), l * scale, b * scale);
+    };
+    const text = (s, x, y, color = '#15334d') => {
+      g.fillStyle = color;
+      g.font = 'bold 17px system-ui';
+      g.textAlign = 'center';
+      g.fillText(s, x, y, 155);
+    };
+    g.fillStyle = '#f2f7fb';
+    g.fillRect(0, 0, width, height);
+    rect(x0, y0, L, W, '#9bc2df');
+    if (teker) {
+      for (const x of base ? [ax - base, ax + base] : [ax])
+        for (const y of [-track / 2, track / 2]) rect(x, y, d, w, '#243952');
+      if (!base && M.sarhos_teker !== null) {
+        const C = M.sarhos_teker || {};
+        g.fillStyle = '#536e84';
+        g.beginPath();
+        g.arc(px(C.x_cm ?? -8), py(C.y_cm || 0), Math.max(1, (C.cap_cm || 1.5) * scale / 2), 0, 2 * Math.PI);
+        g.fill();
+      }
+      text('↔ Teker çapı', px(ax + base), py(-track / 2 - w / 2) + 22);
+      text('↕ İz genişliği', px(ax), py(0) - 12);
+    } else if (!H) {
+      text('↔ Gövde boyu', px(x0), py(y0) - 12);
+      text('↕ Gövde eni', px(x0), py(y0) + 14);
+    }
+    if (H) {
+      rect((A.x0 + A.x1) / 2, (A.y0 + A.y1) / 2, Math.abs(A.x1 - A.x0), Math.abs(A.y1 - A.y0), '#a5e6cc');
+      text('Ağız', px((A.x0 + A.x1) / 2), py((A.y0 + A.y1) / 2) - 5);
+      pts.forEach((p, i) => {
+        g.fillStyle = i ? '#195f78' : '#aa3950';
+        g.beginPath();
+        g.arc(px(p.x), py(p.y), 5, 0, 2 * Math.PI);
+        g.fill();
+        text(i ? H.bolmeler[i - 1].ad || 'Bölme' : 'Dışarı', px(p.x), py(p.y) + 20);
+      });
+    }
+    text('+', px(0), py(0) + 6);
+    text('Sol (+y)', width / 2, 23);
+    text('Ön (+x) →', width - 58, height - 14);
+  };
+  draw();
+  return draw;
+}
+
+function govdeParcasi(M) {
+  const parts = (M.parcalar || []).filter(p => p.servo_pin == null && !p.pivot && p.kati !== false && (!p.sekil || p.sekil === 'kutu'));
+  return parts.reduce((largest, p) => p.uzunluk * (p.genislik ?? p.uzunluk) >
+    (largest?.uzunluk || 0) * (largest?.genislik ?? largest?.uzunluk ?? 0) ? p : largest, null);
+}
+
+function hazneFormu(profile, H) {
+  const root = h('div');
+  const M = profile.mekanik || {};
+  const body = govdeParcasi(M) || {};
+  const options = [['', 'Servo seç'], ...(profile.devre?.servolar || []).filter(s => s.pin != null)
+    .map(s => [String(s.pin), (s.ad || 'Servo') + ' · ' + s.pin])];
+  const render = () => {
+    root.replaceChildren();
+    const enabled = h('input', { type: 'checkbox' });
+    enabled.checked = H.var;
+    enabled.onchange = () => { H.var = enabled.checked; render(); };
+    root.append(h('label', { class: 'chk' }, enabled, 'İç hazne var'));
+    if (!H.var) return;
+    const draw = robotCizimi(root, M, body, H, false);
+    const n = (obj, key, label) => taslakAlan(obj, key, label, { change: draw });
+    const row = (...fields) => h('div', { class: 'fields' }, fields);
+    const btn = (s, fn) => h('button', { type: 'button', class: 'btn sm', on: { click: fn } }, s);
+    const servo = (obj, key, label) => {
+      const chosen = obj[key] == null ? '' : String(obj[key]);
+      const resolve = pin => SIM.resolvePin(pin, profile.kartlar || []);
+      const equivalent = options.find(([pin]) => pin && resolve(pin) != null && resolve(pin) === resolve(chosen));
+      const value = equivalent?.[0] ?? chosen;
+      const available = options.some(([pin]) => pin === value) ? options : [...options, [value, value + ' · Devre bölümünü kontrol et']];
+      const input = h('select', {}, ...available.map(([value, title]) =>
+        h('option', { value }, value || key !== 'kapak' ? title : 'Kapak servosu yok')));
+      input.value = value;
+      input.onchange = () => { obj[key] = input.value === '' ? null : input.value; };
+      return h('label', { class: 'f' }, label, input);
+    };
+    const A = H.agiz;
+    root.append(h('h3', {}, 'Yumurta giriş ağzı'), row(n(A, 'x0', 'Arka sınır x (cm)'), n(A, 'x1', 'Ön sınır x (cm)'),
+      n(A, 'y0', 'Sağ sınır y (cm)'), n(A, 'y1', 'Sol sınır y (cm)')));
+    root.append(h('h3', {}, 'Bölmeler'));
+    for (const b of H.bolmeler) {
+      const name = taslakAlan(b, 'ad', 'Bölme adı', { text: true, change: draw });
+      name.querySelector('input').onblur = () => {
+        for (const select of root.querySelectorAll('.hazne-hedef')) {
+          const opt = [...select.options].find(o => o._bolme === b);
+          if (!opt) continue;
+          if (select.value === opt.value) select._kural.hedef = b.ad;
+          opt.value = opt.textContent = b.ad;
+        }
+      };
+      root.append(h('div', { class: 'item' }, row(name, n(b, 'kapasite', 'Kapasite (yumurta)'),
+        servo(b, 'kapak', 'Kapak servosu'), n(b, 'acik_min', 'Açık en küçük açı (°)'), n(b, 'acik_max', 'Açık en büyük açı (°)'),
+        n(b.cikis, 'x', 'Çıkış x (cm)'), n(b.cikis, 'y', 'Çıkış y (cm)'), n(b, 'aralik_ms', 'Çıkış aralığı (ms)')),
+      btn('Bölmeyi kaldır', () => {
+        H.bolmeler.splice(H.bolmeler.indexOf(b), 1);
+        render();
+      })));
+    }
+    root.append(btn('+ Bölme ekle', () => {
+      let i = H.bolmeler.length + 1;
+      while (H.bolmeler.some(b => b.ad === 'Bölme ' + i)) i++;
+      H.bolmeler.push(SIM.hazneTaslagi({ bolmeler: [{ ad: 'Bölme ' + i }] }).bolmeler[0]);
+      render();
+    }));
+    root.append(h('h3', {}, 'Ayırma kuralları'), h('p', { class: 'hint' }, 'Kurallar yukarıdan aşağıya denenir. Birden çok şart varsa aynı anda sağlanmaları gerekir.'));
+    const kosul = (k, label) => [servo(k, 'servo', label), n(k, 'min', 'En küçük açı (°)'), n(k, 'max', 'En büyük açı (°)')];
+    H.kurallar.forEach((k, i) => {
+      const target = h('select', { class: 'hazne-hedef' }, h('option', { value: '' }, 'Hedef seç'), h('option', { value: 'disari' }, 'Dışarı at'),
+        ...H.bolmeler.map(b => Object.assign(h('option', { value: b.ad }, b.ad), { _bolme: b })));
+      target._kural = k;
+      target.value = k.hedef;
+      target.onchange = () => { k.hedef = target.value; };
+      if (target.selectedIndex < 0) target.selectedIndex = 0;
+      root.append(h('div', { class: 'item' }, h('strong', {}, (i + 1) + '. kural'),
+        row(...kosul(k, 'Ayırma servosu'), h('label', { class: 'f' }, 'Hedef', target)),
+        k.ve ? row(...kosul(k.ve, 'İkinci servo')) : null,
+        h('div', { class: 'row' }, btn(k.ve ? 'İkinci şartı kaldır' : '+ İkinci şart ekle', () => {
+          k.ve = k.ve ? null : { servo: null, min: 0, max: 180 }; render();
+        }), i ? btn('Yukarı taşı', () => {
+          [H.kurallar[i - 1], H.kurallar[i]] = [H.kurallar[i], H.kurallar[i - 1]]; render();
+        }) : null, btn('Kuralı kaldır', () => { H.kurallar.splice(i, 1); render(); }))));
+    });
+    root.append(btn('+ Kural ekle', () => {
+      H.kurallar.push({ servo: null, min: 0, max: 180, hedef: 'disari' }); render();
+    }), h('h3', {}, 'Dışarı atma noktası'),
+    row(n(H.disari, 'x', 'x (cm)'), n(H.disari, 'y', 'y (cm)'), n(H.disari, 'hiz_cms', 'Hız (cm/sn)')));
+  };
+  render();
+  return root;
+}
+
+function hazneCard(p, M) {
+  const draft = SIM.hazneTaslagi(M.hazne);
+  const msg = h('div', { class: 'msg', role: 'status' });
+  return card('İç hazne / ayıklayıcı', hazneFormu(p, draft),
+    h('button', { type: 'button', class: 'btn sm', on: { click: () => {
+      try {
+        SIM.hazneDogrula(draft, p);
+        M.hazne = deepCopy(draft);
+        saveProfiles();
+        msg.className = 'msg ok';
+        msg.textContent = 'İç hazne ayarları kaydedildi.';
+      } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = e.message;
+      }
+    } } }, 'Hazneyi kaydet'), msg);
+}
+
+function sensorOlcumKutusu(p, i, kaydet) {
+  const code = h('textarea', { readonly: true, class: 'short', 'aria-label': 'Arduino ölçüm kodu' });
+  const serial = h('textarea', { class: 'short', placeholder: 'Seri Monitör çıktısını buraya yapıştır', 'aria-label': 'Seri Monitör çıktısı' });
+  const msg = h('div', { class: 'msg', role: 'status' });
+  const box = h('details', {}, h('summary', {}, 'Seri Monitör ile otomatik kalibrasyon'));
+  const controls = h('div', { hidden: true });
+  const steps = h('ol');
+  const help = h('p', { class: 'hint' });
+  let plan;
+  const button = (s, fn) => h('button', { type: 'button', class: 'btn sm', on: { click: fn } }, s);
+  const report = (s, ok) => { msg.className = 'msg ' + (ok ? 'ok' : 'err'); msg.textContent = s; };
+  box.append(button('Ölçüm kodu oluştur', () => {
+    try {
+      plan = SIM.sensorOlcumPlani(p, i);
+      help.textContent = 'Motor beslemesini kapat. Ölçüm kodunu ' + plan.kart.id + ' (' + BOARDS[plan.kart.tip]?.ad +
+        ') kartına yükle. Seri Monitör’ü 9600 baud ile aç. Yüzeyi sensörün önüne yerleştir ve listedeki numarayı gönder. Ölçüm bitince kendi yarışma kodunu yeniden yükle.';
+      steps.replaceChildren(...plan.yuzeyler.map(([, label]) => h('li', {}, label)));
+      code.value = plan.kod;
+      controls.hidden = false;
+      report('', true);
+    } catch (e) {
+      controls.hidden = true;
+      report(e.message, false);
+    }
+  }), controls, msg);
+  controls.append(help, code, button('Kodu kopyala', () => copyText(code.value)), steps, serial,
+    button('Ölçümleri aktar', () => {
+      try {
+        const current = SIM.sensorOlcumPlani(p, i);
+        if (current.etiket !== plan.etiket) throw new Error('Pinler değişti. Ölçüm kodunu yeniden oluştur.');
+        const data = SIM.sensorOlcumleriniOku(serial.value, current);
+        const sensor = p.devre.sensorler[i];
+        sensor.kalibrasyon = { ...sensor.kalibrasyon, ...data };
+        report(Object.keys(data).length + ' yüzey kalibre edildi.', true);
+        kaydet();
+      } catch (e) { report(e.message, false); }
+    }));
+  return box;
+}
+
+function robotunuTanit(source, yeni = false) {
+  const p = deepCopy(source);
+  const M = p.mekanik = p.mekanik || {};
+  M.parcalar = M.parcalar || [];
+  const currentBody = govdeParcasi(M);
+  const body = currentBody || { ad: 'Gövde', x: 0, y: 0, z0: 2, uzunluk: 19, genislik: 14, z1: 9 };
+  const bodyDraft = { genislik: body.genislik ?? body.uzunluk, uzunluk: body.uzunluk, yukseklik: (body.z1 ?? 5) - (body.z0 ?? 0) };
+  const T = M.tekerlek = M.tekerlek || {};
+  const draft = SIM.hazneTaslagi(M.hazne);
+  if (yeni) {
+    p.ad = 'Yeni robot';
+    M.model3d = null;
+    delete M.kalibrasyon;
+    for (const s of p.devre?.sensorler || []) delete s.kalibrasyon;
+  }
+  const title = h('h2', { id: 'robotTanitBaslik' }, 'Robotunu tanıt');
+  const dialog = h('dialog', { class: 'robot-sihirbaz', 'aria-labelledby': title.id });
+  document.body.append(dialog);
+  dialog.onclose = () => dialog.remove();
+  let step = 0;
+  const titles = ['Gövde ölçüleri', 'Tekerlek ölçüleri', 'İç hazne', 'Sensör kalibrasyonu'];
+  const render = () => {
+    dialog.replaceChildren(title);
+    const label = h('h3', { tabindex: '-1' }, (step + 1) + ' / ' + titles.length + ' · ' + titles[step]);
+    const msg = h('div', { class: 'msg err', role: 'alert' });
+    const view = h('div');
+    dialog.append(label, view, msg);
+    const row = (...items) => h('div', { class: 'fields' }, items);
+    let validate = () => {};
+    const positive = (obj, keys) => {
+      if (keys.some(k => !Number.isFinite(obj[k]) || obj[k] <= 0)) throw new Error('Ölçüleri sıfırdan büyük sayılarla doldur.');
+    };
+    if (step === 0) {
+      const preview = { ...body, ...bodyDraft };
+      const draw = robotCizimi(view, M, preview, null, false);
+      const side = h('canvas', { width: 620, height: 99, class: 'robot-cizim', role: 'img', 'aria-label': 'Gövdenin yandan görünümü ve yüksekliği' });
+      view.append(side);
+      const redraw = () => {
+        Object.assign(preview, bodyDraft);
+        draw();
+        const g = side.getContext('2d');
+        if (!g) return;
+        g.fillStyle = '#f2f7fb'; g.fillRect(0, 0, 620, 99);
+        const l = Math.min(330, (bodyDraft.uzunluk || 19) * 11);
+        const z = Math.min(65, (bodyDraft.yukseklik || 7) * 7);
+        g.fillStyle = '#9bc2df'; g.fillRect(310 - l / 2, 80 - z, l, z);
+        g.font = 'bold 17px system-ui'; g.textAlign = 'center'; g.fillStyle = '#15334d';
+        g.fillText('↕ Gövde yüksekliği', 310, 70);
+      };
+      redraw();
+      view.append(row(taslakAlan(p, 'ad', 'Robot adı', { text: true }),
+        taslakAlan(bodyDraft, 'uzunluk', 'Gövde boyu (cm)', { change: redraw }),
+        taslakAlan(bodyDraft, 'genislik', 'Gövde eni (cm)', { change: redraw }),
+        taslakAlan(bodyDraft, 'yukseklik', 'Gövde yüksekliği (cm)', { change: redraw }),
+        taslakAlan(M, 'kutle_kg', 'Robotun toplam kütlesi (kg)', { def: 1 })));
+      validate = () => {
+        if (!p.ad?.trim()) throw new Error('Robot adını gir.');
+        positive(bodyDraft, ['uzunluk', 'genislik', 'yukseklik']);
+        if (M.kutle_kg !== undefined) positive(M, ['kutle_kg']);
+        body.uzunluk = bodyDraft.uzunluk;
+        body.genislik = bodyDraft.genislik;
+        body.z1 = (body.z0 ?? 0) + bodyDraft.yukseklik;
+        if (!M.parcalar.includes(body)) M.parcalar.push(body);
+      };
+    } else if (step === 1) {
+      const draw = robotCizimi(view, M, body, null, true);
+      const f = (key, label, def) => taslakAlan(T, key, label, { def, change: draw });
+      view.append(row(taslakAlan(T, 'adet', 'Motorlu teker sayısı', { def: 2, options: [[2, '2 teker'], [4, '4 teker']], change: render }),
+        f('cap_cm', 'Teker çapı (cm)', 6.5), f('genislik_cm', 'Teker genişliği (cm)', 2.5),
+        f('iz_cm', 'Sol ve sağ teker merkezleri arası (cm)', 15), f('x_cm', 'Tekerlerin ortası x (cm)', 0),
+        +T.adet === 4 ? f('dingil_cm', 'Ön ve arka teker merkezleri arası (cm)', 12) : null));
+      if (+T.adet !== 4) {
+        const caster = h('input', { type: 'checkbox' });
+        caster.checked = M.sarhos_teker !== null;
+        caster.onchange = () => { M.sarhos_teker = caster.checked ? { x_cm: -8, y_cm: 0, cap_cm: 1.5 } : null; render(); };
+        view.append(h('label', { class: 'chk' }, caster, 'Sarhoş teker var'));
+        if (caster.checked) {
+          const C = M.sarhos_teker = M.sarhos_teker || {};
+          view.append(row(taslakAlan(C, 'x_cm', 'Sarhoş teker x (cm)', { def: -8, change: draw }),
+            taslakAlan(C, 'y_cm', 'Sarhoş teker y (cm)', { def: 0, change: draw }),
+            taslakAlan(C, 'cap_cm', 'Sarhoş teker çapı (cm)', { def: 1.5, change: draw })));
+        }
+      }
+      validate = () => {
+        positive(T, ['cap_cm', 'genislik_cm', 'iz_cm', ...(+T.adet === 4 ? ['dingil_cm'] : [])].filter(k => T[k] !== undefined));
+        if (T.x_cm !== undefined && !Number.isFinite(T.x_cm)) throw new Error('Tekerlerin x konumunu gir.');
+        if (+T.adet !== 4 && M.sarhos_teker) {
+          const C = M.sarhos_teker;
+          if (C.cap_cm !== undefined) positive(C, ['cap_cm']);
+          if ([C.x_cm, C.y_cm].some(v => v !== undefined && !Number.isFinite(v))) throw new Error('Sarhoş tekerin konumunu gir.');
+        }
+      };
+    } else if (step === 2) {
+      view.append(hazneFormu(p, draft));
+      validate = () => { SIM.hazneDogrula(draft, p); if (draft.var || M.hazne) M.hazne = draft; };
+    } else {
+      const sensors = p.devre?.sensorler || [];
+      sensors.forEach((s, i) => {
+        if (!['TCS3200', 'TCRT5000'].includes(String(s.tip).toUpperCase())) return;
+        view.append(card(s.ad || s.tip, sensorOlcumKutusu(p, i, () => {})));
+      });
+      if (!view.children.length) view.append(h('p', { class: 'hint' }, 'Devre bölümünden TCS3200 veya TCRT5000 eklediğinde burada ölçüm alabilirsin.'));
+      else view.append(h('p', { class: 'hint' }, 'Ölçüm yapmadan da robotu kaydedebilirsin.'));
+    }
+    const button = (s, fn, cls = '') => h('button', { type: 'button', class: 'btn sm ' + cls, on: { click: fn } }, s);
+    dialog.append(h('div', { class: 'row' }, button('Vazgeç', () => dialog.close()),
+      step > 0 ? button('Geri', () => { step--; render(); }) : null,
+      button(step === titles.length - 1 ? 'Robotu kaydet' : 'İleri', () => {
+        try { validate(); } catch (e) { msg.textContent = e.message; return; }
+        if (step < titles.length - 1) { step++; render(); return; }
+        if (yeni) {
+          p.id = newId();
+          profiles.push(p);
+        } else {
+          source.ad = p.ad;
+          source.mekanik = M;
+          (source.devre?.sensorler || []).forEach((s, i) => {
+            const K = p.devre.sensorler[i].kalibrasyon;
+            if (K) s.kalibrasyon = K;
+          });
+        }
+        saveProfiles();
+        fillProfileSelects();
+        $('selProfile').value = p.id;
+        dialog.close();
+        document.querySelector('#seg button[data-s="mekanik"]').click();
+        toast('Robot profili kaydedildi.');
+      }, 'pri')));
+    if (dialog.open) label.focus();
+  };
+  render();
+  dialog.showModal();
+  title.nextElementSibling.focus();
+}
+
 function calibCard(p, M, rerender) {
   const K = M.kalibrasyon = M.kalibrasyon || {}; const O = K.olcum = K.olcum || { duz_pwm: 200, duz_sure: 1, duz_cm: null, don_pwm: 170, don_sure: 1, don_der: null };
   const fmtK = (k) => k ? `hız ×${(+k.hiz_carpani || 1).toFixed(2)}, dönüş direnci ${(+k.donus_direnci || 0).toFixed(2)}` : 'ayarsız';
@@ -3387,10 +3876,14 @@ function renderDevre(p) {
     if (t === 'TCRT5000') extra.push(fld(s, 'esik', 'Dijital eşik'));
     if (t === 'TCS3200') extra.push(fld(s, 'bakis', 'Bakış', { type: 'select', options: { asagi: 'Aşağı (zemin)', ileri: 'İleri (yumurta)' } }), fld(s, 'menzil_cm', 'Menzil (cm)'), fld(s, 'olcek', 'Ölçek % (S0/S1 yoksa)'));
     if (t === 'BUTON') extra.push(fld(s, 'deger', 'Değer', { type: 'select', options: { HIGH: 'Hep HIGH', LOW: 'Hep LOW', KIRMIZIDA_HIGH: 'Kırmızı köşede HIGH', MAVIDE_HIGH: 'Mavi köşede HIGH' } }));
-    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? calEditor(s, t) : null;
+    const calBox = (t === 'TCS3200' || t === 'TCRT5000') ? h('div', {}, calEditor(s, t)) : null;
+    const automatic = calBox ? sensorOlcumKutusu(p, i, () => {
+      saveProfiles();
+      calBox.replaceChildren(calEditor(s, t));
+    }) : null;
     list.append(h('div', { class: 'item' }, h('div', { class: 'top' }, fld(s, 'tip', 'Tip', { type: 'select', options: Object.fromEntries(Object.entries(SENSOR_TYPES).map(([k, v]) => [k, v.ad])), after: rerender }), fld(s, 'ad', 'Ad', { type: 'text', w: '150px' }),
       h('button', { class: 'btn sm danger', style: 'margin-left:auto', on: { click: () => { D.sensorler.splice(i, 1); saveProfiles(); rerender(); } } }, 'Sil')),
-      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), calBox));
+      h('div', { class: 'fields' }, ...def.pins.map(k => pinFld(s, k, k === 'pin' ? 'Pin' : k === 'dijital_pin' ? 'Dijital pin' : k.toUpperCase())), ...(t === 'BUTON' ? [] : [fld(s, 'x', 'x'), fld(s, 'y', 'y'), fld(s, 'z', 'Yükseklik'), fld(s, 'aci', 'Açı°')]), ...extra), automatic, calBox));
   });
   const addSel = h('select', {}, ...Object.entries(SENSOR_TYPES).map(([k, v]) => h('option', { value: k }, v.ad)));
   root.append(card('Sensörler', h('p', { class: 'hint' }, 'Konum robot merkezine göre cm (x ileri, y sola). Açı: 0 = ileri, + = sola.'), list, h('div', { class: 'row' }, addSel, h('button', { class: 'btn sm', on: { click: () => { D.sensorler.push({ tip: addSel.value, ad: SENSOR_TYPES[addSel.value].ad, x: 8, y: 0, z: 2, aci: 0 }); saveProfiles(); rerender(); } } }, '+ Sensör ekle'))));
