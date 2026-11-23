@@ -1,7 +1,7 @@
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 import json
-d = open('/home/claude/defaults.js').read()
+d = open(os.path.join(HERE, 'defaults.js')).read()
 code = d[d.index('const DEFAULT_CODE = `') + len('const DEFAULT_CODE = `'):d.rindex('`;')]
 code = code.replace('''// 0 = yumurta yok, 1 = kırmızı, 2 = mavi
 int yumurtaRengi() {
@@ -67,7 +67,7 @@ yum = {
    {"ad": "Mini breadboard", "x": -5, "y": 3.5, "z": 8.9, "uzunluk": 4.5, "genislik": 3.4, "kalinlik": 0.9, "renk": "#d1d5db"}]}}
 eski = {
  "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
- "kartlar": [{"id": "mega", "tip": "Mega", "kod": open('/tmp/eski/mega.ino').read()}, {"id": "nano", "tip": "Nano", "kod": open('/tmp/eski/nano.ino').read()}],
+ "kartlar": [{"id": "mega", "tip": "Mega", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_mega.ino')).read()}, {"id": "nano", "tip": "Nano", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_nano.ino')).read()}],
  "kart_baglantilari": [["mega:A0", "nano:A0"], ["mega:A1", "nano:A1"], ["mega:A2", "nano:A2"], ["mega:A3", "nano:A3"], ["mega:A4", "nano:A4"]],
  "mekanik": {"kutle_kg": 2.2, "agirlik_merkezi": {"x_cm": N, "z_cm": 6},
   "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.7, "iz_cm": 23, "x_cm": -2, "adet": 4, "dingil_cm": 14},
