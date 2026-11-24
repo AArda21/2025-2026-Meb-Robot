@@ -110,4 +110,13 @@ try {
   const normal = SIM.Sensors.pulseIn({}, { sensors: [sen] }, rt, 42, 0, 30000);
   ok(Math.abs(normal.next().value - 0.00024) < 1e-12 && normal.next().value === 120, 'TCS geçerli darbe yanlış');
 } finally { SIM.Sensors.tcsPeriod = tcsOrjinal; }
+// 10) Kalibre edilmiş TCRT5000'de sensör yükselince optik sinyal düşmeli.
+const zeminModel = { eggs: [], zoneOf: () => null };
+const yakinRobot = { sensorWorld: () => ({ x: 0, y: 0, z: 0.02 }) };
+const uzakRobot = { sensorWorld: () => ({ x: 0, y: 0, z: 0.08 }) };
+const kalibreTcrt = { kalibrasyon: { beyaz: 200 } };
+const yakinDeger = SIM.Sensors.tcrt(zeminModel, yakinRobot, kalibreTcrt);
+const uzakDeger = SIM.Sensors.tcrt(zeminModel, uzakRobot, kalibreTcrt);
+ok(yakinDeger >= 190 && yakinDeger <= 210 && uzakDeger >= 990,
+  'kalibre edilmiş TCRT5000 sensör yüksekliğinden etkilenmedi');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

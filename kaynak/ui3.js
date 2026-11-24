@@ -425,6 +425,7 @@ function videoIzCard(p) {
           const r = SIM.hareketIziniKarsilastir(p, Engine, type.value, +pwm.value, iz, +battery.value);
           logs.push(name + ' · süre / gerçek / simülasyon\n' + r.sonuclar.map(s => [s.sure, s.gercek, s.sim].map(fmt).join(' / ')).join('\n'));
           return name + ' · Ortalama karekök hata ' + fmt(r.rmse) + ' ' + unit +
+            ' · Ortalama yönlü fark ' + fmt(r.ortalamaFark) + ' ' + unit +
             ' · En büyük sapma ' + fmt(r.enBuyukFark) + ' ' + unit +
             ' · Son fark (sim − gerçek) ' + fmt(r.sonFark) + ' ' + unit +
             (r.sonYuzdeFark == null ? '' : ' (%' + fmt(r.sonYuzdeFark) + ')') +
