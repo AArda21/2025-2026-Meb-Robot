@@ -14,11 +14,12 @@ jobs:
         with: { node-version: 20 }
       - run: npm install
       - run: npm run libs
-      - run: node test/fizik3d.mjs 2>&1 | tail -80
-        continue-on-error: true
+      - run: |
+          set -o pipefail
+          mkdir -p sonuc
+          node test/fizik3d.mjs 2>&1 | tail -80
       - run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
       - run: (cd www && python3 -m http.server 8080 &) && sleep 2 && node test/ekran.mjs
-        continue-on-error: true
       - name: Sonuçları test-sonuclari dalına koy
         run: |
           cp -r sonuc /tmp/sonuc && cd /tmp/sonuc && ls -la
