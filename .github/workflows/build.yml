@@ -5,8 +5,23 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    name: Kaynak derlemesi ve hızlı testler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Kaynak kodlarını derle
+        run: bash kaynak/build.sh
+      - name: Simülatör hızlı testlerini çalıştır
+        run: node kaynak/test/hizli_test.js
+
   apk:
     name: Android APK
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +42,7 @@ jobs:
 
   exe:
     name: Windows EXE
+    needs: [test]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
