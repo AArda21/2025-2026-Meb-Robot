@@ -25,7 +25,7 @@ Kodu: `kaynak/ornek_kodlar/antalya_mega.ino` ve `antalya_nano.ino`. Mega kodunda
 - Depo: `AArda21/2025-2026-Meb-Robot`
 - **`main` dalına DOKUNMA** (takımın robot kodları orada).
 - Simülatör: **`simulator`** dalı. Derlenmiş APK/EXE: `apk-dosyalari` dalı (GitHub Actions yazar). Test çıktıları: `test-sonuclari` dalı.
-- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.6). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
+- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
 
 ```
 www/index.html          ← UYGULAMANIN KENDİSİ (üretilen dosya, elle düzenleme; kaynak/'tan üretilir)
