@@ -190,7 +190,13 @@ function hareketIziniKarsilastir(p, Engine, tip, pwm, iz, pil = 100) {
     const a = sonuclar[i - 1], b = sonuclar[i];
     return a.sure + (b.sure - a.sure) * (yari - a[alan]) / (b[alan] - a[alan]);
   };
-  return { sonuclar, rmse, yari, gercekYari: gecis('gercek'), simYari: gecis('sim') };
+  const hatalar = sonuclar.map(s => s.sim - s.gercek);
+  const ortalamaFark = hatalar.reduce((toplam, e) => toplam + e, 0) / hatalar.length;
+  const enBuyukFark = Math.max(...hatalar.map(Math.abs));
+  const sonFark = hatalar.at(-1);
+  const gercekSon = sonuclar.at(-1).gercek;
+  const sonYuzdeFark = Math.abs(gercekSon) > 1e-9 ? 100 * sonFark / Math.abs(gercekSon) : null;
+  return { sonuclar, rmse, ortalamaFark, enBuyukFark, sonFark, sonYuzdeFark, yari, gercekYari: gecis('gercek'), simYari: gecis('sim') };
 }
 function autoCalibrate(profile, MatchClass, real) {
   const out = { hiz_carpani: 1, donus_direnci: 0, notlar: [] }; const bis = (lo, hi, f, target, inc) => { for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; const v = f(mid); if ((v < target) === inc) lo = mid; else hi = mid; } return (lo + hi) / 2; };

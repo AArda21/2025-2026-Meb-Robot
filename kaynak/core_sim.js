@@ -103,7 +103,10 @@ const Sensors = {
       yield timeout / 1e6; return 0;
     }
     const tcs = rb.sensors.find(s => s.type === 'TCS3200' && s.out === k);
-    if (tcs) { const per = Sensors.tcsPeriod(m, rb, tcs); if (per == null) { yield timeout / 1e6; return 0; } yield (per * 2) / 1e6; return Math.round(per); }
+    if (tcs) { const per = Sensors.tcsPeriod(m, rb, tcs); const bekleme = per * 2;
+      // pulseIn zaman aşımında olmayan bir darbe üretmez: uzun ya da geçersiz periyot 0 döndürür.
+      if (!Number.isFinite(per) || per <= 0 || bekleme > timeout) { yield timeout / 1e6; return 0; }
+      yield bekleme / 1e6; return Math.round(per); }
     yield timeout / 1e6; return 0;
   },
   readouts(m, rb) {

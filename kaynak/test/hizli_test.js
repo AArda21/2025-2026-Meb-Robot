@@ -86,4 +86,28 @@ const fark = SIM.hareketIziniKarsilastir(P[0], SIM.Match, 'duz', 200, iz);
 ok(fark.sonuclar[0].sim === 0 && fark.sonuclar[1].sim > 20 && fark.rmse > 0, 'ara zaman örnekleri karşılaştırılmadı');
 ok(Math.abs(fark.gercekYari - 1.53125) < 1e-9, 'yarı mesafe zamanı doğrusal süre varsayımıyla hesaplandı');
 reddet(() => SIM.hareketIziniOku('0;0\n1;20\n1;30'), 'tekrarlanan video zamanları kabul edildi');
+
+// 9) Gerçek video izinde hatanın yönü, son fark ve en yüksek sapma ayrı raporlanır.
+const sapma = SIM.hareketIziniKarsilastir(P[0], SIM.Match, 'duz', 200, iz);
+const hatalar = sapma.sonuclar.map(s => s.sim - s.gercek);
+ok(Math.abs(sapma.ortalamaFark - hatalar.reduce((a,b)=>a+b,0)/hatalar.length) < 1e-10,
+  'ortalama farkın işareti ya da değeri yanlış');
+ok(Math.abs(sapma.enBuyukFark - Math.max(...hatalar.map(Math.abs))) < 1e-10, 'en büyük sapma yanlış');
+ok(sapma.sonFark === hatalar.at(-1) && Math.abs(sapma.sonYuzdeFark - sapma.sonFark) < 1e-9,
+  'son ölçüm farkı veya yüzdesi yanlış');
+const sifirIz = [{ sure: 0, deger: 0 }, { sure: 0.25, deger: 0 }, { sure: 0.5, deger: 0 }];
+ok(SIM.hareketIziniKarsilastir(P[0], SIM.Match, 'duz', 200, sifirIz).sonYuzdeFark === null,
+  'gerçek son ölçüm sıfırken sıfıra bölündü');
+// TCS3200 pulseIn: zaman aşımından uzun sinyali 0 say ve sanal zamanı yalnız timeout kadar ilerlet.
+const tcsOrjinal = SIM.Sensors.tcsPeriod;
+try {
+  const sen = { type: 'TCS3200', out: 42 };
+  const rt = { t: 0 };
+  SIM.Sensors.tcsPeriod = () => 40000;
+  const gec = SIM.Sensors.pulseIn({}, { sensors: [sen] }, rt, 42, 0, 30000);
+  ok(Math.abs(gec.next().value - 0.03) < 1e-12 && gec.next().value === 0, 'TCS zaman aşımı yanlış');
+  SIM.Sensors.tcsPeriod = () => 120;
+  const normal = SIM.Sensors.pulseIn({}, { sensors: [sen] }, rt, 42, 0, 30000);
+  ok(Math.abs(normal.next().value - 0.00024) < 1e-12 && normal.next().value === 120, 'TCS geçerli darbe yanlış');
+} finally { SIM.Sensors.tcsPeriod = tcsOrjinal; }
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

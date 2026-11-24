@@ -424,7 +424,10 @@ function videoIzCard(p) {
         out.textContent = engines.map(([name, Engine]) => {
           const r = SIM.hareketIziniKarsilastir(p, Engine, type.value, +pwm.value, iz, +battery.value);
           logs.push(name + ' · süre / gerçek / simülasyon\n' + r.sonuclar.map(s => [s.sure, s.gercek, s.sim].map(fmt).join(' / ')).join('\n'));
-          return name + ' · Karesel ortalama hata ' + fmt(r.rmse) + ' ' + unit +
+          return name + ' · Ortalama karekök hata ' + fmt(r.rmse) + ' ' + unit +
+            ' · En büyük sapma ' + fmt(r.enBuyukFark) + ' ' + unit +
+            ' · Son fark (sim − gerçek) ' + fmt(r.sonFark) + ' ' + unit +
+            (r.sonYuzdeFark == null ? '' : ' (%' + fmt(r.sonYuzdeFark) + ')') +
             ' · ' + fmt(r.yari) + ' ' + unit + ' eşiği: gerçek ' + times(r.gercekYari) + ', simülasyon ' + times(r.simYari);
         }).join('\n');
         log.textContent = logs.join('\n\n');
@@ -435,7 +438,7 @@ function videoIzCard(p) {
     }, 30);
   } } }, 'Video ölçümlerini karşılaştır');
   return card('Video ile hareket karşılaştırması',
-    h('p', { class: 'hint' }, 'Sabit PWM ile duruştan başlayan, yumurtasız ve duvara değmeyen tek denemeyi kullan. İlk satır 0;0. Sonraki her satıra saniye ve başlangıca göre cm veya dereceyi noktalı virgülle ayırarak yaz. Düz denemede simülasyon 35 cm çizgisinden başlar.'),
+    h('p', { class: 'hint' }, 'Sabit PWM ile duruştan başlayan, yumurtasız ve duvara değmeyen tek denemeyi kullan. İlk satır 0;0. Sonraki her satıra saniye ve başlangıca göre cm veya dereceyi noktalı virgülle ayırarak yaz. Düz denemede simülasyon 35 cm çizgisinden başlar. Karşılaştırma sonucunun güvenilirliği için gerçek pil gerilimini, zemin türünü ve ölçüm yöntemini de aynı tut. Tek ölçüm, robotun her koşulda aynı davranacağını kanıtlamaz.'),
     h('div', { class: 'fields' }, h('label', { class: 'f' }, 'Deneme', type), h('label', { class: 'f' }, 'PWM', pwm),
       h('label', { class: 'f' }, 'Başlangıç pil doluluğu (%)', battery)), source, compare, out, log);
 }
