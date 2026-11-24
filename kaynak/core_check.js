@@ -420,6 +420,36 @@ function guessRole(name) {
   return 'govde';
 }
 
-return { airImpulse, hareketIziniOku, hareketIziniKarsilastir, hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
+
+/* Gerçekçi simülasyon için veri hazırlığını gösterir; bir doğruluk puanı üretmez.
+   Kullanıcının girdiği değerlerin ölçüldüğünü doğrulayamaz. */
+function gerceklikKontrolu(profile) {
+  const M = profile.mekanik || {}, T = M.tekerlek || {}, D = profile.devre || {};
+  const o = M.kalibrasyon?.olcum || {};
+  const sayi = x => Number.isFinite(+x) && +x > 0 && x !== '' && x != null;
+  const maddeler = [];
+  const ekle = (ad, varMi, aciklama) => maddeler.push({ ad, varMi: !!varMi, aciklama });
+  const govde = (M.parcalar || []).find(p => sayi(p.uzunluk) && sayi(p.genislik ?? p.uzunluk) && Number.isFinite(p.z0) && Number.isFinite(p.z1) && p.z1 > p.z0);
+  ekle('Gövde ölçüleri ve kütle', !!govde && sayi(M.kutle_kg),
+    'Gerçek gövdenin en/boy/yüksekliğini ve toplam kütlesini ölçüp Robotunu Tanıt bölümüne gir.');
+  ekle('Teker ve motor geometrisi', sayi(T.cap_cm) && sayi(T.iz_cm) && (+T.adet !== 4 || sayi(T.dingil_cm)),
+    'Teker çapını, merkezler arası iz genişliğini ve dört tekerliyse dingil aralığını ölç.');
+  ekle('Gerçek düz sürüş testi', sayi(o.duz_cm) && sayi(o.duz_pwm) && sayi(o.duz_sure),
+    'Yarışma zemininde gerçek robotla düz sürüş yapıp PWM, süre ve mesafeyi kaydet.');
+  ekle('Gerçek dönüş testi', sayi(o.don_der) && sayi(o.don_pwm) && sayi(o.don_sure),
+    'Yarışma zemininde yerinde dönüş açısını ve motor komutunu ölç.');
+  ekle('2B hareket kalibrasyonu', !!M.kalibrasyon?.['2B'] && sayi(o.duz_cm) && sayi(o.don_der),
+    'Gerçek ölçümleri kullanarak Otomatik eşleştir işlemini çalıştır.');
+  const gereken = (D.sensorler || []).filter(s => ['TCS3200', 'TCRT5000'].includes(String(s.tip).toUpperCase()));
+  if (gereken.length) {
+    const tamam = gereken.filter(s => s.kalibrasyon && Object.keys(s.kalibrasyon).some(k => {
+      const v = s.kalibrasyon[k]; return Array.isArray(v) ? v.length >= 3 && v.every(sayi) : sayi(v) || v === 0;
+    })).length;
+    ekle('Renk ve zemin sensör kalibrasyonu', tamam === gereken.length,
+      gereken.length + ' sensörün ' + tamam + ' tanesinde kalibrasyon girdisi var. Gerçek yüzeyler için Seri Monitör ölçümlerini aktar.');
+  }
+  return { maddeler, eksik: maddeler.filter(x => !x.varMi).length, toplam: maddeler.length };
+}
+return { gerceklikKontrolu, airImpulse, hareketIziniOku, hareketIziniKarsilastir, hazneTaslagi, hazneDogrula, sensorOlcumPlani, sensorOlcumleriniOku, BATTERIES, floorMu, calibYaw, measureMotion, autoCalibrate, calibSketch, lint, CAL_COLORS, CALKEY, SURF_EXPORT: SURF, parseOBJ, parseGLTF, parseModel, transformModel, guessRole, RULES, RULESETS, SURF, BOARDS, TIRES, MOTORS, DRIVERS, SENSOR_TYPES, Match, Robot, Runtime, Sensors, transpile, compile, trError, stripJsonComments, resolvePin, keyLabel, pinLabel, boardOf, staticChecks, runTrial, parseNetlist, parseSTL, transformSTL, deepCopy, clamp };
 })();
 if (typeof module !== 'undefined') module.exports = SIM;

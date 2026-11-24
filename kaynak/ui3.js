@@ -348,7 +348,7 @@ function renderMekanik(p) {
   if (Mo.model === 'ozel') mc.append(h('div', { class: 'fields', style: 'margin-top:10px' }, fld(Mo, 'volt', 'Nominal gerilim (V)'), fld(Mo, 'rpm', 'Boşta devir (rpm)'), fld(Mo, 'tork_kgcm', 'Kilitlenme torku (kg·cm)'), fld(Mo, 'surtunme_kgcm', 'İç sürtünme (kg·cm)')));
   else { const mm = MOTORS[Mo.model]; if (mm) mc.append(h('p', { class: 'hint' }, `${mm.volt} V'ta ≈ ${mm.rpm} rpm, kilitlenme torku ≈ ${mm.tork} kg·cm (redüktör çıkışı, yaklaşık değer).`)); }
   root.append(mc);
-  root.append(calibCard(p, M, rerender), videoIzCard(p));
+  root.append(gerceklikCard(p), calibCard(p, M, rerender), videoIzCard(p));
   root.append(hazneCard(p, M));
   const st = card('Acil stop butonu', h('label', { class: 'chk' }, Object.assign(h('input', { type: 'checkbox' }), { checked: !!M.acil_stop, onchange: (e) => { M.acil_stop = e.target.checked ? { x: 0, y: 0, z: 9 } : null; saveProfiles(); rerender(); } }), 'Var (kurallar gereği zorunlu)'));
   if (M.acil_stop) st.append(h('div', { class: 'fields', style: 'margin-top:8px' }, fld(M.acil_stop, 'x', 'x (cm)'), fld(M.acil_stop, 'y', 'y (cm)'), fld(M.acil_stop, 'z', 'Montaj yüksekliği (cm)')));
@@ -401,6 +401,18 @@ const HAZNE_ORNEK = { var: true, agiz: { x0: 9, x1: 16, y0: -4.5, y1: 4.5 },
   kurallar: [{ servo: '10', min: 150, max: 180, hedef: 'bizim' }, { servo: '10', min: 0, max: 30, hedef: 'disari' }],
   bolmeler: [{ ad: 'bizim', kapasite: 5, kapak: '9', acik_min: 60, acik_max: 180, cikis: { x: -15, y: 0 } }], disari: { x: 4, y: -14, hiz_cms: 40 } };
 /*ROBOT_TANIT*/
+
+function gerceklikCard(p) {
+  const durum = SIM.gerceklikKontrolu(p);
+  const satirlar = durum.maddeler.map(m => h('div', { class: 'item' },
+    h('strong', {}, (m.varMi ? '✓ Profilde var · ' : '○ Eksik · ') + m.ad),
+    h('p', { class: 'hint' }, m.aciklama)));
+  return card('Gerçekçilik kontrolü',
+    h('p', { class: 'hint' }, 'Bu liste yalnızca profilde hangi verilerin bulunduğunu gösterir; verilerin gerçekten ölçüldüğünü veya simülasyonun doğruluk yüzdesini kanıtlamaz. Gerçek robotla aynı davranışı hedeflemek için eksikleri tamamla.'),
+    h('p', {}, durum.eksik ? durum.eksik + ' veri grubu eksik (' + durum.toplam + ' gruptan).' :
+      'Temel veri grupları girilmiş. Gerçek videolarla ve ayrı denemelerle doğrula.'),
+    ...satirlar);
+}
 function videoIzCard(p) {
   const source = h('textarea', { class: 'short', 'aria-label': 'Videodan ölçülen hareket', placeholder: '0;0\n0,5;18\n1;39' });
   const type = h('select', {}, h('option', { value: 'duz' }, 'İleri (cm)'), h('option', { value: 'don' }, 'Yerinde sola dönüş (°)'));

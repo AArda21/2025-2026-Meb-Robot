@@ -119,4 +119,16 @@ const yakinDeger = SIM.Sensors.tcrt(zeminModel, yakinRobot, kalibreTcrt);
 const uzakDeger = SIM.Sensors.tcrt(zeminModel, uzakRobot, kalibreTcrt);
 ok(yakinDeger >= 190 && yakinDeger <= 210 && uzakDeger >= 990,
   'kalibre edilmiş TCRT5000 sensör yüksekliğinden etkilenmedi');
+// 11) Gerçekçilik kontrolü eksik ölçümler için ölçüm adımları verir, sahte doğruluk yüzdesi üretmez.
+const eksikProfil = SIM.deepCopy(P[1]);
+eksikProfil.mekanik = eksikProfil.mekanik || {};
+eksikProfil.mekanik.kalibrasyon = {};
+const hazirlik = SIM.gerceklikKontrolu(eksikProfil);
+ok(hazirlik.eksik > 0 && hazirlik.maddeler.some(m => m.ad === 'Gerçek düz sürüş testi' && !m.varMi),
+  'eksik gerçek sürüş ölçümleri kullanıcıya gösterilmedi');
+eksikProfil.mekanik.kalibrasyon.olcum = { duz_cm: 35, duz_pwm: 200, duz_sure: 1, don_der: 90, don_pwm: 170, don_sure: 1 };
+eksikProfil.mekanik.kalibrasyon['2B'] = { hiz_carpani: 1, donus_direnci: 0 };
+const olculuHazirlik = SIM.gerceklikKontrolu(eksikProfil);
+ok(olculuHazirlik.eksik < hazirlik.eksik && !olculuHazirlik.maddeler.some(m => m.ad === 'Gerçek dönüş testi' && !m.varMi),
+  'gerçek ölçümlerin tamamlanması kontrolü güncellemedi');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);
