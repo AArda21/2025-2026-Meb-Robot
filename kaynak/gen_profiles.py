@@ -115,6 +115,8 @@ vm["agirlik_merkezi"] = {"x_cm": 0, "z_cm": 4.5}
 vm["tekerlek"] = {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.2, "iz_cm": 17, "x_cm": 0, "adet": 4, "dingil_cm": 12}
 # Temsili dört tekerli şasi için örnek yüksek torklu motor; gerçek robotun motoru bilinmiyor.
 vm["motor"] = {"model": "JGB37-520 12V 107"}
+# Dört tekerli kızaklı dönüşteki yanal kaymayı yaklaşık modelleyen deneysel lastik varsayımı.
+vm["tekerlek"].update({"lastik": "ozel", "mu_statik": 0.42, "mu_kinetik": 0.32, "yuvarlanma": 0.016})
 vm["sarhos_teker"] = N
 vm["acil_stop"] = {"x": -6, "y": 0, "z": 8}
 vm["parcalar"] = [
