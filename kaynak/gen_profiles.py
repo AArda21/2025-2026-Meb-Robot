@@ -113,6 +113,8 @@ vm["video_on_rev"] = 2
 vm["kutle_kg"] = 1.6
 vm["agirlik_merkezi"] = {"x_cm": 0, "z_cm": 4.5}
 vm["tekerlek"] = {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.2, "iz_cm": 17, "x_cm": 0, "adet": 4, "dingil_cm": 12}
+# Temsili dört tekerli şasi için örnek yüksek torklu motor; gerçek robotun motoru bilinmiyor.
+vm["motor"] = {"model": "JGB37-520 12V 107"}
 vm["sarhos_teker"] = N
 vm["acil_stop"] = {"x": -6, "y": 0, "z": 8}
 vm["parcalar"] = [
