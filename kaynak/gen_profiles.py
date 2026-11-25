@@ -1,4 +1,5 @@
 import os
+import copy
 HERE = os.path.dirname(os.path.abspath(__file__))
 import json
 d = open(os.path.join(HERE, 'defaults.js')).read()
@@ -100,6 +101,37 @@ eski = {
    {"ad": "Arduino Nano", "x": 5, "y": 4, "z": 12, "uzunluk": 4.5, "genislik": 1.8, "kalinlik": 1, "renk": "#0369a1"},
    {"ad": "BTS7960 sol", "x": 4, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"},
    {"ad": "BTS7960 sağ", "x": -9, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"}]}}
+# Videoda görülen dört tekerli, üstü açık yarış robotunun TEMSİLİ profili.
+# Motor/sensör ölçüleri ve yarış kodu gerçek robotun doğrulanmış değerleri değildir.
+video = copy.deepcopy(yum)
+video["id"] = "video2026"
+video["ad"] = "Video yarış robotu (temsili)"
+video["renk"] = "#eab308"
+video["aciklama"] = "25 Kasım 2026 yarış videosundaki açık şasili, dört tekerli robotun yaklaşık dış görünümü. Motor, sensör ve ölçüler temsili; robotunuzun gerçek verilerini girin."
+vm = video["mekanik"]
+vm["video_on_rev"] = 1
+vm["kutle_kg"] = 1.6
+vm["agirlik_merkezi"] = {"x_cm": 0, "z_cm": 4.5}
+vm["tekerlek"] = {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.2, "iz_cm": 17, "x_cm": 0, "adet": 4, "dingil_cm": 12}
+vm["sarhos_teker"] = N
+vm["acil_stop"] = {"x": -6, "y": 0, "z": 8}
+vm["parcalar"] = [
+    {"ad": "Alçak açık şasi", "x": 0, "y": 0, "uzunluk": 19, "genislik": 13, "z0": 3.2, "z1": 3.8, "renk": "#30343b"},
+    {"ad": "Sol yan koruma", "x": 0, "y": 6.6, "uzunluk": 18, "genislik": 0.6, "z0": 2.6, "z1": 4.7, "renk": "#eab308"},
+    {"ad": "Sağ yan koruma", "x": 0, "y": -6.6, "uzunluk": 18, "genislik": 0.6, "z0": 2.6, "z1": 4.7, "renk": "#eab308"},
+    {"ad": "Ön alçak tampon", "x": 9.5, "y": 0, "uzunluk": 0.8, "genislik": 12.8, "z0": 1.5, "z1": 3.8, "renk": "#facc15"},
+    {"ad": "Ön LED şeridi (görsel)", "x": 9.65, "y": 0, "uzunluk": 0.25, "genislik": 10, "z0": 3.8, "z1": 4.15, "renk": "#ef4444", "kati": F},
+    {"ad": "Arka elektronik kafesi (görsel)", "x": -5.8, "y": 0, "uzunluk": 5.5, "genislik": 9, "z0": 3.8, "z1": 7, "renk": "#374151", "kati": F}
+]
+video["devre"]["sensorler"] = copy.deepcopy(yum["devre"]["sensorler"])
+for sensor in video["devre"]["sensorler"]:
+    if sensor["tip"] == "HC-SR04": sensor["x"], sensor["z"] = 8, 4.4
+    if sensor["tip"] == "TCS3200": sensor["x"], sensor["z"] = 8.9, 1.2
+video["devre"]["yerlesim"] = [
+    {"ad": "Arduino Uno", "x": -2, "y": 1.5, "z": 3.8, "uzunluk": 6.9, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490"},
+    {"ad": "Motor sürücüsü", "x": 4.5, "y": -1.2, "z": 3.8, "uzunluk": 4, "genislik": 4, "kalinlik": 2, "renk": "#b91c1c"},
+    {"ad": "Pil grubu", "x": -5.5, "y": -3, "z": 3.8, "uzunluk": 5, "genislik": 3, "kalinlik": 2.3, "renk": "#1d4ed8"}
+]
 rakip_code = open(os.path.join(HERE, 'rakip.ino')).read()
 rakip = {"id": "rakip", "ad": "Basit rakip", "renk": "#2563eb", "aciklama": "Rastgele dolaşan basit rakip robot.",
  "kartlar": [{"id": "ana", "tip": "Uno", "kod": rakip_code}], "kart_baglantilari": [],
@@ -109,5 +141,5 @@ rakip = {"id": "rakip", "ad": "Basit rakip", "renk": "#2563eb", "aciklama": "Ras
   "sensorler": [{"tip": "HC-SR04", "ad": "Ultrasonik", "trig": 11, "echo": 12, "x": 9, "y": 0, "z": 6, "aci": 0}, {"tip": "BUTON", "ad": "Köşe anahtarı", "pin": "A5", "deger": "KIRMIZIDA_HIGH"}], "servolar": [],
   "led": {"tip": "iki_pin", "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -4, "y": 0, "z": 7},
   "yerlesim": [{"ad": "Arduino Uno", "x": -2, "y": 0, "z": 7, "uzunluk": 6.9, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490"}]}}
-open(os.path.join(HERE, 'profiles.js'), 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip], ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
+open(os.path.join(HERE, 'profiles.js'), 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip, video], ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
 print('ok')

@@ -145,4 +145,14 @@ ok(html.includes('id="arenaScore"') && html.includes('id="arenaRed"') &&
    html.includes('id="arenaBlue"') && html.includes('id="arenaTime"') &&
    html.includes("const sc = snap?.sc || match.score()"),
   'Saha sağ üstündeki canlı skor veya maç tekrarı skor bağlantısı eksik');
+
+// Videodan çıkarılmış ayrı 4-teker temsili profil: özgün Yum Yum ve Antalya'nın ayarları korunmalı.
+const videoRobot = P.find(p => p.id === 'video2026');
+ok(!!videoRobot && videoRobot.mekanik.tekerlek.adet === 4 && videoRobot.mekanik.sarhos_teker == null,
+  'videodaki açık şasili dört teker robot profili yok');
+ok(videoRobot.mekanik.parcalar.some(p => p.ad === 'Ön alçak tampon') &&
+   !videoRobot.mekanik.parcalar.some(p => /Kepçe|Sol kol|Sağ kol/.test(p.ad)),
+  'video robotunda gereksiz kepçe/kol var');
+ok(videoRobot.kartlar[0].kod === P[0].kartlar[0].kod,
+  'temsili video profili için beklenmeyen gerçek robot kodu yerleştirildi');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);
