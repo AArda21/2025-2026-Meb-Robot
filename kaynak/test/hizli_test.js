@@ -150,7 +150,7 @@ ok(html.includes('id="arenaScore"') && html.includes('id="arenaRed"') &&
 const videoRobot = P.find(p => p.id === 'video2026');
 ok(!!videoRobot && videoRobot.mekanik.tekerlek.adet === 4 && videoRobot.mekanik.sarhos_teker == null,
   'videodaki açık şasili dört teker robot profili yok');
-ok(videoRobot.mekanik.parcalar.some(p => p.ad === 'Ön alçak tampon') &&
+ok(videoRobot.mekanik.parcalar.some(p => p.ad === 'Ön üst travers') &&
    !videoRobot.mekanik.parcalar.some(p => /Kepçe|Sol kol|Sağ kol/.test(p.ad)),
   'video robotunda gereksiz kepçe/kol var');
 ok(videoRobot.kartlar[0].kod === P.find(p => p.id === 'rakip').kartlar[0].kod &&
