@@ -109,7 +109,7 @@ video["ad"] = "Video yarış robotu (temsili)"
 video["renk"] = "#eab308"
 video["aciklama"] = "25 Kasım 2026 yarış videosundaki açık şasili, dört tekerli robotun yaklaşık dış görünümü. Motor, sensör ve ölçüler temsili; robotunuzun gerçek verilerini girin."
 vm = video["mekanik"]
-vm["video_on_rev"] = 1
+vm["video_on_rev"] = 2
 vm["kutle_kg"] = 1.6
 vm["agirlik_merkezi"] = {"x_cm": 0, "z_cm": 4.5}
 vm["tekerlek"] = {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.2, "iz_cm": 17, "x_cm": 0, "adet": 4, "dingil_cm": 12}
@@ -119,10 +119,11 @@ vm["parcalar"] = [
     {"ad": "Alçak açık şasi", "x": 0, "y": 0, "uzunluk": 19, "genislik": 13, "z0": 3.2, "z1": 3.8, "renk": "#30343b"},
     {"ad": "Sol yan koruma", "x": 0, "y": 6.6, "uzunluk": 18, "genislik": 0.6, "z0": 2.6, "z1": 4.7, "renk": "#eab308"},
     {"ad": "Sağ yan koruma", "x": 0, "y": -6.6, "uzunluk": 18, "genislik": 0.6, "z0": 2.6, "z1": 4.7, "renk": "#eab308"},
-    {"ad": "Ön alçak tampon", "x": 9.5, "y": 0, "uzunluk": 0.8, "genislik": 12.8, "z0": 1.5, "z1": 3.8, "renk": "#facc15"},
-    {"ad": "Ön LED şeridi (görsel)", "x": 9.65, "y": 0, "uzunluk": 0.25, "genislik": 10, "z0": 3.8, "z1": 4.15, "renk": "#ef4444", "kati": F},
+    {"ad": "Ön üst travers", "x": 9.5, "y": 0, "uzunluk": 0.8, "genislik": 12.8, "z0": 3.15, "z1": 4.0, "renk": "#facc15"},
+    {"ad": "Ön LED şeridi (sabit)", "x": 9.65, "y": 0, "uzunluk": 0.25, "genislik": 10, "z0": 4.0, "z1": 4.3, "renk": "#ef4444", "kati": F},
     {"ad": "Arka elektronik kafesi (görsel)", "x": -5.8, "y": 0, "uzunluk": 5.5, "genislik": 9, "z0": 3.8, "z1": 7, "renk": "#374151", "kati": F}
 ]
+video["devre"]["servolar"] = []  # Videoda olmayan açılır ön kapak modelinden çıkarıldı.
 video["devre"]["sensorler"] = copy.deepcopy(yum["devre"]["sensorler"])
 for sensor in video["devre"]["sensorler"]:
     if sensor["tip"] == "HC-SR04": sensor["x"], sensor["z"] = 8, 4.4
@@ -133,6 +134,8 @@ video["devre"]["yerlesim"] = [
     {"ad": "Pil grubu", "x": -5.5, "y": -3, "z": 3.8, "uzunluk": 5, "genislik": 3, "kalinlik": 2.3, "renk": "#1d4ed8"}
 ]
 rakip_code = open(os.path.join(HERE, 'rakip.ino')).read()
+# Ön kapak servo algoritması bu video profiline uygun değildir; temsili dolaşma örneği kullanılır.
+video["kartlar"][0]["kod"] = rakip_code
 rakip = {"id": "rakip", "ad": "Basit rakip", "renk": "#2563eb", "aciklama": "Rastgele dolaşan basit rakip robot.",
  "kartlar": [{"id": "ana", "tip": "Uno", "kod": rakip_code}], "kart_baglantilari": [],
  "mekanik": {"kutle_kg": 0.9, "agirlik_merkezi": {"x_cm": N, "z_cm": 4}, "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.6, "iz_cm": 15, "x_cm": 0}, "sarhos_teker": {"x_cm": -8, "y_cm": 0, "cap_cm": 1.6}, "motor": {"model": "TT 1:48 6V"}, "pil": {"volt": 7.4}, "acil_stop": {"x": -3, "y": 3, "z": 7},

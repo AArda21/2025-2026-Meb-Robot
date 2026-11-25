@@ -153,6 +153,10 @@ ok(!!videoRobot && videoRobot.mekanik.tekerlek.adet === 4 && videoRobot.mekanik.
 ok(videoRobot.mekanik.parcalar.some(p => p.ad === 'Ön alçak tampon') &&
    !videoRobot.mekanik.parcalar.some(p => /Kepçe|Sol kol|Sağ kol/.test(p.ad)),
   'video robotunda gereksiz kepçe/kol var');
-ok(videoRobot.kartlar[0].kod === P[0].kartlar[0].kod,
-  'temsili video profili için beklenmeyen gerçek robot kodu yerleştirildi');
+ok(videoRobot.kartlar[0].kod === P.find(p => p.id === 'rakip').kartlar[0].kod &&
+   videoRobot.devre.servolar.length === 0, 'video robotunda kapak servosu ya da eski servo kodu var');
+const onParca = videoRobot.mekanik.parcalar.find(p => p.ad === 'Ön üst travers');
+ok(!!onParca && onParca.z0 > SIM.RULES.EGG_H * 100 &&
+   !videoRobot.mekanik.parcalar.some(p => p.x >= 9 && p.y === 0 && p.z0 < 2.2 && p.kati !== false),
+   'yumurta geçişi ön tarafta katı parçayla kapalı');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

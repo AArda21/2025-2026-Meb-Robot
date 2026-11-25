@@ -36,6 +36,23 @@ function eskiYumYumOnuDuzenle(p) {
   return true;
 }
 if (profiles.some(eskiYumYumOnuDuzenle)) LS.set('mebsim3_profiller', JSON.stringify(profiles));
+// Eski varsayılan video robotunun 2 cm'lik yumurta ön geçişini kapatan tamponunu düzelt.
+// Yalnızca değişmemiş hazır parçayı güncelle; kullanıcının özel mekanik tasarımını koru.
+function videoRobotOnunuGuncelle(p) {
+  if (p?.id !== 'video2026' || !p.mekanik || (+p.mekanik.video_on_rev || 0) >= 2) return false;
+  const part = (p.mekanik.parcalar || []).find(v => v.ad === 'Ön alçak tampon' && v.x === 9.5 && v.z0 === 1.5 && v.z1 === 3.8);
+  if (!part) return false;
+  Object.assign(part, { ad: 'Ön üst travers', z0: 3.15, z1: 4.0 });
+  const led = p.mekanik.parcalar.find(v => v.ad === 'Ön LED şeridi (görsel)' && v.x === 9.65);
+  if (led) Object.assign(led, { ad: 'Ön LED şeridi (sabit)', z0: 4.0, z1: 4.3 });
+  const eskiOrnek = DEFAULT_PROFILES.find(v => v.id === 'yumyum')?.kartlar?.[0]?.kod;
+  const yeniOrnek = DEFAULT_PROFILES.find(v => v.id === 'rakip')?.kartlar?.[0]?.kod;
+  if (p.kartlar?.[0]?.kod === eskiOrnek && yeniOrnek) p.kartlar[0].kod = yeniOrnek;
+  if (p.devre?.servolar?.length === 1 && p.devre.servolar[0].ad === 'Kapak servosu') p.devre.servolar = [];
+  p.mekanik.video_on_rev = 2;
+  return true;
+}
+if (profiles.some(videoRobotOnunuGuncelle)) LS.set('mebsim3_profiller', JSON.stringify(profiles));
 const undoStack = []; let lastUndoT = 0, lastSaved = JSON.stringify(profiles);
 function pushUndo() { const now = Date.now(); if (now - lastUndoT > 1500) { undoStack.push(lastSaved); if (undoStack.length > 40) undoStack.shift(); } lastUndoT = now; }
 let saveT = null; function saveProfiles() { pushUndo(); clearTimeout(saveT); saveT = setTimeout(() => { lastSaved = JSON.stringify(profiles); LS.set('mebsim3_profiller', lastSaved); }, 300); dirty = true; }

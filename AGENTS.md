@@ -25,7 +25,7 @@ Kodu: `kaynak/ornek_kodlar/antalya_mega.ino` ve `antalya_nano.ino`. Mega kodunda
 - Depo: `AArda21/2025-2026-Meb-Robot`
 - **`main` dalına DOKUNMA** (takımın robot kodları orada).
 - Simülatör: **`simulator`** dalı. Derlenmiş APK/EXE: `apk-dosyalari` dalı (GitHub Actions yazar). Test çıktıları: `test-sonuclari` dalı.
-- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7.2). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
+- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7.3). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
 
 ```
 www/index.html          ← UYGULAMANIN KENDİSİ (üretilen dosya, elle düzenleme; kaynak/'tan üretilir)
@@ -127,3 +127,7 @@ gerçek robot ölçüleriyle 3B modelin görünümü, yarışma salonu ışığ�
 25 Kasım 2026 tarihli 2:10'luk yarışma videosunda beyaz kenarlı yükseltilmiş saha, kırmızı/mavi/yeşil köşe alanları, sahaya dağılmış yumurtalar ve iki robot görünmektedir. Videoda robotların iç haznesi ya da puanlama kararları doğrulanamamaktadır. Bu nedenle resmi 2026 puanlama modeline dokunulmadı. Yum Yum varsayılan profilindeki eski uzun kepçe/kollar yerine sade ön şasi yerleştirildi; kullanıcı tarafından değiştirilmiş profiller korunur. Saha sağ üstüne `match.score()` kullanan skor/süre paneli, maç tekrarında kayıtlı `snapshot.sc` ile uyumlu olarak eklendi. 2B sahadaki hayali ızgara kaldırıldı; 3B görünüm zaten beyaz zemin ve tek ek çizgisi kullanmaktadır. Gerçek robotun iç mekanizması ölçülmeden kesin fiziksel benzerlik iddia edilmez.
 
 V4.7.2 video ek doğrulaması: `video2026` adında ayrı, dört tekerli ve üstü açık temsili yarış robotu eklendi. Yeni kurulumlarda kırmızı köşedeki başlangıç robotu bu profildir; var olan yerel kullanıcı seçimleri korunur. Profil yalnızca videonun görselini yaklaşık yansıtır, gerçek hareket parametreleri ve koduyla birebir eşleşme iddia edilmez.
+
+## V4.7.3 video robotu ön açıklık düzeltmesi
+
+`video2026` profilinde 2 cm yüksekliğindeki yumurtaları karşılayan ön katı tampon, 3,15 cm üzerindeki sabit traversle değiştirildi. Görünür ön servo kaldırıldı; servo kontrolü gerektiren Yum Yum kodunun yerine temsili dolaşma kodu kullanıldı. Eski varsayılan video profili, kullanıcı değişikliği yoksa yükseltilir. Yeni hızlı test ön geçiş açıklığını denetler. Gerçek fiziksel robot ölçümleri hâlâ gereklidir.
