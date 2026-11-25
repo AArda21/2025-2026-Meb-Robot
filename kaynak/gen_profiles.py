@@ -26,11 +26,11 @@ code = code.replace('  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);', '  pin
 code = code.replace('if (renk != 0 && renk != benim) {', 'if (renk != 0 && renk != benim && renk != 3) {   // yeşil ödül yumurtasını tut')
 F = False; T = True; N = None
 yum = {
- "id": "yumyum", "ad": "Yum Yum", "renk": "#f08c00", "aciklama": "Takımın bu yılki robotu (örnek değerlerle başlar — kendi ölçülerinizi girin).",
+ "id": "yumyum", "ad": "Yum Yum", "renk": "#f08c00", "aciklama": "Yarışma videosuna uygun sade ön şasili örnek robot. Gerçek robotun iç mekanizması, sensör ve motor ölçüleri videodan doğrulanamaz; ölçüleri düzenleyin.",
  "kartlar": [{"id": "ana", "tip": "Uno", "kod": open(os.path.join(HERE, "strateji.ino")).read()}],
  "kart_baglantilari": [],
  "mekanik": {
-  "kutle_kg": 1.1, "agirlik_merkezi": {"x_cm": N, "z_cm": 5},
+  "video_on_rev": 1, "kutle_kg": 1.1, "agirlik_merkezi": {"x_cm": N, "z_cm": 5},
   "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.6, "iz_cm": 17, "x_cm": -2},
   "sarhos_teker": {"x_cm": -8, "y_cm": 0, "cap_cm": 1.6},
   "motor": {"model": "TT 1:48 6V"}, "pil": {"volt": 7.4}, "acil_stop": {"x": 2, "y": -4, "z": 8.9},
@@ -43,11 +43,7 @@ yum = {
    {"ad": "Direk 3", "sekil": "silindir", "x": -7.5, "y": 6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227"},
    {"ad": "Direk 4", "sekil": "silindir", "x": -7.5, "y": -6, "uzunluk": 0.6, "genislik": 0.6, "z0": 4.6, "z1": 8.6, "renk": "#c9a227"},
    {"ad": "Üst pleksi plaka", "x": -0.5, "y": 0, "uzunluk": 18, "genislik": 15, "z0": 8.6, "z1": 8.9, "renk": "#cfe3f0"},
-   {"ad": "Kepçe arka", "x": 10, "y": 0, "uzunluk": 1, "genislik": 12, "z0": 0.3, "z1": 4.3, "renk": "#374151"},
-   {"ad": "Sol kol", "x": 14.25, "y": 6, "uzunluk": 7.5, "genislik": 1, "z0": 0.3, "z1": 4.3, "renk": "#374151"},
-   {"ad": "Sağ kol", "x": 14.25, "y": -6, "uzunluk": 7.5, "genislik": 1, "z0": 0.3, "z1": 4.3, "renk": "#374151"},
-   {"ad": "SG90 servo", "x": 16.5, "y": 6.3, "uzunluk": 2.3, "genislik": 1.2, "z0": 4.3, "z1": 6.6, "renk": "#2563eb", "kati": F},
-   {"ad": "Kapak", "servo_pin": 3, "pivot": [18, 5.5], "uzunluk": 11, "genislik": 0.8, "aci_ofset": -90, "yon": 1, "z0": 0.3, "z1": 4, "renk": "#f59e0b"}
+   {"ad": "Ön şasi kenarı", "x": 9, "y": 0, "uzunluk": 0.7, "genislik": 12, "z0": 2.4, "z1": 4.3, "renk": "#64748b"}
   ], "model3d": N},
  "devre": {
   "surucu": {"tip": "L298N", "sol": {"en": 5, "in1": 7, "in2": 8}, "sag": {"en": 6, "in1": 9, "in2": 10}, "sol_ters": F, "sag_ters": F},
@@ -56,7 +52,7 @@ yum = {
    {"tip": "IR_ENGEL", "ad": "Sol IR", "pin": 2, "x": 8, "y": 7.5, "z": 1.5, "aci": 40, "menzil_cm": 14},
    {"tip": "IR_ENGEL", "ad": "Sağ IR", "pin": 4, "x": 8, "y": -7.5, "z": 1.5, "aci": -40, "menzil_cm": 14},
    {"tip": "TCRT5000", "ad": "Zemin", "pin": "A0", "x": 2, "y": 0, "z": 1, "esik": 500},
-   {"tip": "TCS3200", "ad": "Renk (kepçe)", "s2": "A1", "s3": "A2", "out": 13, "olcek": 20, "x": 10.6, "y": 0, "z": 1, "aci": 0, "bakis": "ileri", "menzil_cm": 2.5},
+   {"tip": "TCS3200", "ad": "Ön renk sensörü (temsili)", "s2": "A1", "s3": "A2", "out": 13, "olcek": 20, "x": 8.8, "y": 0, "z": 1, "aci": 0, "bakis": "ileri", "menzil_cm": 2.5},
    {"tip": "BUTON", "ad": "Köşe anahtarı", "pin": "A5", "deger": "KIRMIZIDA_HIGH"}],
   "servolar": [{"ad": "Kapak servosu", "pin": 3, "hiz_derece_s": 450, "baslangic_aci": 0}],
   "led": {"tip": "iki_pin", "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -7, "y": 0, "z": 8.9},

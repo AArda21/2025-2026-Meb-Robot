@@ -131,4 +131,18 @@ eksikProfil.mekanik.kalibrasyon['2B'] = { hiz_carpani: 1, donus_direnci: 0 };
 const olculuHazirlik = SIM.gerceklikKontrolu(eksikProfil);
 ok(olculuHazirlik.eksik < hazirlik.eksik && !olculuHazirlik.maddeler.some(m => m.ad === 'Gerçek dönüş testi' && !m.varMi),
   'gerçek ölçümlerin tamamlanması kontrolü güncellemedi');
+
+// Video sahası: varsayılan Yum Yum'da gereksiz uzun kepçe/kollar bulunmaz.
+const yumParcalar = P[0].mekanik.parcalar;
+ok(P[0].mekanik.video_on_rev === 1 && !yumParcalar.some(p => ['Kepçe arka', 'Sol kol', 'Sağ kol', 'Kapak'].includes(p.ad)),
+  'Yum Yum varsayılan profilinde eski kepçe düzeni kalmış');
+ok(yumParcalar.some(p => p.ad === 'Ön şasi kenarı') &&
+   P[0].devre.sensorler.some(s => s.ad === 'Ön renk sensörü (temsili)'),
+  'Video uyumlu sade robot ön şasisi veya sensörü eksik');
+// Skor 2B ve 3B arayüzünde aynı Match.score üzerinden alınmalı.
+const html = fs.readFileSync(path.join(__dirname, '..', '..', 'www', 'index.html'), 'utf8');
+ok(html.includes('id="arenaScore"') && html.includes('id="arenaRed"') &&
+   html.includes('id="arenaBlue"') && html.includes('id="arenaTime"') &&
+   html.includes("const sc = snap?.sc || match.score()"),
+  'Saha sağ üstündeki canlı skor veya maç tekrarı skor bağlantısı eksik');
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

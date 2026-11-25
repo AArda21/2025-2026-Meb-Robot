@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEB Robot V4.7.1</title>
+<title>MEB Robot V4.7.2</title>
 <style>
 /* VOICE: atölye defteri — sade, aydınlık, işe odaklı
    IDEA: robot yarışma masası; saha ortada, robot kartları yanında
@@ -36,6 +36,12 @@ main{max-width:1320px;margin:0 auto;padding:12px}
 .ovl{position:absolute;left:8px;top:8px;font:600 12px var(--mono);background:rgba(255,255,255,.88);border:1px solid var(--line);padding:4px 8px;border-radius:6px;pointer-events:none}
 .result{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:14px;display:none}
 .result.on{display:block}
+.arena-skor{position:absolute;right:8px;top:8px;z-index:4;display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:10px;background:rgba(17,24,39,.9);color:#fff;font:700 12px system-ui;box-shadow:0 4px 15px #0003;pointer-events:none;font-variant-numeric:tabular-nums}
+.arena-skor .takim{display:flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px;background:#ffffff18}
+.arena-skor .puan{font-size:19px;min-width:18px;text-align:center}
+.arena-skor .r{color:#ffc2c5}.arena-skor .b{color:#b4dbff}
+.arena-skor .sure{min-width:40px;text-align:center;color:#f8fafc}
+@media(max-width:410px){.arena-skor{gap:3px;right:5px;top:5px;padding:5px;font-size:10px}.arena-skor .puan{font-size:16px}.arena-skor .takim{gap:3px;padding:3px}}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
 .btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 13px;min-height:40px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600}
 .btn:hover{border-color:#c3cad6}.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -99,7 +105,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
 </head>
 <body>
 <header>
-  <h1>MEB Robot <span class="ver">V4.7</span></h1>
+  <h1>MEB Robot <span class="ver">V4.7.2</span></h1>
   <button class="btn sm" id="bGuide" style="margin-left:6px" title="Rehber" aria-label="Rehber">?</button>
   <div class="hud"><span class="chip" id="hTime">0:00</span><span class="chip r" id="hRed">K 0</span><span class="chip b" id="hBlue">M 0</span></div>
 </header>
@@ -110,7 +116,7 @@ details summary{cursor:pointer;font-weight:650;color:var(--mute);padding:4px 0}
   <!-- ================= SAHA ================= -->
   <section class="pane on" id="saha">
     <div>
-      <div class="view" id="view"><canvas id="cv"></canvas><div id="v3" style="position:absolute;inset:0;display:none"></div><div class="ovl" id="ovl">Hazır</div><div class="result" id="result"></div></div>
+      <div class="view" id="view"><canvas id="cv"></canvas><div id="v3" style="position:absolute;inset:0;display:none"></div><div class="ovl" id="ovl">Hazır</div><div class="arena-skor" id="arenaScore" role="status" aria-label="Canlı maç skoru"><span class="takim r">Kırmızı <span class="puan" id="arenaRed">0</span></span><span class="sure" id="arenaTime">2:00</span><span class="takim b">Mavi <span class="puan" id="arenaBlue">0</span></span></div><div class="result" id="result"></div></div>
     </div>
     <div>
       <div class="card">

@@ -25,7 +25,7 @@ Kodu: `kaynak/ornek_kodlar/antalya_mega.ino` ve `antalya_nano.ino`. Mega kodunda
 - Depo: `AArda21/2025-2026-Meb-Robot`
 - **`main` dalına DOKUNMA** (takımın robot kodları orada).
 - Simülatör: **`simulator`** dalı. Derlenmiş APK/EXE: `apk-dosyalari` dalı (GitHub Actions yazar). Test çıktıları: `test-sonuclari` dalı.
-- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7.1). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
+- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7.2). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
 
 ```
 www/index.html          ← UYGULAMANIN KENDİSİ (üretilen dosya, elle düzenleme; kaynak/'tan üretilir)
@@ -121,3 +121,7 @@ gerçek robot ölçüleriyle 3B modelin görünümü, yarışma salonu ışığ�
 ## 9. Gerçek robotla doğrulama (V4.7.1)
 
 `GERCEKLIK_DOGRULAMA_PLANI.md` gerçek robotun ölçü, video, motor, zemin ve sensör verilerinin nasıl toplanacağını ve simülasyonla nasıl karşılaştırılacağını açıklar. Bu sürümde TCS3200 zaman aşımı, TCRT5000 sensör yüksekliği ile kalibrasyon tutarlılığı ve gerçek hareket sapması raporu iyileştirildi. Deneysel gerçek robot verisi olmadan tam fiziksel eşleşme iddia edilmez.
+
+## 10. Yarışma videosu ile saha görünümü (V4.7.2)
+
+25 Kasım 2026 tarihli 2:10'luk yarışma videosunda beyaz kenarlı yükseltilmiş saha, kırmızı/mavi/yeşil köşe alanları, sahaya dağılmış yumurtalar ve iki robot görünmektedir. Videoda robotların iç haznesi ya da puanlama kararları doğrulanamamaktadır. Bu nedenle resmi 2026 puanlama modeline dokunulmadı. Yum Yum varsayılan profilindeki eski uzun kepçe/kollar yerine sade ön şasi yerleştirildi; kullanıcı tarafından değiştirilmiş profiller korunur. Saha sağ üstüne `match.score()` kullanan skor/süre paneli, maç tekrarında kayıtlı `snapshot.sc` ile uyumlu olarak eklendi. 2B sahadaki hayali ızgara kaldırıldı; 3B görünüm zaten beyaz zemin ve tek ek çizgisi kullanmaktadır. Gerçek robotun iç mekanizması ölçülmeden kesin fiziksel benzerlik iddia edilmez.

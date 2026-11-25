@@ -19,6 +19,23 @@ const idb = (() => { let dbp = null; const open = () => dbp || (dbp = new Promis
 let profiles; try { profiles = JSON.parse(LS.get('mebsim3_profiller') || 'null'); } catch (e) { profiles = null; }
 if (!Array.isArray(profiles) || !profiles.length) profiles = deepCopy(DEFAULT_PROFILES);
 else { for (const d of DEFAULT_PROFILES) if (!profiles.some(p => p.id === d.id)) profiles.push(deepCopy(d)); }
+// Eski hazır Yum Yum kepçesini video düzenine taşı; kullanıcı tarafından değiştirilen mekanizmaya dokunma.
+function eskiYumYumOnuDuzenle(p) {
+  const M = p?.mekanik, ps = M?.parcalar;
+  if (p?.id !== 'yumyum' || M.video_on_rev || !Array.isArray(ps)) return false;
+  const parca = (ad, x) => ps.find(z => z.ad === ad && z.x === x);
+  if (!parca('Kepçe arka', 10) || !parca('Sol kol', 14.25) || !parca('Sağ kol', 14.25) ||
+      !parca('SG90 servo', 16.5) || !ps.some(z => z.ad === 'Kapak' && z.servo_pin === 3)) return false;
+  M.parcalar = ps.filter(z => !['Kepçe arka', 'Sol kol', 'Sağ kol', 'SG90 servo', 'Kapak'].includes(z.ad));
+  M.parcalar.push({ ad: 'Ön şasi kenarı', x: 9, y: 0, uzunluk: 0.7, genislik: 12,
+    z0: 2.4, z1: 4.3, renk: '#64748b' });
+  M.video_on_rev = 1;
+  for (const s of p.devre?.sensorler || []) if (s.ad === 'Renk (kepçe)' && s.x === 10.6) {
+    s.ad = 'Ön renk sensörü (temsili)'; s.x = 8.8;
+  }
+  return true;
+}
+if (profiles.some(eskiYumYumOnuDuzenle)) LS.set('mebsim3_profiller', JSON.stringify(profiles));
 const undoStack = []; let lastUndoT = 0, lastSaved = JSON.stringify(profiles);
 function pushUndo() { const now = Date.now(); if (now - lastUndoT > 1500) { undoStack.push(lastSaved); if (undoStack.length > 40) undoStack.shift(); } lastUndoT = now; }
 let saveT = null; function saveProfiles() { pushUndo(); clearTimeout(saveT); saveT = setTimeout(() => { lastSaved = JSON.stringify(profiles); LS.set('mebsim3_profiller', lastSaved); }, 300); dirty = true; }
@@ -109,7 +126,9 @@ function draw2d() {
   ctx.fillStyle = '#e3e8ee'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#d4d9df'; ctx.fillRect(X(-0.03), Y(F + 0.03), (F + 0.06) * SC, (F + 0.06) * SC);
   ctx.fillStyle = col.zemin; ctx.fillRect(X(0), Y(F), F * SC, F * SC);
-  ctx.strokeStyle = 'rgba(0,0,0,.05)'; ctx.lineWidth = 1; for (let v = 0.25; v < F; v += 0.25) { ctx.beginPath(); ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(F)); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(F), Y(v)); ctx.stroke(); }
+  // Videodaki düz beyaz saha: yalnızca levha birleşim çizgisi, hayali 25 cm ızgara yok.
+  ctx.strokeStyle = 'rgba(0,0,0,.09)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(F / 2), Y(0)); ctx.lineTo(X(F / 2), Y(F)); ctx.stroke();
   ctx.font = `600 ${Math.max(10, SC * 0.035)}px system-ui`; ctx.textAlign = 'center';
   for (const z of match.zones) { ctx.fillStyle = z.kind === 'red' ? col.kirmizi : z.kind === 'blue' ? col.mavi : col.yesil; ctx.fillRect(X(z.x0), Y(z.y1), (z.x1 - z.x0) * SC, (z.y1 - z.y0) * SC); ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.fillText(`${(match.banked[z.kind] || []).length} toplandı`, X((z.x0 + z.x1) / 2), Y((z.y0 + z.y1) / 2)); }
   for (const rb of match.robots) if ($('cTrail').checked && rb.trail.length > 1) { ctx.strokeStyle = rb.team === 'red' ? 'rgba(230,126,0,.6)' : 'rgba(37,99,235,.55)'; ctx.lineWidth = Math.max(1, SC * 0.004); ctx.beginPath(); rb.trail.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke(); }
@@ -155,8 +174,14 @@ cv.addEventListener('pointerup', () => { if (eggUp()) return; drag = null; });
 const fmtT = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(1).padStart(4, '0')}`; };
 let serialDirty = true, lastUi = 0;
 function updateUi() {
-  if (!match) return; const sc = match.score();
-  $('hTime').textContent = fmtT(Math.max(0, match.matchTime - match.time)); $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
+  if (!match) return;
+  const snap = replay && replay.idx >= 0 ? rec[replay.idx] : null;
+  const sc = snap?.sc || match.score();
+  const kalan = Math.max(0, match.matchTime - (snap ? snap.t : match.time));
+  $('hTime').textContent = fmtT(kalan); $('hRed').textContent = 'K ' + sc.red; $('hBlue').textContent = 'M ' + sc.blue;
+  $('arenaTime').textContent = fmtT(kalan);
+  $('arenaRed').textContent = sc.red;
+  $('arenaBlue').textContent = sc.blue;
   const rb = focusRobot();
   $('ovl').textContent = `${match.engineName} · ${running ? '● ' + realF.toFixed(1) + '×' : ended ? 'bitti' : 'durdu'}` + (rb ? ` · ${(Math.hypot(rb.state.vx, rb.state.vy) * 100).toFixed(0)} cm/s` : '');
   if (rb) {
