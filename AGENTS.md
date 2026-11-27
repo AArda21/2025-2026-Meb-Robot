@@ -25,7 +25,7 @@ Kodu: `kaynak/ornek_kodlar/antalya_mega.ino` ve `antalya_nano.ino`. Mega kodunda
 - Depo: `AArda21/2025-2026-Meb-Robot`
 - **`main` dalına DOKUNMA** (takımın robot kodları orada).
 - Simülatör: **`simulator`** dalı. Derlenmiş APK/EXE: `apk-dosyalari` dalı (GitHub Actions yazar). Test çıktıları: `test-sonuclari` dalı.
-- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.7.3). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
+- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.8.0). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
 
 ```
 www/index.html          ← UYGULAMANIN KENDİSİ (üretilen dosya, elle düzenleme; kaynak/'tan üretilir)
@@ -131,3 +131,19 @@ V4.7.2 video ek doğrulaması: `video2026` adında ayrı, dört tekerli ve üst�
 ## V4.7.3 video robotu ön açıklık düzeltmesi
 
 `video2026` profilinde 2 cm yüksekliğindeki yumurtaları karşılayan ön katı tampon, 3,15 cm üzerindeki sabit traversle değiştirildi. Görünür ön servo kaldırıldı; servo kontrolü gerektiren Yum Yum kodunun yerine temsili dolaşma kodu kullanıldı. Eski varsayılan video profili, kullanıcı değişikliği yoksa yükseltilir. Yeni hızlı test ön geçiş açıklığını denetler. Gerçek fiziksel robot ölçümleri hâlâ gereklidir.
+
+## V4.8.0 Antalya robotunun ayrıntılı 3B modeli (fotoğraflardan)
+
+27 Kasım 2026'da ekibin gönderdiği 50 fotoğraftan (üstten 10 ve 49, yandan 24, önden 38) robot parça parça modellendi: `kaynak/robot_antalya_3b.py` → `parcalar()` ve `kablolar()`; `gen_profiles.py` Antalya profiline bağlar. Ölçek, üstten çekimde 18650 pil boyuyla (65 mm ≈ 27 px/cm) kuruldu.
+
+- Ölçüler: 27,6 × 28,6 × 13,9 cm; teker Ø7,5 cm, iz 25,4 cm, dingil 13,9 cm; önde tek yönlü kapakçık sırası, iç huni → kanal → ortada tokatlı ayıklayıcı (hazne ağzı x −3,2…1,6 cm), yan (sol) ve arka çıkış kapıları, 2 BTS7960, Mega + Nano, 8 × 18650, köşelerde 2'şer MZ80 (üstteki çapraz ±25° olanlar kodda bağlı), NeoPixel şerit.
+- **Çıkarım (ölçülmedi):** 8 hücre → 4S2P **14,8 V**; motor **JGA25-370 12V 130**. Sebep: ekibin kodu `sol(100)`, `sag(80)`, `ileri(100)` ile çalışıyor; 7,4 V/280 rpm varsayımında robot bu PWM'lerde hiç dönemiyordu. Gerçek pil bağlantısı ve motor etiketi gelince düzelt.
+- Depodaki Mega kodu **test modunda** (loop sadece `olcum()`); simülatör `ornek_kodlar/antalya_mega_oyun.ino` kullanır (aynı kod, oyun mantığı ve başlangıç yorumdan çıkarılmış).
+
+Yeni profil alanları (genel, her robot kullanabilir):
+- `parcalar[].gorsel: true` → sadece görünüş; fizik/çarpışma/sensör ışınlarına girmez (Robot.visualParts), 3B'de opak çizilir. Çarpışacak gövde parçalarını `gorsel` yapma.
+- `parcalar[].eksen: "x"|"y"|"z"` → silindirin yönü (yatay: yarıçap = (z1−z0)/2, boy = uzunluk/genişlik). `malzeme: metal|kaucuk|led|pcb|parlak`.
+- `mekanik.kablolar: [{renk, kalinlik, noktalar:[[x,y,z],...]}]` → 3B'de eğri jumper kablo (TubeGeometry).
+- `mekanik.detayli_gorunum: true` → hazır kart kutuları, sensör/acil stop simgeleri çizilmez (model kendi parçalarıyla çizer).
+- `tekerlek.jant_renk`, `tekerlek.lastik_renk`; `led.uzunluk/genislik/adet` (NeoPixel şeridi tek tek LED).
+- Performans: görsel parçalar fizik döngüsünden çıkarıldı (önce 167 parçayla 2B maç 2,5 kat yavaşlıyordu).

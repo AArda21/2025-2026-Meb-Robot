@@ -188,7 +188,9 @@ class Robot {
     const dkey = Object.keys(DRIVERS).find(k => k.toUpperCase() === String((D.surucu || {}).tip || 'L298N').toUpperCase()) || 'L298N';
     const Dr = D.surucu || {};
     this.mass = +M.kutle_kg || 1.0;
-    this.wheelR = cm(T.cap_cm || 6.5) / 2; this.track = cm(T.iz_cm || 15); this.wheelX = cm(T.x_cm || 0); this.wheelW = cm(T.genislik_cm || 2.5);
+    this.wheelR = cm(T.cap_cm || 6.5) / 2; this.track = cm(T.iz_cm || 15); this.wheelX = cm(T.x_cm || 0); this.wheelW = cm(T.genislik_cm || 2.5); this.wheelLook = { jant: T.jant_renk || null, lastik: T.lastik_renk || null }; this.detail = !!M.detayli_gorunum;
+    /* görsel kablolar (yalnız 3B görünüş): her biri renk + nokta dizisi (cm), aradan yumuşak eğri geçer */
+    this.cables = (Array.isArray(M.kablolar) ? M.kablolar : []).filter(k => Array.isArray(k.noktalar) && k.noktalar.length >= 2).map(k => ({ color: k.renk || '#e11d48', r: cm(k.kalinlik || 0.16) / 2, pts: k.noktalar.map(q => [cm(q[0]), cm(q[1]), cm(q[2])]) }));
     this.tire = tire; this.muS = tire.muS; this.muK = tire.muK; this.crr = tire.crr; this.muLat = tire.muS;
     // 4 tekerli (kızaklı / skid-steer) robot: her yanda iki teker, aynı sürücü kanalından
     this.wheelCount = +T.adet === 4 ? 4 : 2; this.wheelBase = this.wheelCount === 4 ? cm(T.dingil_cm || 12) : 0;
@@ -215,11 +217,15 @@ class Robot {
       name: p.ad || 'parça', x: cm(p.x), y: cm(p.y), hx: cm(p.uzunluk) / 2, hy: cm(p.genislik ?? p.uzunluk) / 2,
       z0: cm(p.z0 ?? 0), z1: cm(p.z1 ?? 5), ang: (p.aci || 0) * Math.PI / 180, color: p.renk || '#6b7280', shape: p.sekil || 'kutu',
       servoPin: pin(p.servo_pin), pivot: p.pivot ? [cm(p.pivot[0]), cm(p.pivot[1])] : null, angOff: p.aci_ofset || 0, dir: p.yon ?? 1, len: cm(p.uzunluk), solid: p.kati ?? true,
+      /* görsel ayrıntı: fiziğe/çarpışmaya girmez, 3B'de tam opak çizilir; eksen: silindirin yönü (x/y/z); malzeme: metal, plastik, kaucuk, led, pcb */
+      gorsel: !!p.gorsel, axis: p.eksen || 'z', mat: p.malzeme || null, ...(p.gorsel ? { solid: false } : {}),
     }));
     const auto = [];
     for (const ax of this.axles) for (const sy of [1, -1]) auto.push({ name: (sy > 0 ? 'Sol' : 'Sağ') + (this.axles.length > 1 ? (ax > this.wheelX ? ' ön' : ' arka') : '') + ' teker', x: ax, y: sy * this.track / 2, hx: this.wheelR, hy: this.wheelW / 2, z0: 0, z1: this.wheelR * 2, ang: 0, color: '#1f2937', auto: 'wheel', solid: true });
     if (this.caster) auto.push({ name: 'Sarhoş teker', x: this.caster.x, y: this.caster.y, hx: this.caster.r, hy: this.caster.r, z0: 0, z1: this.caster.r * 2, ang: 0, color: '#9ca3af', auto: 'caster', solid: true });
     this.parts = auto.concat(this.parts);
+    /* görsel ayrıntılar fizik döngüsüne girmez (yüzlerce kablo/vida her adımda dolaşılırsa simülasyon yavaşlar); sadece çizimde kullanılır */
+    this.visualParts = this.parts.filter(p => p.gorsel); this.parts = this.parts.filter(p => !p.gorsel);
     this.sensors = (D.sensorler || []).map(s => Object.assign({}, s, {
       type: String(s.tip || '').toUpperCase(), name: s.ad || s.tip, x: cm(s.x), y: cm(s.y), z: cm(s.z ?? 2), ang: (s.aci || 0) * Math.PI / 180,
       range: cm(s.menzil_cm || (String(s.tip).toUpperCase() === 'TCS3200' ? 1.5 : 15)),
@@ -235,7 +241,7 @@ class Robot {
           disari: { x: cm(Hz.disari ? Hz.disari.x : 0), y: cm(Hz.disari ? Hz.disari.y : -14), v: (Hz.disari && Hz.disari.hiz_cms != null ? Hz.disari.hiz_cms : 40) / 100 } };
       }
     }
-    const L = D.led; this.led = L ? { type: L.tip === 'NeoPixel' ? 'neo' : 'two', r: pin(L.kirmizi_pin), b: pin(L.mavi_pin), pin: pin(L.pin), x: cm(L.x || 0), y: cm(L.y || 0), z: cm(L.z ?? 9) } : null;
+    const L = D.led; this.led = L ? { type: L.tip === 'NeoPixel' ? 'neo' : 'two', r: pin(L.kirmizi_pin), b: pin(L.mavi_pin), pin: pin(L.pin), x: cm(L.x || 0), y: cm(L.y || 0), z: cm(L.z ?? 9), lx: cm(L.uzunluk || 5), ly: cm(L.genislik || 1.2), n: L.adet || 0 } : null;
     this.circuit = (D.yerlesim || []).map(c => ({ name: c.ad, x: cm(c.x), y: cm(c.y), z: cm(c.z ?? 8), hx: cm(c.uzunluk) / 2, hy: cm(c.genislik) / 2, h: cm(c.kalinlik ?? 1.2), color: c.renk || '#0f766e' }));
     this.stop = M.acil_stop ? { x: cm(M.acil_stop.x), y: cm(M.acil_stop.y), z: cm(M.acil_stop.z ?? 8) } : null;
     this.model3d = Pf._stl ? Object.assign({}, M.model3d || {}, { bbox: Pf._stl.bbox, pos: Pf._stl.pos, objects: Pf._stl.objects }) : null;
@@ -289,9 +295,9 @@ class Robot {
   }
   toWorld(lx, ly) { const s = this.state, c = Math.cos(s.th), n = Math.sin(s.th); return [s.x + c * lx - n * ly, s.y + n * lx + c * ly]; }
   cachedParts(t) { if (this._cpT !== t || !this._cp) { this._cp = this.worldParts(); this._cpT = t; } return this._cp; }
-  worldParts() {
+  worldParts(list) {
     const out = [], th = this.state.th;
-    for (const p of this.parts) {
+    for (const p of (list || this.parts)) {
       const pp = this.partPose(p); const [wx, wy] = this.toWorld(pp.cx, pp.cy); const a = th + pp.a, c = Math.cos(a), s = Math.sin(a);
       const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + c * u * p.hx - s * v * p.hy, wy + s * u * p.hx + c * v * p.hy]);
       out.push({ p, wx, wy, a, c, s, corners, piv: pp.pivot ? this.toWorld(pp.pivot[0], pp.pivot[1]) : null, wS: pp.wS });

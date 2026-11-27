@@ -63,7 +63,7 @@ function staticChecks(profile) {
   }
   const solid = rb.parts.filter(p => p.solid);
   for (const p of rb.parts) if (!p.auto && p.z0 < -0.0005) add('Mekanik', 'err', `'${p.name}' yerin altına iniyor (z0 = ${cmS(p.z0)}): zemine sürter.`);
-  const fixedParts = rb.parts.filter(p => p.servoPin == null || !p.pivot);
+  const fixedParts = rb.parts.filter(p => (p.servoPin == null || !p.pivot) && !p.gorsel);
   const box = (p) => ({ x: p.x, y: p.y, hx: p.hx, hy: p.hy, a: p.ang });
   let overlaps = 0;
   for (let i = 0; i < fixedParts.length; i++) for (let j = i + 1; j < fixedParts.length; j++) {
@@ -83,7 +83,7 @@ function staticChecks(profile) {
     if ((s.type === 'IR_ENGEL' || s.type === 'MZ80') && s.z > RULES.EGG_H + 0.012) add('Mekanik', 'info', `'${s.name}' ${cmS(s.z)} yükseklikte: yumurtaları göremez.`);
     if (['HC-SR04', 'IR_ENGEL', 'MZ80', 'SHARP_IR'].includes(s.type)) {
       const fake = { robots: [rb], eggs: [], zoneOf: () => null }; const w = rb.sensorWorld(s); const r = Sensors.ray(fake, rb, w.x, w.y, w.a, w.z, 0.3, { self: true, wallTol: -1, eggTol: -1 });
-      if (r.hit && r.hit.self) add('Mekanik', 'warn', `'${s.name}' sensörünün önünü kendi parçası '${r.hit.self.name}' ${cmS(r.d)} mesafede kapatıyor.`);
+      const lim = ['IR_ENGEL', 'MZ80'].includes(s.type) && s.range ? s.range : 0.3; if (r.hit && r.hit.self && r.d <= lim) add('Mekanik', 'warn', `'${s.name}' sensörünün önünü kendi parçası '${r.hit.self.name}' ${cmS(r.d)} mesafede kapatıyor.`);
     }
   }
   for (const s of rb.sensors.filter(x => x.type === 'TCS3200')) {

@@ -53,6 +53,9 @@ function videoRobotOnunuGuncelle(p) {
   return true;
 }
 if (profiles.some(videoRobotOnunuGuncelle)) LS.set('mebsim3_profiller', JSON.stringify(profiles));
+// V4.8: Antalya robotu fotoğraflardan ayrıntılı modellendi. Kayıtlı eski profil kaybolmasın diye "(eski sürüm)" adıyla yedeklenir, yerine yenisi gelir.
+{ const yeni = DEFAULT_PROFILES.find(d => d.id === 'eski2025'); const i = profiles.findIndex(p => p.id === 'eski2025');
+  if (yeni && i >= 0 && !(+profiles[i].mekanik?.foto_rev >= 1)) { const eski = profiles[i]; eski.id = 'eski2025_' + Date.now().toString(36); eski.ad = (eski.ad || 'Antalya 2026 robotumuz') + ' (eski sürüm)'; profiles.splice(i, 0, deepCopy(yeni)); LS.set('mebsim3_profiller', JSON.stringify(profiles)); } }
 const undoStack = []; let lastUndoT = 0, lastSaved = JSON.stringify(profiles);
 function pushUndo() { const now = Date.now(); if (now - lastUndoT > 1500) { undoStack.push(lastSaved); if (undoStack.length > 40) undoStack.shift(); } lastUndoT = now; }
 let saveT = null; function saveProfiles() { pushUndo(); clearTimeout(saveT); saveT = setTimeout(() => { lastSaved = JSON.stringify(profiles); LS.set('mebsim3_profiller', lastSaved); }, 300); dirty = true; }
@@ -82,6 +85,8 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(
 //                                  SAHA
 // =====================================================================================
 let MatchClass = Match, Match3D = null, view3d = null, use3d = false, libs = null;
+/* test ve hata ayıklama için (bulut ekran görüntüsü testleri kamera/robot durumuna buradan erişir) */
+globalThis.__meb = { get view3d() { return view3d; }, get match() { return match; } };
 let match = null, running = false, ended = false, dirty = false, seed = +(LS.get('mebsim3_tohum') || 2026);
 const startPoses = {};
 function fillProfileSelects() {
@@ -155,7 +160,8 @@ function draw2d() {
     else { ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fillStyle = e.kind === 'red' ? col.kirmizi : e.kind === 'green' ? col.yesil : col.mavi; ctx.fill(); }
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke(); ctx.restore(); }
   for (const rb of match.robots) {
-    for (const wp of rb.worldParts()) { poly(wp.corners); let fill = wp.p.color; if (wp.p.auto === 'wheel') fill = rb.wheelInfo[wp.p.name.startsWith('Sol') ? 'L' : 'R'].slip ? '#b91c1c' : '#1f2937'; ctx.globalAlpha = wp.p.solid ? 0.95 : 0.6; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke(); }
+    if (!rb._drawList) rb._drawList = rb.parts.concat(rb.visualParts || []).sort((a, b) => a.z1 - b.z1); /* alçaktan yükseğe: üstten bakışta üstteki parça üstte görünür */
+    for (const wp of rb.worldParts(rb._drawList)) { poly(wp.corners); let fill = wp.p.color; if (wp.p.auto === 'wheel') fill = rb.wheelInfo[wp.p.name.startsWith('Sol') ? 'L' : 'R'].slip ? '#b91c1c' : '#1f2937'; ctx.globalAlpha = wp.p.solid || wp.p.gorsel ? 0.95 : 0.6; ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1; ctx.stroke(); }
     if ($('cCirc').checked) for (const c of rb.circuit) { const th = rb.state.th, cc = Math.cos(th), ss = Math.sin(th); const [wx, wy] = rb.toWorld(c.x, c.y); poly([[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([u, v]) => [wx + cc * u * c.hx - ss * v * c.hy, wy + ss * u * c.hx + cc * v * c.hy])); ctx.globalAlpha = 0.85; ctx.fillStyle = c.color; ctx.fill(); ctx.globalAlpha = 1; }
     if ($('cRays').checked) for (const s of rb.sensors) { const w = rb.sensorWorld(s);
       if (s.type === 'HC-SR04') { const d = Sensors.ultrasonic(match, rb, s); const L = d == null ? 1.5 : d; ctx.fillStyle = d == null ? 'rgba(76,125,255,.05)' : d < 0.3 ? 'rgba(22,163,74,.18)' : 'rgba(22,163,74,.06)'; ctx.beginPath(); ctx.moveTo(X(w.x), Y(w.y)); ctx.lineTo(X(w.x + Math.cos(w.a - 0.26) * L), Y(w.y + Math.sin(w.a - 0.26) * L)); ctx.lineTo(X(w.x + Math.cos(w.a + 0.26) * L), Y(w.y + Math.sin(w.a + 0.26) * L)); ctx.closePath(); ctx.fill();

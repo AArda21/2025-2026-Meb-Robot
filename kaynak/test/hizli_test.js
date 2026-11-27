@@ -2,8 +2,8 @@
 const path = require('path'), fs = require('fs');
 const SIM = require(path.join(__dirname, '..', 'core3.js')); const { DEFAULT_PROFILES: P } = require(path.join(__dirname, '..', 'profiles.js'));
 let hata = 0; const ok = (k, m) => { if (!k) { hata++; console.log('HATA:', m); } };
-// 1) Hazır profiller derleniyor mu? (Antalya Mega kodundaki 'yesil' çakışması BİLEREK hata verir)
-for (const p of P) { const m = new SIM.Match({ profiles: { red: p } }); const e = m.compileAll(); console.log(`${p.ad}: ${e.length} derleme hatası`); if (p.id !== 'eski2025') ok(e.length === 0, p.ad + ' derlenmedi'); }
+// 1) Hazır profiller derleniyor mu? (Antalya profili düzeltilmiş Mega kodunu kullanır)
+for (const p of P) { const m = new SIM.Match({ profiles: { red: p } }); const e = m.compileAll(); console.log(`${p.ad}: ${e.length} derleme hatası`); ok(e.length === 0, p.ad + ' derlenmedi'); }
 // 2) Arduino dil örnekleri çalışıyor mu?
 for (const f of fs.readdirSync(path.join(__dirname, 'kod_ornekleri')).filter(f => f.endsWith('.ino'))) {
   const A = JSON.parse(JSON.stringify(P[2])); A.kartlar[0].kod = fs.readFileSync(path.join(__dirname, 'kod_ornekleri', f), 'utf8');
@@ -159,4 +159,14 @@ const onParca = videoRobot.mekanik.parcalar.find(p => p.ad === 'Ön üst travers
 ok(!!onParca && onParca.z0 > SIM.RULES.EGG_H * 100 &&
    !videoRobot.mekanik.parcalar.some(p => p.x >= 9 && p.y === 0 && p.z0 < 2.2 && p.kati !== false),
    'yumurta geçişi ön tarafta katı parçayla kapalı');
+// 8) Ayrıntılı 3B model (Antalya): görsel parçalar fiziğe girmez, ölçüler kurala uyar, oyun kodu robotu yürütür
+{ const A = P.find(p => p.id === 'eski2025'); const rb = new SIM.Robot(A, 'red', null);
+  ok(rb.visualParts.length > 100 && rb.cables.length > 30, 'ayrıntılı model yüklenmedi');
+  ok(rb.parts.every(p => !p.gorsel), 'görsel parça fizik listesine karıştı');
+  const env = rb.envelope(); const en = (env.maxY - env.minY) * 100, boy = (env.maxX - env.minX) * 100; const yuk = Math.max(...rb.parts.concat(rb.visualParts).map(p => p.z1)) * 100;
+  console.log(`Antalya ölçüleri: ${boy.toFixed(1)} × ${en.toFixed(1)} × ${yuk.toFixed(1)} cm, ${rb.visualParts.length} görsel parça, ${rb.cables.length} kablo`);
+  ok(boy <= 30 && en <= 30 && yuk <= 30, 'Antalya robotu 30×30×30 sınırını aşıyor');
+  const m = new SIM.Match({ profiles: { red: A, blue: P.find(p => p.id === 'rakip') }, saha: { tohum: 1 } }); m.compileAll(); const s0 = { ...m.robots[0].state }; let yol = 0, px = s0.x, py = s0.y;
+  while (m.time < 20) { m.step(m.dt); const s = m.robots[0].state; yol += Math.hypot(s.x - px, s.y - py); px = s.x; py = s.y; }
+  console.log(`Antalya 20 sn'de ${(yol * 100).toFixed(0)} cm yol aldı`); ok(yol > 2, 'Antalya oyun kodu robotu yürütmüyor'); }
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

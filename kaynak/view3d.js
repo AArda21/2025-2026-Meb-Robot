@@ -88,12 +88,18 @@ function makeView3D(THREE, host) {
     const v = { group: new THREE.Group(), parts: [], wheels: {}, wires: [], led: null, ledLight: null, stl: null };
     const robot = v.group; scene.add(robot); const wr = rb.wheelR;
     const hideBoxes = rb.model3d && rb.model3d.kutulari_gizle;
-    for (const p of rb.parts) {
+    for (const p of rb.parts.concat(rb.visualParts || [])) {
       if (p.auto) continue;
       const h = Math.max(0.002, p.z1 - p.z0); let geo;
-      if (p.shape === 'silindir') { geo = new THREE.CylinderGeometry(p.hx, p.hx, h, 28); geo.rotateX(Math.PI / 2); } else geo = new THREE.BoxGeometry(p.hx * 2, p.hy * 2, h);
+      if (p.shape === 'silindir') {
+        /* eksen x/y: yatay silindir (pil, motor, MZ80 göz); yarıçap yüksekliğin yarısı, boyu uzunluk/genişlik */
+        if (p.axis === 'x') { geo = new THREE.CylinderGeometry(h / 2, h / 2, p.hx * 2, 24); geo.rotateZ(Math.PI / 2); }
+        else if (p.axis === 'y') geo = new THREE.CylinderGeometry(h / 2, h / 2, p.hy * 2, 24);
+        else { geo = new THREE.CylinderGeometry(p.hx, p.hx, h, 28); geo.rotateX(Math.PI / 2); }
+      } else geo = new THREE.BoxGeometry(p.hx * 2, p.hy * 2, h);
       const transparent = /şeffaf|seffaf|pleksi|akrilik/i.test(p.name);
-      const m = new THREE.Mesh(geo, std(p.color, transparent ? { transparent: true, opacity: 0.55, roughness: 0.2 } : (p.solid ? {} : { transparent: true, opacity: 0.85 })));
+      const matOpt = p.mat === 'metal' ? { metalness: 0.85, roughness: 0.3 } : p.mat === 'kaucuk' ? { roughness: 0.95 } : p.mat === 'led' ? { emissive: p.color, emissiveIntensity: 0.9 } : p.mat === 'pcb' ? { roughness: 0.45 } : p.mat === 'parlak' ? { roughness: 0.25 } : {};
+      const m = new THREE.Mesh(geo, std(p.color, transparent ? { transparent: true, opacity: 0.55, roughness: 0.2 } : (p.solid || p.gorsel ? matOpt : { transparent: true, opacity: 0.85 })));
       m.castShadow = m.receiveShadow = true; m.userData = { p, zc: (p.z0 + p.z1) / 2 - wr }; m.visible = !hideBoxes || p.servoPin != null; robot.add(m); v.parts.push(m);
     }
     if (rb.model3d && rb.model3d.pos) {
@@ -106,22 +112,29 @@ function makeView3D(THREE, host) {
         const m = new THREE.Mesh(g, std(col, { roughness: 0.55, metalness: 0.05, transparent: !!md.seffaf, opacity: md.seffaf ? 0.45 : 1, side: THREE.DoubleSide }));
         m.castShadow = m.receiveShadow = true; robot.add(m); v.stl.push(m); }
     }
+    for (const k of (rb.cables || [])) { /* jumper kablolar: noktalardan geçen yumuşak boru */
+      const curve = new THREE.CatmullRomCurve3(k.pts.map(q => new THREE.Vector3(q[0], q[1], q[2] - wr)));
+      const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(12, k.pts.length * 8), Math.max(0.0005, k.r), 6, false), std(k.color, { roughness: 0.45 })); m.castShadow = true; robot.add(m); }
     v.wheelG = [];
     for (const ax of (rb.axles || [rb.wheelX])) for (const side of ['L', 'R']) {
       const g = new THREE.Group();
-      const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 48, 1), std(0x1b1c1f, { roughness: 0.92 })); tire.castShadow = true;
-      for (let k = 0; k < 18; k++) { const tr = new THREE.Mesh(new THREE.BoxGeometry(wr * 0.16, rb.wheelW * 0.92, 0.0016), std(0x111214, { roughness: 1 })); const a = k / 18 * Math.PI * 2; tr.position.set(Math.cos(a) * (wr + 0.0006), 0, Math.sin(a) * (wr + 0.0006)); tr.rotation.y = -a + Math.PI / 2; tire.add(tr); } // diş deseni
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
-      g.add(tire, hub); robot.add(g); if (!v.wheels[side]) v.wheels[side] = g; v.wheelG.push({ g, side, ax });
+      const WL = rb.wheelLook || {}; const tire = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, rb.wheelW, 48, 1), std(WL.lastik ? new THREE.Color(WL.lastik) : 0x1b1c1f, { roughness: 0.92 })); tire.castShadow = true;
+      for (let k = 0; k < 18; k++) { const tr = new THREE.Mesh(new THREE.BoxGeometry(wr * 0.16, rb.wheelW * 0.92, 0.0016), std(WL.lastik ? new THREE.Color(WL.lastik).multiplyScalar(0.8) : 0x111214, { roughness: 1 })); const a = k / 18 * Math.PI * 2; tr.position.set(Math.cos(a) * (wr + 0.0006), 0, Math.sin(a) * (wr + 0.0006)); tr.rotation.y = -a + Math.PI / 2; tire.add(tr); } // diş deseni
+      const hub = WL.jant ? new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.8, wr * 0.8, rb.wheelW * 1.03, 36), std(new THREE.Color(WL.jant), { roughness: 0.55 })) : new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.62, wr * 0.62, rb.wheelW * 1.04, 6), std(0xf5c518, { roughness: 0.5 }));
+      g.add(tire, hub);
+      if (WL.jant) { /* 6 kollu 3B baskı jant: kolların arası koyu boşluk, ortada metal göbek */
+        for (let k = 0; k < 6; k++) { const a = (k + 0.5) / 6 * Math.PI * 2; const win = new THREE.Mesh(new THREE.BoxGeometry(wr * 0.34, rb.wheelW * 1.06, wr * 0.2), std(0x2a2d33, { roughness: 0.9 })); win.position.set(Math.cos(a) * wr * 0.5, 0, Math.sin(a) * wr * 0.5); win.rotation.y = -a; g.add(win); }
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.16, wr * 0.16, rb.wheelW * 1.1, 20), std(0xc8ccd2, { metalness: 0.85, roughness: 0.3 })); g.add(cap); } robot.add(g); if (!v.wheels[side]) v.wheels[side] = g; v.wheelG.push({ g, side, ax });
     }
     if (rb.caster) { const c = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.004, rb.caster.r), 20, 14), std(0xc0c4cc, { metalness: 0.8, roughness: 0.25 })); c.position.set(rb.caster.x, rb.caster.y, Math.max(0.004, rb.caster.r) - wr); c.castShadow = true; robot.add(c); }
-    for (const c of rb.circuit) {
+    for (const c of (rb.detail ? [] : rb.circuit)) {
       const mats = Array.from({ length: 6 }, () => std(c.color, { roughness: 0.6 })); mats[4] = std(0xffffff, { map: labelTex(c.name, c.color), roughness: 0.6 });
       const m = new THREE.Mesh(new THREE.BoxGeometry(c.hx * 2, c.hy * 2, c.h), mats); m.position.set(c.x, c.y, c.z + c.h / 2 - wr); m.castShadow = true; robot.add(m);
       c._top = [c.x, c.y, c.z + c.h - wr];
     }
+    if (rb.detail) for (const c of rb.circuit) c._top = [c.x, c.y, c.z + c.h - wr];
     for (const s of rb.sensors) {
-      if (s.type === 'BUTON') continue;
+      if (s.type === 'BUTON' || rb.detail) continue;
       const g = new THREE.Group(); g.position.set(s.x, s.y, s.z - wr); g.rotation.z = s.ang;
       if (s.type === 'HC-SR04') { const b = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.045, 0.02), std(0x1d4ed8)); b.position.x = -0.006; g.add(b);
         for (const yy of [-0.013, 0.013]) { const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.012, 20), std(0xd1d5db, { metalness: 0.7, roughness: 0.3 })); eye.rotation.z = Math.PI / 2; eye.position.set(0.005, yy, 0); g.add(eye); } }
@@ -129,8 +142,13 @@ function makeView3D(THREE, host) {
       else { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.014, 0.006), std(s.type === 'TCRT5000' ? 0x6d28d9 : 0x0f766e))); const ir = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.006, 12), std(0x111111)); ir.rotation.z = Math.PI / 2; ir.position.x = 0.006; g.add(ir); }
       g.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(g);
     }
-    if (rb.stop) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
-    if (rb.led) { v.led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); v.ledLight = new THREE.PointLight(0xff0000, 0, 0.18, 2); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
+    if (rb.stop && !rb.detail) { const st = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 24), std(0xf5c518)); base.rotation.x = Math.PI / 2; base.position.z = 0.01; const cap = new THREE.Mesh(new THREE.SphereGeometry(0.018, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), std(0xdc2626, { roughness: 0.4 })); cap.rotation.x = Math.PI / 2; cap.position.z = 0.02; st.add(base, cap); st.position.set(rb.stop.x, rb.stop.y, rb.stop.z - wr); st.traverse(o => { if (o.isMesh) o.castShadow = true; }); robot.add(st); }
+    if (rb.led) {
+      if (rb.led.n > 0) { /* NeoPixel şerit: koyu taşıyıcı + tek tek LED'ler (hepsi aynı malzemeyi paylaşır, renk birlikte değişir) */
+        const L = rb.led, horiz = L.lx >= L.ly; const strip = new THREE.Mesh(new THREE.BoxGeometry(L.lx, L.ly, 0.0015), std(0x15171a, { roughness: 0.6 })); strip.position.set(L.x, L.y, L.z - wr); robot.add(strip);
+        const lm = std(0x333333, { emissive: 0x000000 }); for (let i = 0; i < L.n; i++) { const t = (i + 0.5) / L.n - 0.5; const px = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.005, 0.0016), lm); px.position.set(L.x + (horiz ? t * L.lx : 0), L.y + (horiz ? 0 : t * L.ly), L.z - wr + 0.0015); robot.add(px); if (!v.led) v.led = px; }
+        v.led = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.001, 0.001), lm); v.led.visible = false; v.led.position.set(L.x, L.y, L.z - wr); robot.add(v.led);
+      } else { v.led = new THREE.Mesh(new THREE.BoxGeometry(rb.led.lx || 0.05, rb.led.ly || 0.012, 0.008), std(0x333333, { emissive: 0x000000 })); v.led.position.set(rb.led.x, rb.led.y, rb.led.z - wr); robot.add(v.led); } v.ledLight = new THREE.PointLight(0xff0000, 0, 0.18, 2); v.ledLight.position.copy(v.led.position); v.ledLight.position.z += 0.02; robot.add(v.ledLight); }
     const ard = rb.circuit.find(c => /arduino|uno|nano|mega/i.test(c.name)) || rb.circuit[0];
     const drv = rb.circuit.find(c => /l298|l293|tb6612|l9110|drv|bts|sürücü|surucu|driver/i.test(c.name));
     if (ard) {
@@ -204,7 +222,7 @@ function makeView3D(THREE, host) {
         robot.position.set(s.x, s.y, s.z ?? rb.wheelR);
         if (s.q) robot.quaternion.set(s.q.x, s.q.y, s.q.z, s.q.w); else robot.quaternion.setFromAxisAngle(zAxis, s.th);
         for (const m of v.parts) { const pp = rb.partPose(m.userData.p); m.position.set(pp.cx, pp.cy, m.userData.zc); m.rotation.set(0, 0, pp.a); }
-        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(opts.rays && wi.slip ? 0x7f1d1d : 0x1b1c1f); }
+        for (const { g, side, ax } of v.wheelG) { const sy = side === 'L' ? 1 : -1, wi = rb.wheelInfo[side]; g.position.set(ax, sy * rb.track / 2, 0); g.rotation.set(0, wi.spin || 0, 0); g.children[0].material.color.set(opts.rays && wi.slip ? 0x7f1d1d : (rb.wheelLook && rb.wheelLook.lastik) || 0x1b1c1f); }
         if (v.led) { const c = rb.ledColor(); const hex = c === 'red' ? 0xff2a2a : c === 'blue' ? 0x2f6bff : c === 'mor' ? 0xb84bff : 0x000000; v.led.material.emissive.setHex(hex); v.led.material.emissiveIntensity = c ? 2.2 : 0; v.ledLight.color.setHex(hex || 0xffffff); v.ledLight.intensity = c ? 0.012 : 0; }
         for (const l of v.wires) { const k = l.userData.pin; const on = rb.duty(k) > 0; const pw = rb.duty(k); const sv = rb.servoTarget(k) != null; l.visible = opts.circuit; l.material.color.setHex(sv || (pw > 0 && pw < 1) ? 0xf59e0b : on ? 0xef4444 : 0x94a3b8); }
         if (opts.rays) for (const s2 of rb.sensors) {

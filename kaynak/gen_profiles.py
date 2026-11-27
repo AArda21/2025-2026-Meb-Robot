@@ -1,6 +1,9 @@
 import os
 import copy
+import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import robot_antalya_3b
 import json
 d = open(os.path.join(HERE, 'defaults.js')).read()
 code = d[d.index('const DEFAULT_CODE = `') + len('const DEFAULT_CODE = `'):d.rindex('`;')]
@@ -63,44 +66,45 @@ yum = {
    {"ad": "Pil 2S 18650", "x": -4.5, "y": 0, "z": 4.6, "uzunluk": 4.2, "genislik": 7.6, "kalinlik": 2, "renk": "#1d4ed8"},
    {"ad": "Mini breadboard", "x": -5, "y": 3.5, "z": 8.9, "uzunluk": 4.5, "genislik": 3.4, "kalinlik": 0.9, "renk": "#d1d5db"}]}}
 eski = {
- "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
- "kartlar": [{"id": "mega", "tip": "Mega", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_mega.ino')).read()}, {"id": "nano", "tip": "Nano", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_nano.ino')).read()}],
+ "id": "eski2025", "ad": "Antalya 2026 robotumuz", "renk": "#6d28d9", "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mega kodu: derleme hatası düzeltilmiş ve depoda yorum satırında kalan oyun mantığı açılmış hâli (ornek_kodlar/antalya_mega_oyun.ino); orijinali antalya_mega.ino. Görünüş ve ölçüler 27 Kasım fotoğraflarından: sarı 3B baskı şasi, 4 motorlu teker (Ø7,5 cm), önde tek yönlü kapakçık sırası ve iç huni, ortada tokatlı ayıklayıcı, yan ve arka çıkış kapıları, 2 BTS7960, 8 adet 18650 (4S2P, 14,8 V varsayıldı), köşelerde 2şer MZ80 (üstteki kodda kullanılıyor), NeoPixel şerit. Motor modeli, kütle ve iç kanal derinliği hâlâ tahmini.",
+ "kartlar": [{"id": "mega", "tip": "Mega", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_mega_oyun.ino')).read()}, {"id": "nano", "tip": "Nano", "kod": open(os.path.join(HERE, 'ornek_kodlar', 'antalya_nano.ino')).read()}],
  "kart_baglantilari": [["mega:A0", "nano:A0"], ["mega:A1", "nano:A1"], ["mega:A2", "nano:A2"], ["mega:A3", "nano:A3"], ["mega:A4", "nano:A4"]],
- "mekanik": {"kutle_kg": 2.2, "agirlik_merkezi": {"x_cm": N, "z_cm": 6},
-  "tekerlek": {"lastik": "kaucuk", "cap_cm": 6.5, "genislik_cm": 2.7, "iz_cm": 23, "x_cm": -2, "adet": 4, "dingil_cm": 14},
+ "mekanik": {"foto_rev": 1, "kutle_kg": 2.2, "agirlik_merkezi": {"x_cm": -1.5, "z_cm": 4.5}, "detayli_gorunum": T,
+  # 27 Kasım fotoğraflarından: teker Ø7,5 cm, iz (merkezler arası) 25,4 cm, dingil aralığı 13,9 cm, aks ortası gövde merkezinin 1,85 cm gerisinde
+  "tekerlek": {"lastik": "kaucuk", "cap_cm": 7.5, "genislik_cm": 2.8, "iz_cm": 25.4, "x_cm": -1.85, "adet": 4, "dingil_cm": 13.9, "jant_renk": "#efeee9", "lastik_renk": "#8f9296"},
   "sarhos_teker": N,
-  "motor": {"model": "JGA25-370 12V 280"}, "pil": {"volt": 7.4}, "acil_stop": {"x": 6, "y": 8, "z": 14},
-  "parcalar": [
-   {"ad": "Gövde", "x": -1, "y": 0, "uzunluk": 24, "genislik": 19, "z0": 2.5, "z1": 12, "renk": "#facc15"},
-   {"ad": "Ağız sol", "x": 12.5, "y": 6, "uzunluk": 3, "genislik": 1.5, "z0": 0.4, "z1": 6, "renk": "#334155"},
-   {"ad": "Ağız sağ", "x": 12.5, "y": -6, "uzunluk": 3, "genislik": 1.5, "z0": 0.4, "z1": 6, "renk": "#334155"},
-   {"ad": "Ağız arka (stoper)", "x": 9.5, "y": 0, "uzunluk": 1, "genislik": 10.5, "z0": 0.3, "z1": 2.4, "renk": "#1f2937"}], "model3d": N,
-  "hazne": {"var": T, "agiz": {"x0": 9, "x1": 16, "y0": -4.5, "y1": 4.5},
+  # Fotoğraflarda 8 adet 18650 (Orion 2450 mAh) var → 4S2P (14,8 V) varsayıldı. Ekibin kodu sol(100), sag(80), ileri(100) ile dönüp
+  # ilerliyor; 7,4 V ve 280 rpm'lik motorla simülasyonda robot bu değerlerde hiç dönemiyordu. Bu yüzden daha torklu 130 rpm'lik motor seçildi.
+  # İkisi de ÇIKARIM: gerçek pil bağlantısı ve motor etiketi ölçülünce düzeltilmeli.
+  "motor": {"model": "JGA25-370 12V 130"}, "pil": {"volt": 14.8, "mah": 4900}, "acil_stop": {"x": 2.2, "y": -9.0, "z": 12.1},
+  "parcalar": robot_antalya_3b.parcalar(), "kablolar": robot_antalya_3b.kablolar(), "model3d": N,
+  # Ağız: ön kapakçıklardan girip iç huniyle ortaya gelen yumurta stoperin önünde durur, tokat servosu onu bölmelere ayırır
+  "hazne": {"var": T, "agiz": {"x0": -3.2, "x1": 1.6, "y0": -4.2, "y1": 4.2},
    "kurallar": [
     {"servo": "nano:10", "min": 150, "max": 180, "ve": {"servo": "nano:11", "min": 130, "max": 180}, "hedef": "yesil"},
     {"servo": "nano:10", "min": 150, "max": 180, "hedef": "bizim"},
     {"servo": "nano:10", "min": 0, "max": 30, "hedef": "disari"}],
    "bolmeler": [
-    {"ad": "bizim", "kapasite": 5, "kapak": "mega:A8", "acik_min": 60, "acik_max": 180, "cikis": {"x": -15, "y": 3}},
-    {"ad": "yesil", "kapasite": 2, "kapak": "mega:A9", "acik_min": 80, "acik_max": 180, "cikis": {"x": -15, "y": -4}}],
-   "disari": {"x": 4, "y": -14, "hiz_cms": 40}}},
+    {"ad": "bizim", "kapasite": 5, "kapak": "mega:A8", "acik_min": 60, "acik_max": 180, "cikis": {"x": -14.5, "y": 1.8}},
+    {"ad": "yesil", "kapasite": 2, "kapak": "mega:A9", "acik_min": 80, "acik_max": 180, "cikis": {"x": -14.5, "y": -1.8}}],
+   "disari": {"x": -2.0, "y": 14.5, "hiz_cms": 40}}},
  "devre": {
   "surucu": {"tip": "BTS7960", "sol": {"en": "mega:7", "rpwm": "mega:5", "lpwm": "mega:6"}, "sag": {"en": "mega:2", "rpwm": "mega:3", "lpwm": "mega:4"}, "sol_ters": T, "sag_ters": F},
   "sensorler": [
-   {"tip": "IR_ENGEL", "ad": "Sol göz (MZ80)", "pin": "mega:22", "x": 12, "y": 8, "z": 4, "aci": 10, "menzil_cm": 20},
-   {"tip": "IR_ENGEL", "ad": "Sağ göz (MZ80)", "pin": "mega:24", "x": 12, "y": -8, "z": 4, "aci": -10, "menzil_cm": 20},
-   {"tip": "TCS3200", "ad": "Zemin renk (Mega)", "s0": "mega:52", "s1": "mega:50", "s2": "mega:46", "s3": "mega:48", "out": "mega:44", "x": 10, "y": 0, "z": 1, "bakis": "asagi"},
-   {"tip": "TCS3200", "ad": "Ağız renk (Nano)", "s0": "nano:3", "s1": "nano:4", "s2": "nano:5", "s3": "nano:6", "out": "nano:2", "x": 11.5, "y": 0, "z": 1, "bakis": "ileri", "menzil_cm": 2.5},
-   {"tip": "IR_ENGEL", "ad": "Ağız sensörü", "pin": "nano:12", "ters": T, "x": 11.5, "y": -4, "z": 1, "aci": 90, "menzil_cm": 8},
+   {"tip": "IR_ENGEL", "ad": "Sol göz (MZ80, üst, çapraz)", "pin": "mega:22", "x": 11.9, "y": 11.0, "z": 3.6, "aci": 25, "menzil_cm": 20},
+   {"tip": "IR_ENGEL", "ad": "Sağ göz (MZ80, üst, çapraz)", "pin": "mega:24", "x": 11.9, "y": -11.0, "z": 3.6, "aci": -25, "menzil_cm": 20},
+   {"tip": "TCS3200", "ad": "Zemin renk (Mega)", "s0": "mega:52", "s1": "mega:50", "s2": "mega:46", "s3": "mega:48", "out": "mega:44", "x": 10.6, "y": 0, "z": 1.2, "bakis": "asagi"},
+   {"tip": "TCS3200", "ad": "Ağız renk (Nano)", "s0": "nano:3", "s1": "nano:4", "s2": "nano:5", "s3": "nano:6", "out": "nano:2", "x": -3.3, "y": 0, "z": 1, "bakis": "ileri", "menzil_cm": 2.5},
+   {"tip": "IR_ENGEL", "ad": "Ağız sensörü", "pin": "nano:12", "ters": T, "x": -1.2, "y": -4.5, "z": 1, "aci": 90, "menzil_cm": 6},
    {"tip": "BUTON", "ad": "Bölge anahtarı (Mega)", "pin": "mega:A14", "deger": "KIRMIZIDA_HIGH"},
    {"tip": "BUTON", "ad": "Bölge anahtarı (Nano)", "pin": "nano:8", "deger": "KIRMIZIDA_HIGH"}],
-  "servolar": [{"ad": "Rakip kapağı", "pin": "mega:A7", "baslangic_aci": 180}, {"ad": "Bizim kapak", "pin": "mega:A8", "baslangic_aci": 0}, {"ad": "Yeşil kapak", "pin": "mega:A9", "baslangic_aci": 0}, {"ad": "Tokat", "pin": "nano:10", "baslangic_aci": 90}, {"ad": "Yeşil tokat", "pin": "nano:11", "baslangic_aci": 70}],
-  "led": {"tip": "NeoPixel", "pin": "mega:42", "x": -6, "y": 0, "z": 12},
+  "servolar": [{"ad": "Rakip kapağı (yan çıkış)", "pin": "mega:A7", "baslangic_aci": 180}, {"ad": "Bizim kapak", "pin": "mega:A8", "baslangic_aci": 0}, {"ad": "Yeşil kapak", "pin": "mega:A9", "baslangic_aci": 0}, {"ad": "Tokat", "pin": "nano:10", "baslangic_aci": 90}, {"ad": "Yeşil tokat", "pin": "nano:11", "baslangic_aci": 70}],
+  "led": {"tip": "NeoPixel", "pin": "mega:42", "x": 10.6, "y": 0, "z": 3.35, "uzunluk": 13.5, "genislik": 0.9, "adet": 8},
   "yerlesim": [
-   {"ad": "Arduino Mega", "x": -3, "y": 0, "z": 12, "uzunluk": 10.2, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490"},
-   {"ad": "Arduino Nano", "x": 5, "y": 4, "z": 12, "uzunluk": 4.5, "genislik": 1.8, "kalinlik": 1, "renk": "#0369a1"},
-   {"ad": "BTS7960 sol", "x": 4, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"},
-   {"ad": "BTS7960 sağ", "x": -9, "y": -5, "z": 12, "uzunluk": 5, "genislik": 5, "kalinlik": 2.5, "renk": "#b91c1c"}]}}
+   {"ad": "Arduino Mega", "x": -8.2, "y": -0.5, "z": 5.6, "uzunluk": 10.2, "genislik": 5.3, "kalinlik": 0.15, "renk": "#0e7490"},
+   {"ad": "Arduino Nano", "x": -9.1, "y": -0.3, "z": 7.95, "uzunluk": 4.5, "genislik": 1.8, "kalinlik": 0.1, "renk": "#0369a1"},
+   {"ad": "BTS7960 sağ", "x": -12.65, "y": -6.55, "z": 7.0, "uzunluk": 5, "genislik": 5, "kalinlik": 0.16, "renk": "#b91c1c"},
+   {"ad": "BTS7960 sol", "x": -11.85, "y": 6.3, "z": 7.0, "uzunluk": 5, "genislik": 5, "kalinlik": 0.16, "renk": "#b91c1c"}]}}
 # Videoda görülen dört tekerli, üstü açık yarış robotunun TEMSİLİ profili.
 # Motor/sensör ölçüleri ve yarış kodu gerçek robotun doğrulanmış değerleri değildir.
 video = copy.deepcopy(yum)

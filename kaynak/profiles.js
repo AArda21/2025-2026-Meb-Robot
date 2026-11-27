@@ -3,7 +3,7 @@ const DEFAULT_PROFILES = [
   "id": "yumyum",
   "ad": "Yum Yum",
   "renk": "#f08c00",
-  "aciklama": "Takımın bu yılki robotu (örnek değerlerle başlar — kendi ölçülerinizi girin).",
+  "aciklama": "Yarışma videosuna uygun sade ön şasili örnek robot. Gerçek robotun iç mekanizması, sensör ve motor ölçüleri videodan doğrulanamaz; ölçüleri düzenleyin.",
   "kartlar": [
    {
     "id": "ana",
@@ -13,6 +13,7 @@ const DEFAULT_PROFILES = [
   ],
   "kart_baglantilari": [],
   "mekanik": {
+   "video_on_rev": 1,
    "kutle_kg": 1.1,
    "agirlik_merkezi": {
     "x_cm": null,
@@ -127,60 +128,14 @@ const DEFAULT_PROFILES = [
      "renk": "#cfe3f0"
     },
     {
-     "ad": "Kepçe arka",
-     "x": 10,
+     "ad": "Ön şasi kenarı",
+     "x": 9,
      "y": 0,
-     "uzunluk": 1,
+     "uzunluk": 0.7,
      "genislik": 12,
-     "z0": 0.3,
+     "z0": 2.4,
      "z1": 4.3,
-     "renk": "#374151"
-    },
-    {
-     "ad": "Sol kol",
-     "x": 14.25,
-     "y": 6,
-     "uzunluk": 7.5,
-     "genislik": 1,
-     "z0": 0.3,
-     "z1": 4.3,
-     "renk": "#374151"
-    },
-    {
-     "ad": "Sağ kol",
-     "x": 14.25,
-     "y": -6,
-     "uzunluk": 7.5,
-     "genislik": 1,
-     "z0": 0.3,
-     "z1": 4.3,
-     "renk": "#374151"
-    },
-    {
-     "ad": "SG90 servo",
-     "x": 16.5,
-     "y": 6.3,
-     "uzunluk": 2.3,
-     "genislik": 1.2,
-     "z0": 4.3,
-     "z1": 6.6,
-     "renk": "#2563eb",
-     "kati": false
-    },
-    {
-     "ad": "Kapak",
-     "servo_pin": 3,
-     "pivot": [
-      18,
-      5.5
-     ],
-     "uzunluk": 11,
-     "genislik": 0.8,
-     "aci_ofset": -90,
-     "yon": 1,
-     "z0": 0.3,
-     "z1": 4,
-     "renk": "#f59e0b"
+     "renk": "#64748b"
     }
    ],
    "model3d": null
@@ -243,12 +198,12 @@ const DEFAULT_PROFILES = [
     },
     {
      "tip": "TCS3200",
-     "ad": "Renk (kepçe)",
+     "ad": "Ön renk sensörü (temsili)",
      "s2": "A1",
      "s3": "A2",
      "out": 13,
      "olcek": 20,
-     "x": 10.6,
+     "x": 8.8,
      "y": 0,
      "z": 1,
      "aci": 0,
@@ -326,12 +281,12 @@ const DEFAULT_PROFILES = [
   "id": "eski2025",
   "ad": "Antalya 2026 robotumuz",
   "renk": "#6d28d9",
-  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Fotoğrafa göre: 4 teker (hepsi motorlu), 2×18650 pil (7,4 V), sarı gövde, önde içeri giren yumurtanın çıkmasını önleyen kelepçeler, köşelerde MZ80 gözler (kodda 2 tanesi kullanılıyor). Ölçüler, sensör yerleri ve iç hazne TAHMİNİ.",
+  "aciklama": "Repodaki 21 Ocak Mega + Nano kodları (Antalya 2026). Mega kodu: derleme hatası düzeltilmiş ve depoda yorum satırında kalan oyun mantığı açılmış hâli (ornek_kodlar/antalya_mega_oyun.ino); orijinali antalya_mega.ino. Görünüş ve ölçüler 27 Kasım fotoğraflarından: sarı 3B baskı şasi, 4 motorlu teker (Ø7,5 cm), önde tek yönlü kapakçık sırası ve iç huni, ortada tokatlı ayıklayıcı, yan ve arka çıkış kapıları, 2 BTS7960, 8 adet 18650 (4S2P, 14,8 V varsayıldı), köşelerde 2şer MZ80 (üstteki kodda kullanılıyor), NeoPixel şerit. Motor modeli, kütle ve iç kanal derinliği hâlâ tahmini.",
   "kartlar": [
    {
     "id": "mega",
     "tip": "Mega",
-    "kod": "#include<Servo.h>\n#include <Adafruit_NeoPixel.h>\n\nServo bizim;\nServo rakip;\nServo yesil;\n\n// HABERLEŞME\n#define sayac_bildirim A0\n#define yesil_bildirim A1\n#define kilit_sinyal A2\n#define yesil_tokatla_sinyal A3\n#define otur_bildirim A4\n\n// Sağ motor pinleri\n#define EN_R 2\n#define RPWM_R 3\n#define LPWM_R 4\n\n// Sol motor pinleri\n#define RPWM_L 5\n#define LPWM_L 6\n#define EN_L 7\n\n#define sol_goz 22\n#define sag_goz 24\n\n#define s0 52\n#define s1 50\n#define s2 46\n#define s3 48\n#define out 44\n\n#define LED_PIN 42\n#define LED_COUNT  8 // LED sayısı\n#define KIRMIZI 1\n#define MAVI 0\n#define BIZIM_TOPU_BIRAK 1\n#define YESIL_BIRAK 0\n\nAdafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);\n\nfloat kirmizi = 0, mavi = 0, yesil = 0;\nint kirmizi_veriler[4] = { 0, 0, 0, 0 };\nint mavi_veriler[4] = { 0, 0, 0, 0 };\nint yesil_veriler[4] = { 0, 0, 0, 0 };\nint mavi_ust_limit = 60, kirmizi_alt_limit = 300, yesil_alt_limit=70, yesil_ust_limit=80;\nbyte bolge = 0, duvarla_isim_var = 0;\n\nbyte bizim_kapak_default = 0, yesil_kapak_default = 0;\n\nvoid setup() {\n  // SERVO TANIMLARI\n  rakip.attach(A7);\n  bizim.attach(A8);\n  yesil.attach(A9);\n  bizim.write(bizim_kapak_default);\n  rakip.write(180);\n  yesil.write(yesil_kapak_default);\n\n  // MZ80 TANIMLARI\n  pinMode(sol_goz, INPUT);\n  pinMode(sag_goz, INPUT);\n\n  //RENK SENSÖRÜ TANIMLARI\n  pinMode(s0, OUTPUT);\n  pinMode(s1, OUTPUT);\n  pinMode(s2, OUTPUT);\n  pinMode(s3, OUTPUT);\n  pinMode(out, INPUT);\n\n  // Sağ motor pin tanımları\n  pinMode(EN_R, OUTPUT);\n  pinMode(RPWM_R, OUTPUT);\n  pinMode(LPWM_R, OUTPUT);\n\n  // Sol motor pin tanımları\n  pinMode(EN_L, OUTPUT);\n  pinMode(RPWM_L, OUTPUT);\n  pinMode(LPWM_L, OUTPUT);\n\n  //HABERLEŞME PİNLERİ\n  pinMode(sayac_bildirim, INPUT);\n  pinMode(yesil_bildirim, INPUT);\n  pinMode(otur_bildirim, INPUT);\n  pinMode(kilit_sinyal, OUTPUT);\n  pinMode(yesil_tokatla_sinyal, OUTPUT);\n\n  // Motor sürücülerini aktif et\n  digitalWrite(EN_R, HIGH);\n  digitalWrite(EN_L, HIGH);\n\n  digitalWrite(s0, HIGH);\n  digitalWrite(s1, LOW);\n\n  //NEOPİXEL\n  pinMode(A14, INPUT);\n  bolge = digitalRead(A14);\n  strip.begin();\n  strip.show();\n\n  for (int i = 0; i < LED_COUNT; i++) {\n    if (bolge == KIRMIZI)\n    {\n      strip.setPixelColor(i, strip.Color(255, 0, 0)); // kırmızı\n    }\n    else\n    {\n      strip.setPixelColor(i, strip.Color(0, 0, 255)); // mavi\n    }\n  }\n  strip.show();\n\n  Serial.begin(9600);\n /* while(digitalRead(sag_goz) == 0);\n  basla();*/\n}\n\nvoid loop() {\nolcum();\n  /*\n  if (digitalRead(sayac_bildirim) == 1)\n  {\n    digitalWrite(kilit_sinyal, HIGH);\n    duvarla_isim_var = 1;\n    while(duvarla_isim_var == 1)\n    {\n      duvar_takip(BIZIM_TOPU_BIRAK);\n    }\n    digitalWrite(kilit_sinyal, LOW);\n    delay(2000);\n  }\n  else if (digitalRead(yesil_bildirim) == 1)\n  {\n    digitalWrite(kilit_sinyal, HIGH);\n    duvarla_isim_var = 1;\n    while(duvarla_isim_var == 1)\n    {\n      duvar_takip(yesil_BIRAK);\n    }\n    digitalWrite(kilit_sinyal, LOW);\n    delay(2000);\n  }\n  else if(digitalRead(otur_bildirim) == 1)\n  {\n    duvar_takip_otur();\n  }\n  else\n  {\n    rastgele();\n  }*/\n}\n\nvoid goz_okuma()\n{\n  Serial.print(\"Sol göz: \");\n  Serial.println(digitalRead(sol_goz));\n  Serial.print(\"Saü göz: \");\n  Serial.println(digitalRead(sag_goz));\n  Serial.print(\"\\n\\n\\n\");\n  delay(300);\n}\n\nvoid rastgele()\n{\n  if (digitalRead(sol_goz) == 0)\n  {\n    sag(80);\n    delay(600);\n  }\n  else if (digitalRead(sag_goz) == 0)\n  {\n    sag(80);\n    delay(800);\n  }\n  else\n  {\n    ileri(100);\n  }\n}\n\nvoid duvar_takip(byte nereye)\n{\n  if (digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 0)\n  {\n    dur(200);\n    int sonuc = olcum();\n\n    /* AŞAĞIDAKİ IF KOŞULUNUN TÜRKÇE MEALİ :)\n     * MAVİ BÖLGE OKUDUK: KIRMIZI KÖŞEYİZ(bolge = KIRMIZI = 1) ve CEZA BIRAKACAĞIZ(nereye = CEZA_BIRAK = 0) --> bolge(1) != nereye(0)\n     * MAVİ BÖLGE OKUDUK: MAVİ KÖŞEYİZ(bolge = MAVI = 0) ve BİZİM TOPU BIRAKACAĞIZ(nereye = BIZIM_TOPU_BIRAK = 1) --> bolge(0) != nereye(1)\n     * KIRMIZI BÖLGE OKUDUK: KIRMIZI KÖŞEYİZ(bolge = KIRMIZI = 1) ve BİZİM TOPU BIRAKACAĞIZ(nereye = BIZIM_TOPU_BIRAK = 1) --> bolge(1) == nereye(1)\n     * KIRMIZI BÖLGE OKUDUK: MAVİ KÖŞEYİZ(bolge = MAVI = 0) ve CEZA BIRAKACAĞIZ(nereye = CEZA_BIRAK = 0) --> bolge(0) == nereye(0)\n     * GERİ KALAN HİÇBİR KOŞULDA IF'İN İÇİNE GİRİLİP PARK YAPILMAZ DUVAR TAKİBE DEVAM EDİLİR <3\n     */\n     if(nereye == 1){\n    if ( (sonuc < mavi_ust_limit == bolge ) || (sonuc > kirmizi_alt_limit == bolge) )\n    {\n      dur(200);\n      park(1);\n    }\n    }\n    else{\n      if(sonuc<yesil_ust_limit && sonuc>yesil_alt_limit){\n        dur(200);\n        park(0);\n      }\n    }\n    while (digitalRead(sag_goz) == 0)\n    {\n      sol(100);\n    }\n    \n    dur(200);\n  }\n  else if(digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 1)\n  {\n    unsigned long firstMillis = millis();\n    while (digitalRead(sag_goz) == 1)\n    {\n      if( (millis() - firstMillis) > 3000)\n      {\n        ileri(100);\n        delay(300);\n        break;\n      }\n      sol(100);\n    }\n  }\n  else\n  {\n    if (digitalRead(sag_goz) == 1) //SAĞA YANAŞ\n    {\n      ileri(150, 100);\n    }\n    else\n    {\n      ileri(100, 150);\n    }\n  }\n}\n\nvoid duvar_takip_otur()\n{\n  if (digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 0)\n  {\n    dur(200);\n    int sonuc = olcum();\n    if ( (sonuc < mavi_ust_limit && bolge == KIRMIZI) || (sonuc > kirmizi_alt_limit && bolge == MAVI) )\n    {\n      ileri(80);\n      delay(250);\n      dur(0);\n      delay(100);\n      geri(80);\n      delay(200);\n      dur(0);\n      while(1); // OTURDUK BEKLİYORUZ\n    }\n    \n    while (digitalRead(sag_goz) == 0)\n    {\n      sol(100);\n    }\n    \n    dur(200);\n  }\n  else if(digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 1)\n  {\n    unsigned long firstMillis = millis();\n    while (digitalRead(sag_goz) == 1)\n    {\n      if( (millis() - firstMillis) > 3000)\n      {\n        ileri(100);\n        delay(300);\n        break;\n      }\n      sol(100);\n    }\n  }\n  else\n  {\n    if (digitalRead(sag_goz) == 1) //SAĞA YANAŞ\n    {\n      ileri(150, 100);\n    }\n    else\n    {\n      ileri(100, 150);\n    }\n  }\n}\n\nvoid park (byte nereye)\n{\n  while (digitalRead(sag_goz) == 0)\n  {\n    sol(100);\n  }\n  dur(200);\n  sol(100);\n  delay(100);\n  dur(200);\n  if (nereye == 1)\n  {\n    bizim.write(bizim_kapak_default + 90);\n    delay(150);\n  }\n  else\n  {\n    sol(100);\n    delay(300);\n    dur(200);\n    yesil.write(yesil_kapak_default + 120);\n    delay(100);\n    digitalWrite(yesil_tokatla_sinyal, HIGH);\n    delay(500);\n    digitalWrite(yesil_tokatla_sinyal, LOW);\n  }\n  ileri(100);\n  delay(1600);\n  dur(200);\n  if(nereye == 1)\n  {\n    bizim.write(bizim_kapak_default);\n  }\n  else\n  {\n    yesil.write(yesil_kapak_default);\n  }\n  duvarla_isim_var = 0;\n}\n\nvoid ileri(byte hiz)\n{\n  analogWrite(RPWM_R, hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, hiz);\n}\n\nvoid ileri(byte sol_hiz, byte sag_hiz)\n{\n  analogWrite(RPWM_R, sag_hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, sol_hiz);\n}\n\nvoid geri(byte hiz)\n{\n  analogWrite(RPWM_R, 0);\n  analogWrite(LPWM_R, hiz);\n  analogWrite(RPWM_L, hiz);\n  analogWrite(LPWM_L, 0);\n}\n\nvoid sol(byte hiz)\n{\n  analogWrite(RPWM_R, hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, hiz);\n  analogWrite(LPWM_L, 0);\n}\n\nvoid sag(byte hiz)\n{\n  analogWrite(RPWM_R, 0);\n  analogWrite(LPWM_R, hiz);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, hiz);\n}\n\nvoid dur(byte guc)\n{\n  analogWrite(RPWM_R, guc);\n  analogWrite(LPWM_R, guc);\n  analogWrite(RPWM_L, guc);\n  analogWrite(LPWM_L, guc);\n}\n\nvoid basla()\n{\n  // İLERİ GİT (her iki motor ileri yönde döner)\n  ileri(255); // ileri(byte hız)\n\n  delay(800);  // 1 saniye ileri git\n\n  // DUR\n  dur(100); //dur(byte guc) -> guc ne kadar yüksekse o kadar sert fren yapar.\n\n  //durduğunu anla\n  delay(1000);\n}\n\n\nfloat olcum() {\n  //verileri güncelliyoruz\n  for (int i = 0; i < 4; i++) {\n    olc();\n    kirmizi_veriler[i] = kirmizi;\n    mavi_veriler[i] = mavi;\n    yesil_veriler[i] = yesil;\n  }\n\n  // 6 TANE VERİ ALIP İÇELERİNDEN TUTARLI HALE GETİRİYORUZ\n  // ÖRNEK : 64,65,68,97 ÖLÇMÜŞ OLALIM -> 67 GİBİ BİR SONUÇ DÖNDÜRÜYOR ANLIK DALGALANMALARDAN ETKİLENMEMİŞ OLUYORUZ\n  kirmizi = stabilSonucuBul(kirmizi_veriler, 4);\n  mavi = stabilSonucuBul(mavi_veriler, 4);\n   yesil = stabilSonucuBul(yesil_veriler, 4);\n\n \n\n  float sonuc = ((float)mavi / (float)kirmizi /(float)yesil) * 10000;\n  Serial.println(sonuc);\n  /*\nSerial.println(\"MAVİ\");  \nSerial.println(mavi);\n\nSerial.println(\"KIRMIZI\");  \nSerial.println(kirmizi);\n\nSerial.println(\"yeşil\");  \nSerial.println(yesil);*/\n\n  \n  return sonuc;\n}\n\nvoid olc() {\n  //RENK SENSÖRÜ KIRMIZI FİLTRE AYARI\n  digitalWrite(s2, LOW);\n  digitalWrite(s3, LOW);\n  delay(10);\n  kirmizi = pulseIn(out, LOW);\n\n  //RENK SENSÖRÜ MAVİ FİLTRE AYARI\n  digitalWrite(s2, LOW);\n  digitalWrite(s3, HIGH);\n  delay(10);\n  mavi = pulseIn(out, LOW);\n\n   //RENK SENSÖRÜ YESİL FİLTRE AYARI\n  digitalWrite(s2, HIGH);\n  digitalWrite(s3, HIGH);\n  delay(10);\n  yesil = pulseIn(out, LOW);\n}\n\n\n\n// ******************************Ortalama hesaplayan fonksiyon*****************************\ndouble ortalamaHesapla(const int arr[], int size) {\n  double sum = 0;\n  for (int i = 0; i < size; i++) {\n    sum += arr[i];\n  }\n  return sum / size;\n}\n\n// Standart sapmayı hesaplayan fonksiyon\ndouble standartSapmaHesapla(const int arr[], int size, double mean) {\n  double sum = 0;\n  for (int i = 0; i < size; i++) {\n    sum += pow(arr[i] - mean, 2);\n  }\n  return sqrt(sum / size);\n}\n\n// Uç değerleri filtreleyerek en istikrarlı değeri bul\nint stabilSonucuBul(const int arr[], int size) {\n  // Dizinin ortalamasını hesapla\n  double mean = ortalamaHesapla(arr, size);\n\n  // Dizinin standart sapmasını hesapla\n  double stdDev = standartSapmaHesapla(arr, size, mean);\n\n  // Standart sapmanın 1.5 katından daha uzak olan değerleri göz ardı et\n  const double threshold = 1.5 * stdDev;\n\n  // Filtrelenmiş dizinin ortalamasını ve en yakın değeri bul\n  double filteredSum = 0;\n  int filteredCount = 0;\n  int closestValue = arr[0];\n  double minDifference = 1e6;  // çok büyük bir sayı kullanıyoruz\n\n  for (int i = 0; i < size; i++) {\n    if (fabs(arr[i] - mean) <= threshold) {\n      filteredSum += arr[i];\n      filteredCount++;\n\n      // Ortalamaya en yakın değeri bl\n      double diff = fabs(arr[i] - mean);\n      if (diff < minDifference) {\n        minDifference = diff;\n        closestValue = arr[i];\n      }\n    }\n  }\n\n  return closestValue;\n}\n"
+    "kod": "// Antalya 2026 Mega kodu — OYUN MODU (simülatör için hazırlandı)\n// antalya_mega_duzeltilmis.ino ile aynı; sadece setup() sonundaki başlangıç ve loop() içindeki oyun mantığı yorumdan çıkarıldı.\n#include<Servo.h>\n#include <Adafruit_NeoPixel.h>\n\nServo bizim;\nServo rakip;\nServo yesilServo;   // DÜZELTME: 'yesil' adı aşağıdaki float yesil ile çakışıyordu (derleme hatası)\n\n// HABERLEŞME\n#define sayac_bildirim A0\n#define yesil_bildirim A1\n#define kilit_sinyal A2\n#define yesil_tokatla_sinyal A3\n#define otur_bildirim A4\n\n// Sağ motor pinleri\n#define EN_R 2\n#define RPWM_R 3\n#define LPWM_R 4\n\n// Sol motor pinleri\n#define RPWM_L 5\n#define LPWM_L 6\n#define EN_L 7\n\n#define sol_goz 22\n#define sag_goz 24\n\n#define s0 52\n#define s1 50\n#define s2 46\n#define s3 48\n#define out 44\n\n#define LED_PIN 42\n#define LED_COUNT  8 // LED sayısı\n#define KIRMIZI 1\n#define MAVI 0\n#define BIZIM_TOPU_BIRAK 1\n#define YESIL_BIRAK 0\n\nAdafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);\n\nfloat kirmizi = 0, mavi = 0, yesil = 0;\nint kirmizi_veriler[4] = { 0, 0, 0, 0 };\nint mavi_veriler[4] = { 0, 0, 0, 0 };\nint yesil_veriler[4] = { 0, 0, 0, 0 };\nint mavi_ust_limit = 60, kirmizi_alt_limit = 300, yesil_alt_limit=70, yesil_ust_limit=80;\nbyte bolge = 0, duvarla_isim_var = 0;\n\nbyte bizim_kapak_default = 0, yesil_kapak_default = 0;\n\nvoid setup() {\n  // SERVO TANIMLARI\n  rakip.attach(A7);\n  bizim.attach(A8);\n  yesilServo.attach(A9);\n  bizim.write(bizim_kapak_default);\n  rakip.write(180);\n  yesilServo.write(yesil_kapak_default);\n\n  // MZ80 TANIMLARI\n  pinMode(sol_goz, INPUT);\n  pinMode(sag_goz, INPUT);\n\n  //RENK SENSÖRÜ TANIMLARI\n  pinMode(s0, OUTPUT);\n  pinMode(s1, OUTPUT);\n  pinMode(s2, OUTPUT);\n  pinMode(s3, OUTPUT);\n  pinMode(out, INPUT);\n\n  // Sağ motor pin tanımları\n  pinMode(EN_R, OUTPUT);\n  pinMode(RPWM_R, OUTPUT);\n  pinMode(LPWM_R, OUTPUT);\n\n  // Sol motor pin tanımları\n  pinMode(EN_L, OUTPUT);\n  pinMode(RPWM_L, OUTPUT);\n  pinMode(LPWM_L, OUTPUT);\n\n  //HABERLEŞME PİNLERİ\n  pinMode(sayac_bildirim, INPUT);\n  pinMode(yesil_bildirim, INPUT);\n  pinMode(otur_bildirim, INPUT);\n  pinMode(kilit_sinyal, OUTPUT);\n  pinMode(yesil_tokatla_sinyal, OUTPUT);\n\n  // Motor sürücülerini aktif et\n  digitalWrite(EN_R, HIGH);\n  digitalWrite(EN_L, HIGH);\n\n  digitalWrite(s0, HIGH);\n  digitalWrite(s1, LOW);\n\n  //NEOPİXEL\n  pinMode(A14, INPUT);\n  bolge = digitalRead(A14);\n  strip.begin();\n  strip.show();\n\n  for (int i = 0; i < LED_COUNT; i++) {\n    if (bolge == KIRMIZI)\n    {\n      strip.setPixelColor(i, strip.Color(255, 0, 0)); // kırmızı\n    }\n    else\n    {\n      strip.setPixelColor(i, strip.Color(0, 0, 255)); // mavi\n    }\n  }\n  strip.show();\n\n  Serial.begin(9600);\n  // OYUN MODU: elini sağ gözün önünden çekince başlar\n  while(digitalRead(sag_goz) == 0);\n  basla();\n}\n\nvoid loop() {\n  // OYUN MODU: depodaki 21 Ocak kodunda bu bölüm yorum satırındaydı ve loop() sadece olcum() çağırıyordu (test modu).\n  if (digitalRead(sayac_bildirim) == 1)\n  {\n    digitalWrite(kilit_sinyal, HIGH);\n    duvarla_isim_var = 1;\n    while(duvarla_isim_var == 1)\n    {\n      duvar_takip(BIZIM_TOPU_BIRAK);\n    }\n    digitalWrite(kilit_sinyal, LOW);\n    delay(2000);\n  }\n  else if (digitalRead(yesil_bildirim) == 1)\n  {\n    digitalWrite(kilit_sinyal, HIGH);\n    duvarla_isim_var = 1;\n    while(duvarla_isim_var == 1)\n    {\n      duvar_takip(YESIL_BIRAK);   // DÜZELTME: yesil_BIRAK diye bir şey yok, YESIL_BIRAK olmalı\n    }\n    digitalWrite(kilit_sinyal, LOW);\n    delay(2000);\n  }\n  else if(digitalRead(otur_bildirim) == 1)\n  {\n    duvar_takip_otur();\n  }\n  else\n  {\n    rastgele();\n  }\n}\n\nvoid goz_okuma()\n{\n  Serial.print(\"Sol göz: \");\n  Serial.println(digitalRead(sol_goz));\n  Serial.print(\"Saü göz: \");\n  Serial.println(digitalRead(sag_goz));\n  Serial.print(\"\\n\\n\\n\");\n  delay(300);\n}\n\nvoid rastgele()\n{\n  if (digitalRead(sol_goz) == 0)\n  {\n    sag(80);\n    delay(600);\n  }\n  else if (digitalRead(sag_goz) == 0)\n  {\n    sag(80);\n    delay(800);\n  }\n  else\n  {\n    ileri(100);\n  }\n}\n\nvoid duvar_takip(byte nereye)\n{\n  if (digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 0)\n  {\n    dur(200);\n    int sonuc = olcum();\n\n    /* AŞAĞIDAKİ IF KOŞULUNUN TÜRKÇE MEALİ :)\n     * MAVİ BÖLGE OKUDUK: KIRMIZI KÖŞEYİZ(bolge = KIRMIZI = 1) ve CEZA BIRAKACAĞIZ(nereye = CEZA_BIRAK = 0) --> bolge(1) != nereye(0)\n     * MAVİ BÖLGE OKUDUK: MAVİ KÖŞEYİZ(bolge = MAVI = 0) ve BİZİM TOPU BIRAKACAĞIZ(nereye = BIZIM_TOPU_BIRAK = 1) --> bolge(0) != nereye(1)\n     * KIRMIZI BÖLGE OKUDUK: KIRMIZI KÖŞEYİZ(bolge = KIRMIZI = 1) ve BİZİM TOPU BIRAKACAĞIZ(nereye = BIZIM_TOPU_BIRAK = 1) --> bolge(1) == nereye(1)\n     * KIRMIZI BÖLGE OKUDUK: MAVİ KÖŞEYİZ(bolge = MAVI = 0) ve CEZA BIRAKACAĞIZ(nereye = CEZA_BIRAK = 0) --> bolge(0) == nereye(0)\n     * GERİ KALAN HİÇBİR KOŞULDA IF'İN İÇİNE GİRİLİP PARK YAPILMAZ DUVAR TAKİBE DEVAM EDİLİR <3\n     */\n     if(nereye == 1){\n    if ( (sonuc < mavi_ust_limit == bolge ) || (sonuc > kirmizi_alt_limit == bolge) )\n    {\n      dur(200);\n      park(1);\n    }\n    }\n    else{\n      if(sonuc<yesil_ust_limit && sonuc>yesil_alt_limit){\n        dur(200);\n        park(0);\n      }\n    }\n    while (digitalRead(sag_goz) == 0)\n    {\n      sol(100);\n    }\n    \n    dur(200);\n  }\n  else if(digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 1)\n  {\n    unsigned long firstMillis = millis();\n    while (digitalRead(sag_goz) == 1)\n    {\n      if( (millis() - firstMillis) > 3000)\n      {\n        ileri(100);\n        delay(300);\n        break;\n      }\n      sol(100);\n    }\n  }\n  else\n  {\n    if (digitalRead(sag_goz) == 1) //SAĞA YANAŞ\n    {\n      ileri(150, 100);\n    }\n    else\n    {\n      ileri(100, 150);\n    }\n  }\n}\n\nvoid duvar_takip_otur()\n{\n  if (digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 0)\n  {\n    dur(200);\n    int sonuc = olcum();\n    if ( (sonuc < mavi_ust_limit && bolge == KIRMIZI) || (sonuc > kirmizi_alt_limit && bolge == MAVI) )\n    {\n      ileri(80);\n      delay(250);\n      dur(0);\n      delay(100);\n      geri(80);\n      delay(200);\n      dur(0);\n      while(1); // OTURDUK BEKLİYORUZ\n    }\n    \n    while (digitalRead(sag_goz) == 0)\n    {\n      sol(100);\n    }\n    \n    dur(200);\n  }\n  else if(digitalRead(sol_goz) == 0 && digitalRead(sag_goz) == 1)\n  {\n    unsigned long firstMillis = millis();\n    while (digitalRead(sag_goz) == 1)\n    {\n      if( (millis() - firstMillis) > 3000)\n      {\n        ileri(100);\n        delay(300);\n        break;\n      }\n      sol(100);\n    }\n  }\n  else\n  {\n    if (digitalRead(sag_goz) == 1) //SAĞA YANAŞ\n    {\n      ileri(150, 100);\n    }\n    else\n    {\n      ileri(100, 150);\n    }\n  }\n}\n\nvoid park (byte nereye)\n{\n  while (digitalRead(sag_goz) == 0)\n  {\n    sol(100);\n  }\n  dur(200);\n  sol(100);\n  delay(100);\n  dur(200);\n  if (nereye == 1)\n  {\n    bizim.write(bizim_kapak_default + 90);\n    delay(150);\n  }\n  else\n  {\n    sol(100);\n    delay(300);\n    dur(200);\n    yesilServo.write(yesil_kapak_default + 120);\n    delay(100);\n    digitalWrite(yesil_tokatla_sinyal, HIGH);\n    delay(500);\n    digitalWrite(yesil_tokatla_sinyal, LOW);\n  }\n  ileri(100);\n  delay(1600);\n  dur(200);\n  if(nereye == 1)\n  {\n    bizim.write(bizim_kapak_default);\n  }\n  else\n  {\n    yesilServo.write(yesil_kapak_default);\n  }\n  duvarla_isim_var = 0;\n}\n\nvoid ileri(byte hiz)\n{\n  analogWrite(RPWM_R, hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, hiz);\n}\n\nvoid ileri(byte sol_hiz, byte sag_hiz)\n{\n  analogWrite(RPWM_R, sag_hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, sol_hiz);\n}\n\nvoid geri(byte hiz)\n{\n  analogWrite(RPWM_R, 0);\n  analogWrite(LPWM_R, hiz);\n  analogWrite(RPWM_L, hiz);\n  analogWrite(LPWM_L, 0);\n}\n\nvoid sol(byte hiz)\n{\n  analogWrite(RPWM_R, hiz);\n  analogWrite(LPWM_R, 0);\n  analogWrite(RPWM_L, hiz);\n  analogWrite(LPWM_L, 0);\n}\n\nvoid sag(byte hiz)\n{\n  analogWrite(RPWM_R, 0);\n  analogWrite(LPWM_R, hiz);\n  analogWrite(RPWM_L, 0);\n  analogWrite(LPWM_L, hiz);\n}\n\nvoid dur(byte guc)\n{\n  analogWrite(RPWM_R, guc);\n  analogWrite(LPWM_R, guc);\n  analogWrite(RPWM_L, guc);\n  analogWrite(LPWM_L, guc);\n}\n\nvoid basla()\n{\n  // İLERİ GİT (her iki motor ileri yönde döner)\n  ileri(255); // ileri(byte hız)\n\n  delay(800);  // 1 saniye ileri git\n\n  // DUR\n  dur(100); //dur(byte guc) -> guc ne kadar yüksekse o kadar sert fren yapar.\n\n  //durduğunu anla\n  delay(1000);\n}\n\n\nfloat olcum() {\n  //verileri güncelliyoruz\n  for (int i = 0; i < 4; i++) {\n    olc();\n    kirmizi_veriler[i] = kirmizi;\n    mavi_veriler[i] = mavi;\n    yesil_veriler[i] = yesil;\n  }\n\n  // 6 TANE VERİ ALIP İÇELERİNDEN TUTARLI HALE GETİRİYORUZ\n  // ÖRNEK : 64,65,68,97 ÖLÇMÜŞ OLALIM -> 67 GİBİ BİR SONUÇ DÖNDÜRÜYOR ANLIK DALGALANMALARDAN ETKİLENMEMİŞ OLUYORUZ\n  kirmizi = stabilSonucuBul(kirmizi_veriler, 4);\n  mavi = stabilSonucuBul(mavi_veriler, 4);\n   yesil = stabilSonucuBul(yesil_veriler, 4);\n\n \n\n  // DÜZELTME: pulseIn zaman aşımında 0 döndürür; 0'a bölmek sonsuz/anlamsız sonuç verir\n  if (kirmizi <= 0 || yesil <= 0) {\n    Serial.println(\"renk sensoru okumadi\");\n    return 0;\n  }\n  float sonuc = ((float)mavi / (float)kirmizi /(float)yesil) * 10000;\n  Serial.println(sonuc);\n  /*\nSerial.println(\"MAVİ\");  \nSerial.println(mavi);\n\nSerial.println(\"KIRMIZI\");  \nSerial.println(kirmizi);\n\nSerial.println(\"yeşil\");  \nSerial.println(yesil);*/\n\n  \n  return sonuc;\n}\n\nvoid olc() {\n  //RENK SENSÖRÜ KIRMIZI FİLTRE AYARI\n  digitalWrite(s2, LOW);\n  digitalWrite(s3, LOW);\n  delay(10);\n  kirmizi = pulseIn(out, LOW);\n\n  //RENK SENSÖRÜ MAVİ FİLTRE AYARI\n  digitalWrite(s2, LOW);\n  digitalWrite(s3, HIGH);\n  delay(10);\n  mavi = pulseIn(out, LOW);\n\n   //RENK SENSÖRÜ YESİL FİLTRE AYARI\n  digitalWrite(s2, HIGH);\n  digitalWrite(s3, HIGH);\n  delay(10);\n  yesil = pulseIn(out, LOW);\n}\n\n\n\n// ******************************Ortalama hesaplayan fonksiyon*****************************\ndouble ortalamaHesapla(const int arr[], int size) {\n  double sum = 0;\n  for (int i = 0; i < size; i++) {\n    sum += arr[i];\n  }\n  return sum / size;\n}\n\n// Standart sapmayı hesaplayan fonksiyon\ndouble standartSapmaHesapla(const int arr[], int size, double mean) {\n  double sum = 0;\n  for (int i = 0; i < size; i++) {\n    sum += pow(arr[i] - mean, 2);\n  }\n  return sqrt(sum / size);\n}\n\n// Uç değerleri filtreleyerek en istikrarlı değeri bul\nint stabilSonucuBul(const int arr[], int size) {\n  // Dizinin ortalamasını hesapla\n  double mean = ortalamaHesapla(arr, size);\n\n  // Dizinin standart sapmasını hesapla\n  double stdDev = standartSapmaHesapla(arr, size, mean);\n\n  // Standart sapmanın 1.5 katından daha uzak olan değerleri göz ardı et\n  const double threshold = 1.5 * stdDev;\n\n  // Filtrelenmiş dizinin ortalamasını ve en yakın değeri bul\n  double filteredSum = 0;\n  int filteredCount = 0;\n  int closestValue = arr[0];\n  double minDifference = 1e6;  // çok büyük bir sayı kullanıyoruz\n\n  for (int i = 0; i < size; i++) {\n    if (fabs(arr[i] - mean) <= threshold) {\n      filteredSum += arr[i];\n      filteredCount++;\n\n      // Ortalamaya en yakın değeri bl\n      double diff = fabs(arr[i] - mean);\n      if (diff < minDifference) {\n        minDifference = diff;\n        closestValue = arr[i];\n      }\n    }\n  }\n\n  return closestValue;\n}\n"
    },
    {
     "id": "nano",
@@ -362,82 +317,4307 @@ const DEFAULT_PROFILES = [
    ]
   ],
   "mekanik": {
+   "foto_rev": 1,
    "kutle_kg": 2.2,
    "agirlik_merkezi": {
-    "x_cm": null,
-    "z_cm": 6
+    "x_cm": -1.5,
+    "z_cm": 4.5
    },
+   "detayli_gorunum": true,
    "tekerlek": {
     "lastik": "kaucuk",
-    "cap_cm": 6.5,
-    "genislik_cm": 2.7,
-    "iz_cm": 23,
-    "x_cm": -2,
+    "cap_cm": 7.5,
+    "genislik_cm": 2.8,
+    "iz_cm": 25.4,
+    "x_cm": -1.85,
     "adet": 4,
-    "dingil_cm": 14
+    "dingil_cm": 13.9,
+    "jant_renk": "#efeee9",
+    "lastik_renk": "#8f9296"
    },
    "sarhos_teker": null,
    "motor": {
-    "model": "JGA25-370 12V 280"
+    "model": "JGA25-370 12V 130"
    },
    "pil": {
-    "volt": 7.4
+    "volt": 14.8,
+    "mah": 4900
    },
    "acil_stop": {
-    "x": 6,
-    "y": 8,
-    "z": 14
+    "x": 2.2,
+    "y": -9.0,
+    "z": 12.1
    },
    "parcalar": [
     {
-     "ad": "Gövde",
-     "x": -1,
-     "y": 0,
-     "uzunluk": 24,
-     "genislik": 19,
-     "z0": 2.5,
-     "z1": 12,
-     "renk": "#facc15"
+     "ad": "Gövde (sarı şasi plakası)",
+     "x": 0.0,
+     "y": 0.0,
+     "uzunluk": 24.8,
+     "genislik": 21.8,
+     "z0": 2.6,
+     "z1": 3.2,
+     "renk": "#f2c200"
     },
     {
-     "ad": "Ağız sol",
-     "x": 12.5,
-     "y": 6,
-     "uzunluk": 3,
-     "genislik": 1.5,
-     "z0": 0.4,
-     "z1": 6,
-     "renk": "#334155"
+     "ad": "Sol ön köşe kanadı",
+     "x": 10.7,
+     "y": 12.6,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "z0": 0.5,
+     "z1": 3.2,
+     "renk": "#f2c200"
     },
     {
-     "ad": "Ağız sağ",
-     "x": 12.5,
-     "y": -6,
-     "uzunluk": 3,
-     "genislik": 1.5,
-     "z0": 0.4,
-     "z1": 6,
-     "renk": "#334155"
+     "ad": "Sol yan etek",
+     "x": -1.85,
+     "y": 10.65,
+     "uzunluk": 6.3,
+     "genislik": 0.5,
+     "z0": 0.5,
+     "z1": 2.6,
+     "renk": "#f2c200"
     },
     {
-     "ad": "Ağız arka (stoper)",
-     "x": 9.5,
-     "y": 0,
-     "uzunluk": 1,
-     "genislik": 10.5,
+     "ad": "Sağ ön köşe kanadı",
+     "x": 10.7,
+     "y": -12.6,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "z0": 0.5,
+     "z1": 3.2,
+     "renk": "#f2c200"
+    },
+    {
+     "ad": "Sağ yan etek",
+     "x": -1.85,
+     "y": -10.65,
+     "uzunluk": 6.3,
+     "genislik": 0.5,
+     "z0": 0.5,
+     "z1": 2.6,
+     "renk": "#f2c200"
+    },
+    {
+     "ad": "Arka etek",
+     "x": -12.15,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 19.2,
+     "z0": 0.5,
+     "z1": 2.6,
+     "renk": "#f2c200"
+    },
+    {
+     "ad": "Ön travers",
+     "x": 12.05,
+     "y": 0.0,
+     "uzunluk": 0.7,
+     "genislik": 28.6,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200"
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": -12.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": -10.0,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": -7.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": -5.0,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": -2.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 2.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 5.0,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 7.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 10.0,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön diş",
+     "x": 12.65,
+     "y": 12.5,
+     "uzunluk": 0.5,
+     "genislik": 1.0,
+     "z0": 3.2,
+     "z1": 3.9,
+     "renk": "#f2c200",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": -10.35,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": -8.05,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": -5.75,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": -3.45,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": -1.15,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": 1.15,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": 3.45,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": 5.75,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": 8.05,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Tek yönlü kapakçık",
+     "x": 12.1,
+     "y": 10.35,
+     "uzunluk": 0.3,
+     "genislik": 1.0,
+     "z0": 0.35,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "kaucuk"
+    },
+    {
+     "ad": "Sol iç huni",
+     "x": 9.75,
+     "y": 7.45,
+     "uzunluk": 6.8,
+     "genislik": 0.4,
      "z0": 0.3,
-     "z1": 2.4,
-     "renk": "#1f2937"
+     "z1": 2.5,
+     "aci": 57.0,
+     "renk": "#2b2d31"
+    },
+    {
+     "ad": "Sol kanal duvarı",
+     "x": -0.75,
+     "y": 4.8,
+     "uzunluk": 5.3,
+     "genislik": 0.4,
+     "z0": 0.3,
+     "z1": 2.5,
+     "renk": "#2b2d31"
+    },
+    {
+     "ad": "Sağ iç huni",
+     "x": 9.75,
+     "y": -7.45,
+     "uzunluk": 6.8,
+     "genislik": 0.4,
+     "z0": 0.3,
+     "z1": 2.5,
+     "aci": -57.0,
+     "renk": "#2b2d31"
+    },
+    {
+     "ad": "Sağ kanal duvarı",
+     "x": -0.75,
+     "y": -4.8,
+     "uzunluk": 5.3,
+     "genislik": 0.4,
+     "z0": 0.3,
+     "z1": 2.5,
+     "renk": "#2b2d31"
+    },
+    {
+     "ad": "Ayıklayıcı stoperi",
+     "x": -3.6,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 10.0,
+     "z0": 0.3,
+     "z1": 2.5,
+     "renk": "#2b2d31"
+    },
+    {
+     "ad": "Sol ön motor kutusu (alt)",
+     "x": 4.85,
+     "y": 7.5,
+     "uzunluk": 5.9,
+     "genislik": 5.8,
+     "z0": 0.8,
+     "z1": 2.6,
+     "renk": "#2a2a2c"
+    },
+    {
+     "ad": "Sol ön motor kutusu",
+     "x": 4.85,
+     "y": 7.5,
+     "uzunluk": 5.9,
+     "genislik": 5.8,
+     "z0": 3.2,
+     "z1": 6.3,
+     "renk": "#2a2a2c"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 2.7,
+     "y": 5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 4.85,
+     "y": 5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 7.0,
+     "y": 5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Sağ ön motor kutusu (alt)",
+     "x": 4.85,
+     "y": -7.5,
+     "uzunluk": 5.9,
+     "genislik": 5.8,
+     "z0": 0.8,
+     "z1": 2.6,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Sağ ön motor kutusu",
+     "x": 4.85,
+     "y": -7.5,
+     "uzunluk": 5.9,
+     "genislik": 5.8,
+     "z0": 3.2,
+     "z1": 6.3,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 2.7,
+     "y": -5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 4.85,
+     "y": -5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 7.0,
+     "y": -5.3,
+     "z0": 6.3,
+     "z1": 6.42,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Sol arka motor kutusu (alt)",
+     "x": -9.9,
+     "y": 7.5,
+     "uzunluk": 3.0,
+     "genislik": 5.8,
+     "z0": 0.8,
+     "z1": 2.6,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Sol arka motor kutusu",
+     "x": -9.9,
+     "y": 7.5,
+     "uzunluk": 3.0,
+     "genislik": 5.8,
+     "z0": 3.2,
+     "z1": 5.9,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.6,
+     "y": 5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.9,
+     "y": 5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.2,
+     "y": 5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Sağ arka motor kutusu (alt)",
+     "x": -9.9,
+     "y": -7.5,
+     "uzunluk": 3.0,
+     "genislik": 5.8,
+     "z0": 0.8,
+     "z1": 2.6,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Sağ arka motor kutusu",
+     "x": -9.9,
+     "y": -7.5,
+     "uzunluk": 3.0,
+     "genislik": 5.8,
+     "z0": 3.2,
+     "z1": 5.9,
+     "renk": "#1b1c1f"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.6,
+     "y": -5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.9,
+     "y": -5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Vida",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.2,
+     "y": -5.3,
+     "z0": 5.9,
+     "z1": 6.02,
+     "uzunluk": 0.45,
+     "genislik": 0.45,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pirinç kaplin",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 5.1,
+     "y": 10.9,
+     "z0": 3.3,
+     "z1": 4.2,
+     "uzunluk": 0.9,
+     "genislik": 1.0,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pirinç kaplin",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 5.1,
+     "y": -10.9,
+     "z0": 3.3,
+     "z1": 4.2,
+     "uzunluk": 0.9,
+     "genislik": 1.0,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pirinç kaplin",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -8.8,
+     "y": 10.9,
+     "z0": 3.3,
+     "z1": 4.2,
+     "uzunluk": 0.9,
+     "genislik": 1.0,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pirinç kaplin",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -8.8,
+     "y": -10.9,
+     "z0": 3.3,
+     "z1": 4.2,
+     "uzunluk": 0.9,
+     "genislik": 1.0,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Karbon kapak",
+     "x": 4.85,
+     "y": 7.5,
+     "uzunluk": 5.3,
+     "genislik": 5.2,
+     "z0": 6.3,
+     "z1": 6.45,
+     "renk": "#3a3b3f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "QR etiket",
+     "x": 4.6,
+     "y": 7.5,
+     "uzunluk": 2.0,
+     "genislik": 2.2,
+     "z0": 6.45,
+     "z1": 6.5,
+     "renk": "#f5f5f5",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop gövdesi",
+     "x": 2.2,
+     "y": -9.0,
+     "uzunluk": 2.4,
+     "genislik": 2.6,
+     "z0": 6.3,
+     "z1": 12.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop kontak blokları",
+     "x": 2.2,
+     "y": -9.0,
+     "uzunluk": 2.0,
+     "genislik": 2.2,
+     "z0": 7.2,
+     "z1": 9.2,
+     "renk": "#26272b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop boğazı",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 2.2,
+     "y": -9.0,
+     "z0": 11.6,
+     "z1": 12.1,
+     "uzunluk": 2.8,
+     "genislik": 2.8,
+     "renk": "#3a3b3f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop mantarı",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 2.2,
+     "y": -9.0,
+     "z0": 12.1,
+     "z1": 13.8,
+     "uzunluk": 4.0,
+     "genislik": 4.0,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "DUR/STOP etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 2.2,
+     "y": -9.0,
+     "z0": 13.8,
+     "z1": 13.88,
+     "uzunluk": 2.6,
+     "genislik": 2.6,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil yuvası",
+     "x": 8.85,
+     "y": -3.5,
+     "uzunluk": 2.2,
+     "genislik": 7.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": -3.95,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": -0.9,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": -0.25,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pil yuvası",
+     "x": 8.85,
+     "y": 3.4,
+     "uzunluk": 2.2,
+     "genislik": 7.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": 2.95,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": 6.0,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": 8.85,
+     "y": 6.65,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pil yuvası",
+     "x": -1.55,
+     "y": -8.7,
+     "uzunluk": 4.1,
+     "genislik": 7.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -2.5,
+     "y": -9.15,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -2.5,
+     "y": -6.1,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -2.5,
+     "y": -5.45,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -0.6,
+     "y": -9.15,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -0.6,
+     "y": -6.1,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -0.6,
+     "y": -5.45,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pil yuvası",
+     "x": -6.05,
+     "y": -7.25,
+     "uzunluk": 3.9,
+     "genislik": 7.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -6.9,
+     "y": -7.7,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -6.9,
+     "y": -4.65,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -6.9,
+     "y": -4.0,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.2,
+     "y": -7.7,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.2,
+     "y": -4.65,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.2,
+     "y": -4.0,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pil yuvası",
+     "x": -6.35,
+     "y": 6.85,
+     "uzunluk": 3.7,
+     "genislik": 7.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -7.1,
+     "y": 6.4,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -7.1,
+     "y": 9.45,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -7.1,
+     "y": 10.1,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "18650 pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.6,
+     "y": 6.4,
+     "z0": 3.23,
+     "z1": 5.08,
+     "uzunluk": 1.85,
+     "genislik": 5.4,
+     "renk": "#f1f1ee",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil bandı",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.6,
+     "y": 9.45,
+     "z0": 3.22,
+     "z1": 5.09,
+     "uzunluk": 1.87,
+     "genislik": 1.2,
+     "renk": "#d72027",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil ucu",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -5.6,
+     "y": 10.1,
+     "z0": 3.6,
+     "z1": 4.7,
+     "uzunluk": 1.1,
+     "genislik": 0.15,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "BTS7960 soğutucu tabanı",
+     "x": -12.65,
+     "y": -6.55,
+     "uzunluk": 4.6,
+     "genislik": 4.6,
+     "z0": 6.0,
+     "z1": 6.3,
+     "renk": "#b8bcc4",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -14.75,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -13.9,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -13.05,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -12.2,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -11.35,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -10.5,
+     "y": -6.55,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "BTS7960 kartı",
+     "x": -12.65,
+     "y": -6.55,
+     "uzunluk": 5.0,
+     "genislik": 5.0,
+     "z0": 7.0,
+     "z1": 7.16,
+     "renk": "#1f5fbf",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Klemens",
+     "x": -11.05,
+     "y": -6.55,
+     "uzunluk": 1.2,
+     "genislik": 2.8,
+     "z0": 7.16,
+     "z1": 8.0,
+     "renk": "#22a84a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kontrol entegresi",
+     "x": -13.65,
+     "y": -6.75,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "z0": 7.16,
+     "z1": 7.4,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pin başlığı",
+     "x": -14.7,
+     "y": -6.55,
+     "uzunluk": 0.5,
+     "genislik": 3.6,
+     "z0": 7.16,
+     "z1": 8.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "BTS7960 soğutucu tabanı",
+     "x": -11.85,
+     "y": 6.3,
+     "uzunluk": 4.6,
+     "genislik": 4.6,
+     "z0": 6.0,
+     "z1": 6.3,
+     "renk": "#b8bcc4",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -13.95,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -13.1,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -12.25,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -11.4,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -10.55,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Soğutucu kanadı",
+     "x": -9.7,
+     "y": 6.3,
+     "uzunluk": 0.2,
+     "genislik": 4.6,
+     "z0": 5.9,
+     "z1": 7.0,
+     "renk": "#c3c7ce",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "BTS7960 kartı",
+     "x": -11.85,
+     "y": 6.3,
+     "uzunluk": 5.0,
+     "genislik": 5.0,
+     "z0": 7.0,
+     "z1": 7.16,
+     "renk": "#1f5fbf",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Klemens",
+     "x": -10.25,
+     "y": 6.3,
+     "uzunluk": 1.2,
+     "genislik": 2.8,
+     "z0": 7.16,
+     "z1": 8.0,
+     "renk": "#22a84a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kontrol entegresi",
+     "x": -12.85,
+     "y": 6.1,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "z0": 7.16,
+     "z1": 7.4,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pin başlığı",
+     "x": -13.9,
+     "y": 6.3,
+     "uzunluk": 0.5,
+     "genislik": 3.6,
+     "z0": 7.16,
+     "z1": 8.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Arduino Mega",
+     "x": -8.2,
+     "y": -0.5,
+     "uzunluk": 10.2,
+     "genislik": 5.3,
+     "z0": 5.6,
+     "z1": 5.75,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Mega USB-B",
+     "x": -13.15,
+     "y": -0.8,
+     "uzunluk": 1.5,
+     "genislik": 1.2,
+     "z0": 5.75,
+     "z1": 6.85,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Mega dişi başlıklar",
+     "x": -7.8,
+     "y": 1.8,
+     "uzunluk": 8.4,
+     "genislik": 0.4,
+     "z0": 5.75,
+     "z1": 6.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ara direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -12.2,
+     "y": -2.6,
+     "z0": 5.75,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#d4b24a",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ara direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -4.6,
+     "y": -2.6,
+     "z0": 5.75,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#d4b24a",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ara direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -12.2,
+     "y": 1.8,
+     "z0": 5.75,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#d4b24a",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ara direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -4.6,
+     "y": 1.8,
+     "z0": 5.75,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#d4b24a",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Delikli pertinaks",
+     "x": -8.4,
+     "y": -0.55,
+     "uzunluk": 8.0,
+     "genislik": 6.9,
+     "z0": 7.4,
+     "z1": 7.55,
+     "renk": "#9a6233",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Nano dişi başlık",
+     "x": -9.1,
+     "y": -1.1,
+     "uzunluk": 4.6,
+     "genislik": 0.3,
+     "z0": 7.55,
+     "z1": 7.95,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Nano dişi başlık",
+     "x": -9.1,
+     "y": 0.5,
+     "uzunluk": 4.6,
+     "genislik": 0.3,
+     "z0": 7.55,
+     "z1": 7.95,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Arduino Nano",
+     "x": -9.1,
+     "y": -0.3,
+     "uzunluk": 4.7,
+     "genislik": 1.8,
+     "z0": 7.95,
+     "z1": 8.05,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Nano USB",
+     "x": -11.5,
+     "y": -0.3,
+     "uzunluk": 0.8,
+     "genislik": 0.6,
+     "z0": 8.05,
+     "z1": 8.45,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Nano işlemcisi",
+     "x": -9.1,
+     "y": -0.3,
+     "uzunluk": 1.0,
+     "genislik": 1.0,
+     "z0": 8.05,
+     "z1": 8.2,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Anahtar",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -6.0,
+     "y": 1.9,
+     "z0": 7.55,
+     "z1": 8.65,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#b9bcc2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -10.35,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#e63946",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -9.65,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#f4a261",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -8.95,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#2a9d8f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -8.25,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#264653",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -7.55,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#e9c46a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pertinaks kablo",
+     "x": -6.85,
+     "y": -0.55,
+     "uzunluk": 0.3,
+     "genislik": 6.5,
+     "z0": 7.55,
+     "z1": 7.7,
+     "renk": "#8338ec",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ayıklayıcı penceresi",
+     "x": 0.1,
+     "y": -0.1,
+     "uzunluk": 6.4,
+     "genislik": 9.0,
+     "z0": 3.2,
+     "z1": 3.22,
+     "renk": "#0b0b0c",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ayıklayıcı motoru",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 4.6,
+     "y": -0.4,
+     "z0": 3.3,
+     "z1": 5.9,
+     "uzunluk": 3.6,
+     "genislik": 2.6,
+     "renk": "#a7abb2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ayıklayıcı redüktörü",
+     "x": 2.0,
+     "y": -0.4,
+     "uzunluk": 1.6,
+     "genislik": 2.6,
+     "z0": 3.3,
+     "z1": 5.9,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tokat göbeği",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 0.3,
+     "y": -0.4,
+     "z0": 3.22,
+     "z1": 3.82,
+     "uzunluk": 1.4,
+     "genislik": 1.4,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tokat kanadı",
+     "x": 1.5,
+     "y": -0.4,
+     "uzunluk": 2.4,
+     "genislik": 0.9,
+     "z0": 3.25,
+     "z1": 3.7,
+     "aci": 0.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tokat kanadı",
+     "x": -0.3,
+     "y": 0.64,
+     "uzunluk": 2.4,
+     "genislik": 0.9,
+     "z0": 3.25,
+     "z1": 3.7,
+     "aci": 120.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tokat kanadı",
+     "x": -0.3,
+     "y": -1.44,
+     "uzunluk": 2.4,
+     "genislik": 0.9,
+     "z0": 3.25,
+     "z1": 3.7,
+     "aci": -120.0,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Yan kapı servosu",
+     "x": -2.05,
+     "y": 11.6,
+     "uzunluk": 2.3,
+     "genislik": 1.2,
+     "z0": 3.2,
+     "z1": 6.0,
+     "renk": "#1f3b8f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Yan çıkış kapağı",
+     "x": -2.05,
+     "y": 12.35,
+     "uzunluk": 5.5,
+     "genislik": 0.3,
+     "z0": 0.4,
+     "z1": 3.2,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Arka bölme kapağı",
+     "x": -12.65,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 7.2,
+     "z0": 0.4,
+     "z1": 2.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapak servosu",
+     "x": -11.1,
+     "y": -1.8,
+     "uzunluk": 2.2,
+     "genislik": 1.2,
+     "z0": 3.2,
+     "z1": 5.9,
+     "renk": "#1f3b8f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapak servosu",
+     "x": -11.1,
+     "y": 1.8,
+     "uzunluk": 2.2,
+     "genislik": 1.2,
+     "z0": 3.2,
+     "z1": 5.9,
+     "renk": "#1f3b8f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Küçük sürücü kartı",
+     "x": -1.2,
+     "y": 7.6,
+     "uzunluk": 3.2,
+     "genislik": 4.2,
+     "z0": 3.6,
+     "z1": 3.75,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Küçük sürücü soğutucusu",
+     "x": -1.2,
+     "y": 7.6,
+     "uzunluk": 1.4,
+     "genislik": 2.0,
+     "z0": 3.75,
+     "z1": 4.6,
+     "renk": "#1b1c1f",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Mavi klemens",
+     "x": 0.2,
+     "y": 6.0,
+     "uzunluk": 0.4,
+     "genislik": 1.0,
+     "z0": 3.75,
+     "z1": 4.5,
+     "renk": "#1d6fd8",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Mavi klemens",
+     "x": 0.2,
+     "y": 9.2,
+     "uzunluk": 0.4,
+     "genislik": 1.0,
+     "z0": 3.75,
+     "z1": 4.5,
+     "renk": "#1d6fd8",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "MZ80 (üst, bağlı, çapraz)",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.75,
+     "y": 10.1,
+     "z0": 2.7,
+     "z1": 4.5,
+     "uzunluk": 4.5,
+     "genislik": 1.8,
+     "renk": "#e0a21b",
+     "kati": false,
+     "gorsel": true,
+     "aci": 25
+    },
+    {
+     "ad": "MZ80 (alt)",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.75,
+     "y": 12.5,
+     "z0": 0.7,
+     "z1": 2.5,
+     "uzunluk": 4.5,
+     "genislik": 1.8,
+     "renk": "#e0a21b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "MZ80 merceği",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.8,
+     "y": 11.05,
+     "z0": 3.0,
+     "z1": 4.2,
+     "uzunluk": 0.25,
+     "genislik": 1.2,
+     "renk": "#3a0d3f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak",
+     "aci": 25
+    },
+    {
+     "ad": "MZ80 somunu",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.55,
+     "y": 10.5,
+     "z0": 2.5,
+     "z1": 4.7,
+     "uzunluk": 0.35,
+     "genislik": 2.2,
+     "renk": "#c8901a",
+     "kati": false,
+     "gorsel": true,
+     "aci": 25
+    },
+    {
+     "ad": "MZ80 merceği",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.9,
+     "y": 12.5,
+     "z0": 1.0,
+     "z1": 2.2,
+     "uzunluk": 0.25,
+     "genislik": 1.2,
+     "renk": "#3a0d3f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak",
+     "aci": 0
+    },
+    {
+     "ad": "MZ80 somunu",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.65,
+     "y": 12.5,
+     "z0": 0.5,
+     "z1": 2.7,
+     "uzunluk": 0.35,
+     "genislik": 2.2,
+     "renk": "#c8901a",
+     "kati": false,
+     "gorsel": true,
+     "aci": 0
+    },
+    {
+     "ad": "Kablo bağı",
+     "x": 9.2,
+     "y": 11.8,
+     "uzunluk": 0.4,
+     "genislik": 3.2,
+     "z0": 0.6,
+     "z1": 4.6,
+     "renk": "#22c55e",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "MZ80 (üst, bağlı, çapraz)",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.75,
+     "y": -10.1,
+     "z0": 2.7,
+     "z1": 4.5,
+     "uzunluk": 4.5,
+     "genislik": 1.8,
+     "renk": "#e0a21b",
+     "kati": false,
+     "gorsel": true,
+     "aci": -25
+    },
+    {
+     "ad": "MZ80 (alt)",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.75,
+     "y": -12.5,
+     "z0": 0.7,
+     "z1": 2.5,
+     "uzunluk": 4.5,
+     "genislik": 1.8,
+     "renk": "#e0a21b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "MZ80 merceği",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.8,
+     "y": -11.05,
+     "z0": 3.0,
+     "z1": 4.2,
+     "uzunluk": 0.25,
+     "genislik": 1.2,
+     "renk": "#3a0d3f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak",
+     "aci": -25
+    },
+    {
+     "ad": "MZ80 somunu",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.55,
+     "y": -10.5,
+     "z0": 2.5,
+     "z1": 4.7,
+     "uzunluk": 0.35,
+     "genislik": 2.2,
+     "renk": "#c8901a",
+     "kati": false,
+     "gorsel": true,
+     "aci": -25
+    },
+    {
+     "ad": "MZ80 merceği",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.9,
+     "y": -12.5,
+     "z0": 1.0,
+     "z1": 2.2,
+     "uzunluk": 0.25,
+     "genislik": 1.2,
+     "renk": "#3a0d3f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak",
+     "aci": 0
+    },
+    {
+     "ad": "MZ80 somunu",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.65,
+     "y": -12.5,
+     "z0": 0.5,
+     "z1": 2.7,
+     "uzunluk": 0.35,
+     "genislik": 2.2,
+     "renk": "#c8901a",
+     "kati": false,
+     "gorsel": true,
+     "aci": 0
+    },
+    {
+     "ad": "Kablo bağı",
+     "x": 9.2,
+     "y": -11.8,
+     "uzunluk": 0.4,
+     "genislik": 3.2,
+     "z0": 0.6,
+     "z1": 4.6,
+     "renk": "#22c55e",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kablo bağı",
+     "x": -6.5,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 2.4,
+     "z0": 9.6,
+     "z1": 10.4,
+     "renk": "#f8fafc",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kablo bağı",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 2.4,
+     "z0": 9.6,
+     "z1": 10.4,
+     "renk": "#f8fafc",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "kablolar": [
+    {
+     "renk": "#06b6d4",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.31,
+       -0.48,
+       7.7
+      ],
+      [
+       -10.31,
+       -0.48,
+       8.6
+      ],
+      [
+       -11.4,
+       -1.85,
+       9.45
+      ],
+      [
+       -11.44,
+       -3.58,
+       8.79
+      ],
+      [
+       -12.09,
+       -5.71,
+       8.9
+      ],
+      [
+       -12.09,
+       -5.71,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.5,
+       -0.55,
+       7.7
+      ],
+      [
+       -6.5,
+       -0.55,
+       8.6
+      ],
+      [
+       -8.95,
+       -2.63,
+       9.21
+      ],
+      [
+       -11.07,
+       -5.38,
+       8.14
+      ],
+      [
+       -11.88,
+       -6.05,
+       8.9
+      ],
+      [
+       -11.88,
+       -6.05,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.06,
+       -2.24,
+       7.7
+      ],
+      [
+       -7.06,
+       -2.24,
+       8.6
+      ],
+      [
+       -8.02,
+       -2.25,
+       11.43
+      ],
+      [
+       -10.7,
+       -5.45,
+       11.02
+      ],
+      [
+       -12.3,
+       -5.62,
+       8.9
+      ],
+      [
+       -12.3,
+       -5.62,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.88,
+       -1.77,
+       7.7
+      ],
+      [
+       -7.88,
+       -1.77,
+       8.6
+      ],
+      [
+       -9.61,
+       -2.31,
+       10.92
+      ],
+      [
+       -11.3,
+       -4.73,
+       10.81
+      ],
+      [
+       -12.39,
+       -5.88,
+       8.9
+      ],
+      [
+       -12.39,
+       -5.88,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.78,
+       1.7,
+       7.7
+      ],
+      [
+       -7.78,
+       1.7,
+       8.6
+      ],
+      [
+       -8.11,
+       3.1,
+       11.28
+      ],
+      [
+       -10.24,
+       6.13,
+       10.6
+      ],
+      [
+       -11.36,
+       7.04,
+       8.9
+      ],
+      [
+       -11.36,
+       7.04,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.02,
+       1.33,
+       7.7
+      ],
+      [
+       -8.02,
+       1.33,
+       8.6
+      ],
+      [
+       -8.06,
+       3.08,
+       11.16
+      ],
+      [
+       -9.93,
+       5.74,
+       10.65
+      ],
+      [
+       -11.24,
+       7.01,
+       8.9
+      ],
+      [
+       -11.24,
+       7.01,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.2,
+       -2.13,
+       7.7
+      ],
+      [
+       -8.2,
+       -2.13,
+       8.6
+      ],
+      [
+       -9.1,
+       1.44,
+       10.3
+      ],
+      [
+       -9.18,
+       4.28,
+       9.62
+      ],
+      [
+       -10.99,
+       6.9,
+       8.9
+      ],
+      [
+       -10.99,
+       6.9,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.21,
+       -0.21,
+       7.7
+      ],
+      [
+       -5.21,
+       -0.21,
+       8.6
+      ],
+      [
+       -7.2,
+       1.34,
+       11.13
+      ],
+      [
+       -8.73,
+       3.83,
+       10.95
+      ],
+      [
+       -11.18,
+       6.96,
+       8.9
+      ],
+      [
+       -11.18,
+       6.96,
+       8.0
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.43,
+       1.32,
+       7.7
+      ],
+      [
+       -5.43,
+       1.32,
+       8.6
+      ],
+      [
+       -2.65,
+       -1.7,
+       10.68
+      ],
+      [
+       0.68,
+       -5.57,
+       10.16
+      ],
+      [
+       2.54,
+       -8.51,
+       9.9
+      ],
+      [
+       2.54,
+       -8.51,
+       9.0
+      ]
+     ]
+    },
+    {
+     "renk": "#92400e",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.74,
+       1.49,
+       7.7
+      ],
+      [
+       -5.74,
+       1.49,
+       8.6
+      ],
+      [
+       -3.02,
+       -0.81,
+       10.44
+      ],
+      [
+       -0.25,
+       -5.29,
+       9.28
+      ],
+      [
+       2.05,
+       -8.07,
+       9.9
+      ],
+      [
+       2.05,
+       -8.07,
+       9.0
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.11,
+       -0.63,
+       7.7
+      ],
+      [
+       -6.11,
+       -0.63,
+       8.6
+      ],
+      [
+       -4.53,
+       -2.52,
+       11.4
+      ],
+      [
+       -0.72,
+       -6.3,
+       11.38
+      ],
+      [
+       1.85,
+       -8.59,
+       9.9
+      ],
+      [
+       1.85,
+       -8.59,
+       9.0
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.38,
+       -0.22,
+       7.7
+      ],
+      [
+       -8.38,
+       -0.22,
+       8.6
+      ],
+      [
+       -4.36,
+       2.26,
+       9.38
+      ],
+      [
+       2.88,
+       7.23,
+       8.47
+      ],
+      [
+       7.57,
+       11.09,
+       4.7
+      ],
+      [
+       7.57,
+       11.09,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.1,
+       -1.62,
+       7.7
+      ],
+      [
+       -10.1,
+       -1.62,
+       8.6
+      ],
+      [
+       -4.88,
+       2.67,
+       11.18
+      ],
+      [
+       1.4,
+       6.81,
+       10.47
+      ],
+      [
+       7.37,
+       11.22,
+       4.7
+      ],
+      [
+       7.37,
+       11.22,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.92,
+       -0.47,
+       7.7
+      ],
+      [
+       -5.92,
+       -0.47,
+       8.6
+      ],
+      [
+       -1.49,
+       3.84,
+       11.14
+      ],
+      [
+       2.71,
+       7.48,
+       10.17
+      ],
+      [
+       6.97,
+       11.13,
+       4.7
+      ],
+      [
+       6.97,
+       11.13,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.32,
+       -1.24,
+       7.7
+      ],
+      [
+       -6.32,
+       -1.24,
+       8.6
+      ],
+      [
+       -1.46,
+       -3.9,
+       9.08
+      ],
+      [
+       4.34,
+       -7.25,
+       9.05
+      ],
+      [
+       7.67,
+       -11.09,
+       4.7
+      ],
+      [
+       7.67,
+       -11.09,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.1,
+       -1.68,
+       7.7
+      ],
+      [
+       -9.1,
+       -1.68,
+       8.6
+      ],
+      [
+       -4.08,
+       -3.96,
+       11.18
+      ],
+      [
+       1.59,
+       -8.38,
+       10.66
+      ],
+      [
+       7.16,
+       -11.3,
+       4.7
+      ],
+      [
+       7.16,
+       -11.3,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.34,
+       -2.1,
+       7.7
+      ],
+      [
+       -8.34,
+       -2.1,
+       8.6
+      ],
+      [
+       -3.3,
+       -5.41,
+       8.98
+      ],
+      [
+       3.02,
+       -7.44,
+       8.92
+      ],
+      [
+       7.47,
+       -10.96,
+       4.7
+      ],
+      [
+       7.47,
+       -10.96,
+       3.8
+      ]
+     ]
+    },
+    {
+     "renk": "#92400e",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.91,
+       0.77,
+       7.7
+      ],
+      [
+       -9.91,
+       0.77,
+       8.6
+      ],
+      [
+       -4.02,
+       4.23,
+       10.17
+      ],
+      [
+       3.4,
+       8.09,
+       9.16
+      ],
+      [
+       7.8,
+       12.2,
+       2.8
+      ],
+      [
+       7.8,
+       12.2,
+       1.9
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.42,
+       -0.3,
+       7.7
+      ],
+      [
+       -9.42,
+       -0.3,
+       8.6
+      ],
+      [
+       -4.9,
+       3.44,
+       9.35
+      ],
+      [
+       3.63,
+       9.22,
+       9.0
+      ],
+      [
+       7.79,
+       12.41,
+       2.8
+      ],
+      [
+       7.79,
+       12.41,
+       1.9
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.11,
+       -0.61,
+       7.7
+      ],
+      [
+       -9.11,
+       -0.61,
+       8.6
+      ],
+      [
+       -3.59,
+       -3.41,
+       10.81
+      ],
+      [
+       1.77,
+       -7.86,
+       9.76
+      ],
+      [
+       7.2,
+       -12.26,
+       2.8
+      ],
+      [
+       7.2,
+       -12.26,
+       1.9
+      ]
+     ]
+    },
+    {
+     "renk": "#16a34a",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.08,
+       -0.23,
+       7.7
+      ],
+      [
+       -9.08,
+       -0.23,
+       8.6
+      ],
+      [
+       -4.97,
+       -3.13,
+       9.34
+      ],
+      [
+       2.42,
+       -8.25,
+       8.39
+      ],
+      [
+       7.77,
+       -12.22,
+       2.8
+      ],
+      [
+       7.77,
+       -12.22,
+       1.9
+      ]
+     ]
+    },
+    {
+     "renk": "#92400e",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.36,
+       0.8,
+       7.7
+      ],
+      [
+       -10.36,
+       0.8,
+       8.6
+      ],
+      [
+       -4.47,
+       2.06,
+       9.41
+      ],
+      [
+       4.45,
+       4.03,
+       9.1
+      ],
+      [
+       10.64,
+       6.55,
+       4.3
+      ],
+      [
+       10.64,
+       6.55,
+       3.4
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.01,
+       0.61,
+       7.7
+      ],
+      [
+       -10.01,
+       0.61,
+       8.6
+      ],
+      [
+       -3.5,
+       2.44,
+       9.35
+      ],
+      [
+       4.12,
+       5.53,
+       9.0
+      ],
+      [
+       10.81,
+       6.68,
+       4.3
+      ],
+      [
+       10.81,
+       6.68,
+       3.4
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.06,
+       -1.96,
+       7.7
+      ],
+      [
+       -10.06,
+       -1.96,
+       8.6
+      ],
+      [
+       -4.47,
+       1.59,
+       11.07
+      ],
+      [
+       3.24,
+       3.64,
+       10.7
+      ],
+      [
+       10.21,
+       6.79,
+       4.3
+      ],
+      [
+       10.21,
+       6.79,
+       3.4
+      ]
+     ]
+    },
+    {
+     "renk": "#16a34a",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.02,
+       -0.04,
+       7.7
+      ],
+      [
+       -7.02,
+       -0.04,
+       8.6
+      ],
+      [
+       -3.22,
+       0.12,
+       10.77
+      ],
+      [
+       1.59,
+       0.47,
+       10.39
+      ],
+      [
+       4.95,
+       -0.52,
+       6.9
+      ],
+      [
+       4.95,
+       -0.52,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.55,
+       -0.94,
+       7.7
+      ],
+      [
+       -7.55,
+       -0.94,
+       8.6
+      ],
+      [
+       -3.86,
+       0.08,
+       9.8
+      ],
+      [
+       0.56,
+       -1.19,
+       8.82
+      ],
+      [
+       4.74,
+       -0.7,
+       6.9
+      ],
+      [
+       4.74,
+       -0.7,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.73,
+       -0.88,
+       7.7
+      ],
+      [
+       -6.73,
+       -0.88,
+       8.6
+      ],
+      [
+       -4.27,
+       2.31,
+       9.59
+      ],
+      [
+       -3.88,
+       5.7,
+       9.21
+      ],
+      [
+       -1.58,
+       7.76,
+       5.5
+      ],
+      [
+       -1.58,
+       7.76,
+       4.6
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.86,
+       -1.45,
+       7.7
+      ],
+      [
+       -7.86,
+       -1.45,
+       8.6
+      ],
+      [
+       -5.61,
+       0.56,
+       9.17
+      ],
+      [
+       -3.91,
+       4.72,
+       8.39
+      ],
+      [
+       -1.15,
+       7.78,
+       5.5
+      ],
+      [
+       -1.15,
+       7.78,
+       4.6
+      ]
+     ]
+    },
+    {
+     "renk": "#06b6d4",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.25,
+       -0.95,
+       7.7
+      ],
+      [
+       -9.25,
+       -0.95,
+       8.6
+      ],
+      [
+       -6.37,
+       1.92,
+       9.81
+      ],
+      [
+       -3.27,
+       4.35,
+       9.77
+      ],
+      [
+       -1.5,
+       7.53,
+       5.5
+      ],
+      [
+       -1.5,
+       7.53,
+       4.6
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.58,
+       0.6,
+       7.7
+      ],
+      [
+       -5.58,
+       0.6,
+       8.6
+      ],
+      [
+       -5.24,
+       2.2,
+       9.25
+      ],
+      [
+       -2.61,
+       4.89,
+       8.88
+      ],
+      [
+       -1.28,
+       7.4,
+       5.5
+      ],
+      [
+       -1.28,
+       7.4,
+       4.6
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.56,
+       1.54,
+       7.7
+      ],
+      [
+       -7.56,
+       1.54,
+       8.6
+      ],
+      [
+       -5.85,
+       4.12,
+       11.21
+      ],
+      [
+       -3.37,
+       9.17,
+       10.83
+      ],
+      [
+       -1.96,
+       11.72,
+       6.9
+      ],
+      [
+       -1.96,
+       11.72,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.12,
+       0.27,
+       7.7
+      ],
+      [
+       -6.12,
+       0.27,
+       8.6
+      ],
+      [
+       -4.93,
+       2.86,
+       9.43
+      ],
+      [
+       -2.89,
+       8.7,
+       8.58
+      ],
+      [
+       -2.21,
+       11.25,
+       6.9
+      ],
+      [
+       -2.21,
+       11.25,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.48,
+       -2.1,
+       7.7
+      ],
+      [
+       -5.48,
+       -2.1,
+       8.6
+      ],
+      [
+       -4.64,
+       2.24,
+       9.38
+      ],
+      [
+       -2.76,
+       7.35,
+       8.44
+      ],
+      [
+       -1.74,
+       11.47,
+       6.9
+      ],
+      [
+       -1.74,
+       11.47,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.19,
+       -2.55,
+       7.7
+      ],
+      [
+       -9.19,
+       -2.55,
+       8.6
+      ],
+      [
+       -10.08,
+       -0.34,
+       8.91
+      ],
+      [
+       -10.53,
+       0.3,
+       8.87
+      ],
+      [
+       -11.17,
+       1.79,
+       6.9
+      ],
+      [
+       -11.17,
+       1.79,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.51,
+       -1.26,
+       7.7
+      ],
+      [
+       -10.51,
+       -1.26,
+       8.6
+      ],
+      [
+       -9.64,
+       -1.39,
+       10.67
+      ],
+      [
+       -11.36,
+       1.38,
+       9.98
+      ],
+      [
+       -10.92,
+       1.51,
+       6.9
+      ],
+      [
+       -10.92,
+       1.51,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.74,
+       -1.14,
+       7.7
+      ],
+      [
+       -10.74,
+       -1.14,
+       8.6
+      ],
+      [
+       -10.52,
+       0.79,
+       10.85
+      ],
+      [
+       -11.76,
+       0.47,
+       10.38
+      ],
+      [
+       -11.07,
+       2.18,
+       6.9
+      ],
+      [
+       -11.07,
+       2.18,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#06b6d4",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.48,
+       -3.25,
+       7.7
+      ],
+      [
+       -9.48,
+       -3.25,
+       8.6
+      ],
+      [
+       -10.36,
+       -2.66,
+       9.29
+      ],
+      [
+       -10.85,
+       -1.13,
+       9.06
+      ],
+      [
+       -11.03,
+       -1.57,
+       6.9
+      ],
+      [
+       -11.03,
+       -1.57,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.35,
+       1.58,
+       7.7
+      ],
+      [
+       -7.35,
+       1.58,
+       8.6
+      ],
+      [
+       -7.89,
+       1.23,
+       9.75
+      ],
+      [
+       -9.14,
+       -0.46,
+       8.89
+      ],
+      [
+       -10.98,
+       -1.45,
+       6.9
+      ],
+      [
+       -10.98,
+       -1.45,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#16a34a",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.96,
+       -0.27,
+       7.7
+      ],
+      [
+       -9.96,
+       -0.27,
+       8.6
+      ],
+      [
+       -9.62,
+       -0.35,
+       10.14
+      ],
+      [
+       -11.94,
+       -1.37,
+       9.69
+      ],
+      [
+       -11.37,
+       -1.49,
+       6.9
+      ],
+      [
+       -11.37,
+       -1.49,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.91,
+       0.1,
+       7.7
+      ],
+      [
+       -7.91,
+       0.1,
+       8.6
+      ],
+      [
+       -7.17,
+       1.25,
+       9.68
+      ],
+      [
+       -5.19,
+       0.73,
+       9.32
+      ],
+      [
+       -2.8,
+       1.69,
+       4.1
+      ],
+      [
+       -2.8,
+       1.69,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.98,
+       1.96,
+       7.7
+      ],
+      [
+       -8.98,
+       1.96,
+       8.6
+      ],
+      [
+       -6.79,
+       1.89,
+       10.89
+      ],
+      [
+       -4.56,
+       1.16,
+       9.95
+      ],
+      [
+       -2.9,
+       2.02,
+       4.1
+      ],
+      [
+       -2.9,
+       2.02,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.31,
+       1.17,
+       7.7
+      ],
+      [
+       -6.31,
+       1.17,
+       8.6
+      ],
+      [
+       -5.39,
+       1.58,
+       9.3
+      ],
+      [
+       -4.2,
+       2.64,
+       8.52
+      ],
+      [
+       -2.79,
+       2.13,
+       4.1
+      ],
+      [
+       -2.79,
+       2.13,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.66,
+       -2.44,
+       7.7
+      ],
+      [
+       -8.66,
+       -2.44,
+       8.6
+      ],
+      [
+       -7.07,
+       -0.6,
+       10.55
+      ],
+      [
+       -4.43,
+       1.12,
+       10.1
+      ],
+      [
+       -2.35,
+       1.78,
+       4.1
+      ],
+      [
+       -2.35,
+       1.78,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.44,
+       -0.1,
+       7.7
+      ],
+      [
+       -8.44,
+       -0.1,
+       8.6
+      ],
+      [
+       -3.91,
+       -0.4,
+       9.69
+      ],
+      [
+       4.63,
+       -0.19,
+       9.04
+      ],
+      [
+       9.19,
+       0.45,
+       4.1
+      ],
+      [
+       9.19,
+       0.45,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.64,
+       2.33,
+       7.7
+      ],
+      [
+       -9.64,
+       2.33,
+       8.6
+      ],
+      [
+       -4.12,
+       1.5,
+       9.6
+      ],
+      [
+       2.49,
+       1.27,
+       8.8
+      ],
+      [
+       9.05,
+       0.2,
+       4.1
+      ],
+      [
+       9.05,
+       0.2,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.45,
+       1.1,
+       7.7
+      ],
+      [
+       -10.45,
+       1.1,
+       8.6
+      ],
+      [
+       -3.93,
+       1.49,
+       10.42
+      ],
+      [
+       3.2,
+       0.63,
+       9.64
+      ],
+      [
+       9.0,
+       0.64,
+       4.1
+      ],
+      [
+       9.0,
+       0.64,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.65,
+       0.85,
+       7.7
+      ],
+      [
+       -5.65,
+       0.85,
+       8.6
+      ],
+      [
+       -1.7,
+       1.05,
+       9.51
+      ],
+      [
+       4.16,
+       1.19,
+       8.93
+      ],
+      [
+       8.61,
+       0.55,
+       4.1
+      ],
+      [
+       8.61,
+       0.55,
+       3.2
+      ]
+     ]
+    },
+    {
+     "renk": "#ec4899",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.04,
+       -3.28,
+       7.7
+      ],
+      [
+       -9.04,
+       -3.28,
+       8.6
+      ],
+      [
+       -5.41,
+       -1.1,
+       10.94
+      ],
+      [
+       -0.09,
+       3.97,
+       10.61
+      ],
+      [
+       4.58,
+       7.2,
+       7.3
+      ],
+      [
+       4.58,
+       7.2,
+       6.4
+      ]
+     ]
+    },
+    {
+     "renk": "#06b6d4",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -8.86,
+       -0.17,
+       7.7
+      ],
+      [
+       -8.86,
+       -0.17,
+       8.6
+      ],
+      [
+       -5.52,
+       3.14,
+       11.26
+      ],
+      [
+       1.41,
+       4.76,
+       10.45
+      ],
+      [
+       4.55,
+       7.72,
+       7.3
+      ],
+      [
+       4.55,
+       7.72,
+       6.4
+      ]
+     ]
+    },
+    {
+     "renk": "#16a34a",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.21,
+       -0.09,
+       7.7
+      ],
+      [
+       -9.21,
+       -0.09,
+       8.6
+      ],
+      [
+       -5.74,
+       -2.16,
+       10.24
+      ],
+      [
+       0.56,
+       -4.48,
+       9.36
+      ],
+      [
+       4.97,
+       -5.46,
+       7.3
+      ],
+      [
+       4.97,
+       -5.46,
+       6.4
+      ]
+     ]
+    },
+    {
+     "renk": "#9ca3af",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.27,
+       1.96,
+       7.7
+      ],
+      [
+       -5.27,
+       1.96,
+       8.6
+      ],
+      [
+       -2.0,
+       -0.83,
+       9.73
+      ],
+      [
+       2.63,
+       -2.74,
+       9.69
+      ],
+      [
+       4.93,
+       -5.73,
+       7.3
+      ],
+      [
+       4.93,
+       -5.73,
+       6.4
+      ]
+     ]
+    },
+    {
+     "renk": "#92400e",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.23,
+       -0.62,
+       7.7
+      ],
+      [
+       -10.23,
+       -0.62,
+       8.6
+      ],
+      [
+       -10.43,
+       1.92,
+       10.02
+      ],
+      [
+       -9.61,
+       4.86,
+       9.32
+      ],
+      [
+       -10.01,
+       7.77,
+       6.9
+      ],
+      [
+       -10.01,
+       7.77,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.99,
+       0.86,
+       7.7
+      ],
+      [
+       -5.99,
+       0.86,
+       8.6
+      ],
+      [
+       -6.42,
+       3.81,
+       10.18
+      ],
+      [
+       -8.41,
+       6.22,
+       9.01
+      ],
+      [
+       -9.78,
+       7.51,
+       6.9
+      ],
+      [
+       -9.78,
+       7.51,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -9.11,
+       -1.59,
+       7.7
+      ],
+      [
+       -9.11,
+       -1.59,
+       8.6
+      ],
+      [
+       -8.66,
+       -4.09,
+       11.27
+      ],
+      [
+       -10.24,
+       -5.01,
+       10.23
+      ],
+      [
+       -10.03,
+       -7.76,
+       6.9
+      ],
+      [
+       -10.03,
+       -7.76,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -5.96,
+       0.28,
+       7.7
+      ],
+      [
+       -5.96,
+       0.28,
+       8.6
+      ],
+      [
+       -7.56,
+       -2.08,
+       8.97
+      ],
+      [
+       -7.77,
+       -5.64,
+       8.72
+      ],
+      [
+       -9.56,
+       -7.12,
+       6.9
+      ],
+      [
+       -9.56,
+       -7.12,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -6.5,
+       0.8,
+       7.7
+      ],
+      [
+       -6.5,
+       0.8,
+       8.6
+      ],
+      [
+       -6.71,
+       1.47,
+       10.96
+      ],
+      [
+       -6.29,
+       2.12,
+       10.73
+      ],
+      [
+       -6.29,
+       2.04,
+       7.5
+      ],
+      [
+       -6.29,
+       2.04,
+       6.6
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -7.8,
+       2.38,
+       7.7
+      ],
+      [
+       -7.8,
+       2.38,
+       8.6
+      ],
+      [
+       -6.89,
+       1.27,
+       10.86
+      ],
+      [
+       -6.08,
+       0.91,
+       9.91
+      ],
+      [
+       -5.82,
+       1.61,
+       7.5
+      ],
+      [
+       -5.82,
+       1.61,
+       6.6
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.17,
+     "noktalar": [
+      [
+       -10.19,
+       2.28,
+       7.7
+      ],
+      [
+       -10.19,
+       2.28,
+       8.6
+      ],
+      [
+       -8.5,
+       2.58,
+       9.3
+      ],
+      [
+       -6.79,
+       1.63,
+       8.56
+      ],
+      [
+       -5.85,
+       1.6,
+       7.5
+      ],
+      [
+       -5.85,
+       1.6,
+       6.6
+      ]
+     ]
     }
    ],
    "model3d": null,
    "hazne": {
     "var": true,
     "agiz": {
-     "x0": 9,
-     "x1": 16,
-     "y0": -4.5,
-     "y1": 4.5
+     "x0": -3.2,
+     "x1": 1.6,
+     "y0": -4.2,
+     "y1": 4.2
     },
     "kurallar": [
      {
@@ -472,8 +4652,8 @@ const DEFAULT_PROFILES = [
       "acik_min": 60,
       "acik_max": 180,
       "cikis": {
-       "x": -15,
-       "y": 3
+       "x": -14.5,
+       "y": 1.8
       }
      },
      {
@@ -483,14 +4663,14 @@ const DEFAULT_PROFILES = [
       "acik_min": 80,
       "acik_max": 180,
       "cikis": {
-       "x": -15,
-       "y": -4
+       "x": -14.5,
+       "y": -1.8
       }
      }
     ],
     "disari": {
-     "x": 4,
-     "y": -14,
+     "x": -2.0,
+     "y": 14.5,
      "hiz_cms": 40
     }
    }
@@ -514,22 +4694,22 @@ const DEFAULT_PROFILES = [
    "sensorler": [
     {
      "tip": "IR_ENGEL",
-     "ad": "Sol göz (MZ80)",
+     "ad": "Sol göz (MZ80, üst, çapraz)",
      "pin": "mega:22",
-     "x": 12,
-     "y": 8,
-     "z": 4,
-     "aci": 10,
+     "x": 11.9,
+     "y": 11.0,
+     "z": 3.6,
+     "aci": 25,
      "menzil_cm": 20
     },
     {
      "tip": "IR_ENGEL",
-     "ad": "Sağ göz (MZ80)",
+     "ad": "Sağ göz (MZ80, üst, çapraz)",
      "pin": "mega:24",
-     "x": 12,
-     "y": -8,
-     "z": 4,
-     "aci": -10,
+     "x": 11.9,
+     "y": -11.0,
+     "z": 3.6,
+     "aci": -25,
      "menzil_cm": 20
     },
     {
@@ -540,9 +4720,9 @@ const DEFAULT_PROFILES = [
      "s2": "mega:46",
      "s3": "mega:48",
      "out": "mega:44",
-     "x": 10,
+     "x": 10.6,
      "y": 0,
-     "z": 1,
+     "z": 1.2,
      "bakis": "asagi"
     },
     {
@@ -553,7 +4733,7 @@ const DEFAULT_PROFILES = [
      "s2": "nano:5",
      "s3": "nano:6",
      "out": "nano:2",
-     "x": 11.5,
+     "x": -3.3,
      "y": 0,
      "z": 1,
      "bakis": "ileri",
@@ -564,11 +4744,11 @@ const DEFAULT_PROFILES = [
      "ad": "Ağız sensörü",
      "pin": "nano:12",
      "ters": true,
-     "x": 11.5,
-     "y": -4,
+     "x": -1.2,
+     "y": -4.5,
      "z": 1,
      "aci": 90,
-     "menzil_cm": 8
+     "menzil_cm": 6
     },
     {
      "tip": "BUTON",
@@ -585,7 +4765,7 @@ const DEFAULT_PROFILES = [
    ],
    "servolar": [
     {
-     "ad": "Rakip kapağı",
+     "ad": "Rakip kapağı (yan çıkış)",
      "pin": "mega:A7",
      "baslangic_aci": 180
     },
@@ -613,49 +4793,52 @@ const DEFAULT_PROFILES = [
    "led": {
     "tip": "NeoPixel",
     "pin": "mega:42",
-    "x": -6,
+    "x": 10.6,
     "y": 0,
-    "z": 12
+    "z": 3.35,
+    "uzunluk": 13.5,
+    "genislik": 0.9,
+    "adet": 8
    },
    "yerlesim": [
     {
      "ad": "Arduino Mega",
-     "x": -3,
-     "y": 0,
-     "z": 12,
+     "x": -8.2,
+     "y": -0.5,
+     "z": 5.6,
      "uzunluk": 10.2,
      "genislik": 5.3,
-     "kalinlik": 1.3,
+     "kalinlik": 0.15,
      "renk": "#0e7490"
     },
     {
      "ad": "Arduino Nano",
-     "x": 5,
-     "y": 4,
-     "z": 12,
+     "x": -9.1,
+     "y": -0.3,
+     "z": 7.95,
      "uzunluk": 4.5,
      "genislik": 1.8,
-     "kalinlik": 1,
+     "kalinlik": 0.1,
      "renk": "#0369a1"
     },
     {
-     "ad": "BTS7960 sol",
-     "x": 4,
-     "y": -5,
-     "z": 12,
+     "ad": "BTS7960 sağ",
+     "x": -12.65,
+     "y": -6.55,
+     "z": 7.0,
      "uzunluk": 5,
      "genislik": 5,
-     "kalinlik": 2.5,
+     "kalinlik": 0.16,
      "renk": "#b91c1c"
     },
     {
-     "ad": "BTS7960 sağ",
-     "x": -9,
-     "y": -5,
-     "z": 12,
+     "ad": "BTS7960 sol",
+     "x": -11.85,
+     "y": 6.3,
+     "z": 7.0,
      "uzunluk": 5,
      "genislik": 5,
-     "kalinlik": 2.5,
+     "kalinlik": 0.16,
      "renk": "#b91c1c"
     }
    ]
@@ -778,6 +4961,236 @@ const DEFAULT_PROFILES = [
      "genislik": 5.3,
      "kalinlik": 1.3,
      "renk": "#0e7490"
+    }
+   ]
+  }
+ },
+ {
+  "id": "video2026",
+  "ad": "Video yarış robotu (temsili)",
+  "renk": "#eab308",
+  "aciklama": "25 Kasım 2026 yarış videosundaki açık şasili, dört tekerli robotun yaklaşık dış görünümü. Motor, sensör ve ölçüler temsili; robotunuzun gerçek verilerini girin.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Basit rakip: dolaşır, duvar görünce döner\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5   // köşe anahtarı: kırmızıda HIGH\n\nvoid motor(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0); digitalWrite(IN2, sol < 0);\n  digitalWrite(IN3, sag >= 0); digitalWrite(IN4, sag < 0);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafe() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long t = pulseIn(ECHO, HIGH, 30000);\n  return t == 0 ? 999 : t / 58;\n}\n\nvoid setup() {\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  bool kirmizi = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, kirmizi); digitalWrite(LED_M, !kirmizi);\n}\n\nvoid loop() {\n  if (mesafe() < 25) { motor(-160, -160); delay(300); motor(170, -170); delay(random(300, 700)); }\n  else motor(170, 180);\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "video_on_rev": 2,
+   "kutle_kg": 1.6,
+   "agirlik_merkezi": {
+    "x_cm": 0,
+    "z_cm": 4.5
+   },
+   "tekerlek": {
+    "lastik": "ozel",
+    "cap_cm": 6.5,
+    "genislik_cm": 2.2,
+    "iz_cm": 17,
+    "x_cm": 0,
+    "adet": 4,
+    "dingil_cm": 12,
+    "mu_statik": 0.42,
+    "mu_kinetik": 0.32,
+    "yuvarlanma": 0.016
+   },
+   "sarhos_teker": null,
+   "motor": {
+    "model": "JGB37-520 12V 107"
+   },
+   "pil": {
+    "volt": 7.4
+   },
+   "acil_stop": {
+    "x": -6,
+    "y": 0,
+    "z": 8
+   },
+   "parcalar": [
+    {
+     "ad": "Alçak açık şasi",
+     "x": 0,
+     "y": 0,
+     "uzunluk": 19,
+     "genislik": 13,
+     "z0": 3.2,
+     "z1": 3.8,
+     "renk": "#30343b"
+    },
+    {
+     "ad": "Sol yan koruma",
+     "x": 0,
+     "y": 6.6,
+     "uzunluk": 18,
+     "genislik": 0.6,
+     "z0": 2.6,
+     "z1": 4.7,
+     "renk": "#eab308"
+    },
+    {
+     "ad": "Sağ yan koruma",
+     "x": 0,
+     "y": -6.6,
+     "uzunluk": 18,
+     "genislik": 0.6,
+     "z0": 2.6,
+     "z1": 4.7,
+     "renk": "#eab308"
+    },
+    {
+     "ad": "Ön üst travers",
+     "x": 9.5,
+     "y": 0,
+     "uzunluk": 0.8,
+     "genislik": 12.8,
+     "z0": 3.15,
+     "z1": 4.0,
+     "renk": "#facc15"
+    },
+    {
+     "ad": "Ön LED şeridi (sabit)",
+     "x": 9.65,
+     "y": 0,
+     "uzunluk": 0.25,
+     "genislik": 10,
+     "z0": 4.0,
+     "z1": 4.3,
+     "renk": "#ef4444",
+     "kati": false
+    },
+    {
+     "ad": "Arka elektronik kafesi (görsel)",
+     "x": -5.8,
+     "y": 0,
+     "uzunluk": 5.5,
+     "genislik": 9,
+     "z0": 3.8,
+     "z1": 7,
+     "renk": "#374151",
+     "kati": false
+    }
+   ],
+   "model3d": null
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 8,
+     "y": 0,
+     "z": 4.4,
+     "aci": 0
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sol IR",
+     "pin": 2,
+     "x": 8,
+     "y": 7.5,
+     "z": 1.5,
+     "aci": 40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sağ IR",
+     "pin": 4,
+     "x": 8,
+     "y": -7.5,
+     "z": 1.5,
+     "aci": -40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Ön renk sensörü (temsili)",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 8.9,
+     "y": 0,
+     "z": 1.2,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": -7,
+    "y": 0,
+    "z": 8.9
+   },
+   "yerlesim": [
+    {
+     "ad": "Arduino Uno",
+     "x": -2,
+     "y": 1.5,
+     "z": 3.8,
+     "uzunluk": 6.9,
+     "genislik": 5.3,
+     "kalinlik": 1.3,
+     "renk": "#0e7490"
+    },
+    {
+     "ad": "Motor sürücüsü",
+     "x": 4.5,
+     "y": -1.2,
+     "z": 3.8,
+     "uzunluk": 4,
+     "genislik": 4,
+     "kalinlik": 2,
+     "renk": "#b91c1c"
+    },
+    {
+     "ad": "Pil grubu",
+     "x": -5.5,
+     "y": -3,
+     "z": 3.8,
+     "uzunluk": 5,
+     "genislik": 3,
+     "kalinlik": 2.3,
+     "renk": "#1d4ed8"
     }
    ]
   }
