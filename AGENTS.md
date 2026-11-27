@@ -25,7 +25,7 @@ Kodu: `kaynak/ornek_kodlar/antalya_mega.ino` ve `antalya_nano.ino`. Mega kodunda
 - Depo: `AArda21/2025-2026-Meb-Robot`
 - **`main` dalına DOKUNMA** (takımın robot kodları orada).
 - Simülatör: **`simulator`** dalı. Derlenmiş APK/EXE: `apk-dosyalari` dalı (GitHub Actions yazar). Test çıktıları: `test-sonuclari` dalı.
-- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.8.0). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
+- Sürüm adı: **"MEB Robot V4.x"** (şu an V4.9.0). Sürüm numarası `package.json`, `capacitor.config.json` (appName) ve `kaynak/template3.html` içindeki başlıkta.
 
 ```
 www/index.html          ← UYGULAMANIN KENDİSİ (üretilen dosya, elle düzenleme; kaynak/'tan üretilir)
@@ -147,3 +147,12 @@ Yeni profil alanları (genel, her robot kullanabilir):
 - `mekanik.detayli_gorunum: true` → hazır kart kutuları, sensör/acil stop simgeleri çizilmez (model kendi parçalarıyla çizer).
 - `tekerlek.jant_renk`, `tekerlek.lastik_renk`; `led.uzunluk/genislik/adet` (NeoPixel şeridi tek tek LED).
 - Performans: görsel parçalar fizik döngüsünden çıkarıldı (önce 167 parçayla 2B maç 2,5 kat yavaşlıyordu).
+
+## V4.9.0 Yarışma videolarından 8 rakip robot
+
+22 maç videosu (Antalya 2026; ekibin 21 videosu + 25 Kasım videosu) tarandı, robotlar otomatik kırpılıp (beyaz saha içindeki koyu/renkli büyük lekeler) incelendi. Videoda en sık görülen 8 tasarım `kaynak/rakipler.py` içinde profil oldu (id: `kirmizi4`, `yesil_buldozer`, `mavi_huni`, `siyah_kutu`, `ahsap_kutu`, `sari_tt_kit`, `turkuaz_alcak`, `kirmizi_kizak`). Görünüş/ölçü/mekanizma videodan YAKLAŞIK; motor, pil ve kod temsilî.
+- Kodlar: kapaklı kepçe → `strateji.ino` (Yum Yum); iç hazne + ayıklayıcı → `ornek_kodlar/hazne.ino` (`SIRALA 0` ile ayırmadan alır); buldozer/kızak → `ornek_kodlar/buldozer.ino`. Hepsi Uno + aynı pin düzeni.
+- Zayıf 4 tekerliler (TT/N20) kauçuk lastikle simülasyonda yerinde dönemedi; bu yüzden TT kiti 3S, turkuaz JGA25 + 3S, siyah kutu 2 teker + sarhoş teker yapıldı (açıklamalarında yazıyor).
+- Sarhoş teker yumurta kanalının önüne konursa yumurtayı iter, hazneye almaz (siyah/ahşap kutuda yaşandı) — kanallı robotlarda sarhoş teker arkada olmalı.
+- Yeni kurulumda varsayılan maç: kırmızı köşe Antalya robotumuz, mavi köşe `kirmizi4`.
+- YouTube videoları buradan indirilemedi; yalnızca başlık/açıklama okundu. Kaynak ekibin kendi maç videoları.

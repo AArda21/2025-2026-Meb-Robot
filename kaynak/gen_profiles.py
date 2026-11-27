@@ -4,6 +4,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import robot_antalya_3b
+import rakipler
 import json
 d = open(os.path.join(HERE, 'defaults.js')).read()
 code = d[d.index('const DEFAULT_CODE = `') + len('const DEFAULT_CODE = `'):d.rindex('`;')]
@@ -152,5 +153,5 @@ rakip = {"id": "rakip", "ad": "Basit rakip", "renk": "#2563eb", "aciklama": "Ras
   "sensorler": [{"tip": "HC-SR04", "ad": "Ultrasonik", "trig": 11, "echo": 12, "x": 9, "y": 0, "z": 6, "aci": 0}, {"tip": "BUTON", "ad": "Köşe anahtarı", "pin": "A5", "deger": "KIRMIZIDA_HIGH"}], "servolar": [],
   "led": {"tip": "iki_pin", "kirmizi_pin": "A3", "mavi_pin": "A4", "x": -4, "y": 0, "z": 7},
   "yerlesim": [{"ad": "Arduino Uno", "x": -2, "y": 0, "z": 7, "uzunluk": 6.9, "genislik": 5.3, "kalinlik": 1.3, "renk": "#0e7490"}]}}
-open(os.path.join(HERE, 'profiles.js'), 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip, video], ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
+open(os.path.join(HERE, 'profiles.js'), 'w').write('const DEFAULT_PROFILES = ' + json.dumps([yum, eski, rakip, video] + rakipler.hepsi(), ensure_ascii=False, indent=1) + ';\nif (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };\n')
 print('ok')

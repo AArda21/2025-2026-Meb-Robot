@@ -5194,6 +5194,4141 @@ const DEFAULT_PROFILES = [
     }
    ]
   }
+ },
+ {
+  "id": "kirmizi4",
+  "ad": "Kırmızı LED bantlı 4 teker (video)",
+  "renk": "#c81e2a",
+  "aciklama": "Antalya maç videolarında en çok görülen tip (6 maçta): kırmızı pleksi/MDF gövde, 4 büyük beyaz teker, önde LED bant, kapaklı kepçe. Görünüş videodan yaklaşık; motor, pil ve kod temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Yum Yum — örnek strateji (2026 kuralları)\n// 1) ARA: sahada dolaş, kepçeye giren yumurtanın rengine bak\n// 2) Kendi rengimiz ya da yeşilse kapağı kapat, yumurtayı tut\n// 3) EVE: duvarı sola alıp duvar takibi yap; zemin sensörü hedef köşenin rengini görünce bırak\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define KAPAK_ACIK 90\n#define KAPAK_KAPALI 0\n\n// zemin (TCRT5000 analog) eşikleri — kendi ölçümlerinle güncelle\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;\nint durum = 0;          // 0 = ARA, 1 = EVE (duvar takibi)\nint hedef = 0;          // EVE durumunda hedef zemin: 1 kırmızı, 2 mavi, 3 yeşil\nunsigned long durumZamani = 0;\nunsigned long sonYazdirma = 0;\nbool duvarBulundu = false;\nlong sonMesafe = 0;\nunsigned long sonKontrol = 0;\nint ayniSayac = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);\n  int b = renkOku(LOW, HIGH);\n  int g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid donSaga(int ms) { motorlar(170, -170); delay(ms); }\nvoid donSola(int ms) { motorlar(-170, 170); delay(ms); }\n\nvoid durumDegistir(int yeni) {\n  durum = yeni;\n  durumZamani = millis();\n  duvarBulundu = false;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(KAPAK_KAPALI);\n  delay(200);\n  kapak.write(KAPAK_ACIK);\n  // köşeden sahanın ortasına doğru çık\n  motorlar(200, 200);\n  delay(700);\n  durumDegistir(0);\n  Serial.println(TAKIM_KIRMIZI ? \"Takim: KIRMIZI\" : \"Takim: MAVI\");\n}\n\nvoid ara() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int renk = yumurtaRengi();\n  if (renk == benim || renk == 3) {\n    motorlar(0, 0);\n    kapak.write(KAPAK_KAPALI);       // yumurtayı kepçeye hapset\n    delay(250);\n    hedef = renk;\n    Serial.print(\"Yumurta alindi, hedef=\");\n    Serial.println(hedef);\n    durumDegistir(1);\n    return;\n  }\n  if (renk != 0) {                   // rakip rengi: geri çekilip bırak\n    motorlar(-180, -180);\n    delay(350);\n    donSaga(250);\n    return;\n  }\n  if (zeminRengi() != 0 && millis() > 3000) {   // ararken köşelere girme (yanlış yumurta itmeyelim)\n    motorlar(-180, -180);\n    delay(300);\n    donSaga(random(300, 600));\n    return;\n  }\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n  if (d < 25) {\n    motorlar(-170, -170);\n    delay(200);\n    donSaga(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(120, 200);\n  } else if (sagVar && !solVar) {\n    motorlar(200, 120);\n  } else {\n    motorlar(190, 190);\n  }\n}\n\nvoid eve() {\n  // hedef köşeye geldik mi?\n  if (zeminRengi() == hedef) {\n    // Duvar boyunca önümüze yığılan başka yumurtaları köşeye itmemek için:\n    // biraz geri çekil, hafif sağa dön ve kepçeyle köşeye öyle gir.\n    motorlar(-160, -160);\n    delay(200);\n    donSaga(140);\n    motorlar(130, 130);\n    delay(300);\n    motorlar(0, 0);\n    kapak.write(KAPAK_ACIK);\n    delay(250);\n    motorlar(-180, -180);             // yumurtayı köşede bırakıp geri çekil\n    delay(500);\n    donSaga(450);\n    Serial.println(\"Yumurta birakildi\");\n    durumDegistir(0);\n    return;\n  }\n  long d = mesafeCm();\n  bool solDuvar = digitalRead(IR_SOL) == LOW;\n  if (!duvarBulundu) {               // önce bir duvar bul\n    if (d < 18) { donSaga(320); duvarBulundu = true; }\n    else motorlar(190, 190);\n    return;\n  }\n  if (d < 16) {                      // köşe: sağa dön, duvar solda kalsın\n    motorlar(-150, -150);\n    delay(120);\n    donSaga(330);\n  } else if (solDuvar) {\n    motorlar(200, 130);              // duvara çok yakın: hafif sağa\n  } else {\n    motorlar(120, 200);              // duvarı kaybettik: sola yanaş\n  }\n  if (millis() - durumZamani > 40000) {   // çok uzun sürdü: bırak, yeniden ara\n    kapak.write(KAPAK_ACIK);\n    durumDegistir(0);\n  }\n}\n\n// Sıkışma kontrolü: ileri giderken mesafe 1.5 sn boyunca değişmiyorsa geri çık\nvoid sikismaKontrol() {\n  if (millis() - sonKontrol < 500) return;\n  sonKontrol = millis();\n  long d = mesafeCm();\n  if (d < 900 && abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;\n  sonMesafe = d;\n  if (ayniSayac >= 3) {\n    Serial.println(\"Sikisma! geri cikiliyor\");\n    motorlar(-200, -200);\n    delay(450);\n    donSaga(random(250, 550));\n    ayniSayac = 0;\n    if (durum == 1) duvarBulundu = false;\n  }\n}\n\nvoid loop() {\n  sikismaKontrol();\n  if (durum == 0) ara(); else eve();\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"durum=\");\n    Serial.print(durum);\n    Serial.print(\" zemin=\");\n    Serial.print(analogRead(ZEMIN));\n    Serial.print(\" mesafe=\");\n    Serial.println(mesafeCm());\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.7,
+   "agirlik_merkezi": {
+    "x_cm": -1,
+    "z_cm": 4.5
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 8,
+    "genislik_cm": 3.2,
+    "iz_cm": 20.5,
+    "x_cm": -1.5,
+    "adet": 4,
+    "dingil_cm": 12,
+    "jant_renk": "#f3f4f6",
+    "lastik_renk": "#e5e7eb"
+   },
+   "sarhos_teker": null,
+   "motor": {
+    "model": "JGA25-370 12V 280"
+   },
+   "pil": {
+    "volt": 11.1,
+    "mah": 2500
+   },
+   "acil_stop": {
+    "x": -6.5,
+    "y": 4.5,
+    "z": 7
+   },
+   "parcalar": [
+    {
+     "ad": "Kırmızı alt şasi",
+     "x": -0.5,
+     "y": 0.0,
+     "uzunluk": 19,
+     "genislik": 16.4,
+     "z0": 2.4,
+     "z1": 3.0,
+     "renk": "#c81e2a"
+    },
+    {
+     "ad": "Sol yan plaka",
+     "x": -0.5,
+     "y": 8.45,
+     "uzunluk": 19,
+     "genislik": 0.5,
+     "z0": 0.8,
+     "z1": 6.5,
+     "renk": "#c81e2a"
+    },
+    {
+     "ad": "Sağ yan plaka",
+     "x": -0.5,
+     "y": -8.45,
+     "uzunluk": 19,
+     "genislik": 0.5,
+     "z0": 0.8,
+     "z1": 6.5,
+     "renk": "#c81e2a"
+    },
+    {
+     "ad": "Kırmızı üst kat",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 16,
+     "genislik": 15.0,
+     "z0": 6.5,
+     "z1": 7.0,
+     "renk": "#c81e2a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ön LED bandı",
+     "x": 9.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 13.0,
+     "z0": 3.2,
+     "z1": 4.0,
+     "renk": "#ef4444",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": -5.3,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": -3.7,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": -2.1,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": -0.5,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": 1.1,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": 2.7,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": 4.3,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "LED",
+     "x": 9.27,
+     "y": 5.9,
+     "uzunluk": 0.15,
+     "genislik": 0.6,
+     "z0": 3.35,
+     "z1": 3.85,
+     "renk": "#ffd2d2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -8.5,
+     "y": -6,
+     "z0": 3.0,
+     "z1": 6.5,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -8.5,
+     "y": 6,
+     "z0": 3.0,
+     "z1": 6.5,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 5.5,
+     "y": -6,
+     "z0": 3.0,
+     "z1": 6.5,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 5.5,
+     "y": 6,
+     "z0": 3.0,
+     "z1": 6.5,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Kepçe arka",
+     "x": 9.5,
+     "y": 0.0,
+     "uzunluk": 1,
+     "genislik": 13.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#7f1d1d"
+    },
+    {
+     "ad": "Sol kol",
+     "x": 13.75,
+     "y": 6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#7f1d1d"
+    },
+    {
+     "ad": "Sağ kol",
+     "x": 13.75,
+     "y": -6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#7f1d1d"
+    },
+    {
+     "ad": "SG90 servo",
+     "x": 16.45,
+     "y": 6.3,
+     "uzunluk": 2.3,
+     "genislik": 1.2,
+     "z0": 4.3,
+     "z1": 6.6,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapak",
+     "servo_pin": 3,
+     "pivot": [
+      18.0,
+      6.0
+     ],
+     "uzunluk": 11,
+     "genislik": 0.8,
+     "aci_ofset": -90,
+     "yon": 1,
+     "z0": 0.3,
+     "z1": 4,
+     "renk": "#f59e0b"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 9.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 4.5,
+     "z1": 6.5,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.7,
+     "y": 1.3,
+     "z0": 4.7,
+     "z1": 6.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 9.7,
+     "y": -1.3,
+     "z0": 4.7,
+     "z1": 6.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 7.0,
+     "z1": 7.15,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -1.0,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 7.15,
+     "z1": 8.0,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -1.0,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 7.0,
+     "z1": 7.15,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -1.0,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 7.15,
+     "z1": 9.4,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -6.5,
+     "y": 4.5,
+     "z0": 7.0,
+     "z1": 9.0,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -6.5,
+     "y": 4.5,
+     "z0": 9.0,
+     "z1": 9.08,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -6.5,
+     "y": -3.2,
+     "z0": 3.08,
+     "z1": 4.92,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -4.4,
+     "y": -3.2,
+     "z0": 3.08,
+     "z1": 4.92,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "kablolar": [
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -2.83,
+       1.39,
+       7.4
+      ],
+      [
+       0.78,
+       0.97,
+       9.57
+      ],
+      [
+       5.59,
+       0.42,
+       8.97
+      ],
+      [
+       9.2,
+       0,
+       5.5
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -2.91,
+       1.04,
+       7.4
+      ],
+      [
+       0.72,
+       0.73,
+       9.05
+      ],
+      [
+       5.57,
+       0.31,
+       8.45
+      ],
+      [
+       9.2,
+       0,
+       5.5
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       0.44,
+       -1.62,
+       7.4
+      ],
+      [
+       3.91,
+       0.51,
+       8.25
+      ],
+      [
+       8.53,
+       3.36,
+       7.65
+      ],
+      [
+       12,
+       5.5,
+       4.5
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -1.34,
+       1.05,
+       7.4
+      ],
+      [
+       2.66,
+       2.38,
+       8.2
+      ],
+      [
+       8.0,
+       4.16,
+       7.6
+      ],
+      [
+       12,
+       5.5,
+       4.5
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -2.17,
+       1.21,
+       7.4
+      ],
+      [
+       1.33,
+       3.1,
+       9.26
+      ],
+      [
+       6.0,
+       5.61,
+       8.66
+      ],
+      [
+       9.5,
+       7.5,
+       1.5
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       1.01,
+       -1.88,
+       7.4
+      ],
+      [
+       3.55,
+       0.94,
+       8.25
+      ],
+      [
+       6.95,
+       4.69,
+       7.65
+      ],
+      [
+       9.5,
+       7.5,
+       1.5
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       1.2,
+       -0.48,
+       7.4
+      ],
+      [
+       3.69,
+       -2.58,
+       8.59
+      ],
+      [
+       7.01,
+       -5.39,
+       7.99
+      ],
+      [
+       9.5,
+       -7.5,
+       1.5
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       0.13,
+       0.11,
+       7.4
+      ],
+      [
+       2.94,
+       -2.17,
+       9.57
+      ],
+      [
+       6.69,
+       -5.22,
+       8.97
+      ],
+      [
+       9.5,
+       -7.5,
+       1.5
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -0.74,
+       -0.62,
+       7.4
+      ],
+      [
+       -2.01,
+       -1.33,
+       9.42
+      ],
+      [
+       -3.72,
+       -2.29,
+       8.82
+      ],
+      [
+       -5,
+       -3,
+       5
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       1.26,
+       1.71,
+       7.4
+      ],
+      [
+       -0.62,
+       0.29,
+       8.95
+      ],
+      [
+       -3.12,
+       -1.59,
+       8.35
+      ],
+      [
+       -5,
+       -3,
+       5
+      ]
+     ]
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 9.2,
+     "y": 0,
+     "z": 5.5,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sol IR",
+     "pin": 2,
+     "x": 9.4,
+     "y": 7.5,
+     "z": 1.5,
+     "aci": 40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sağ IR",
+     "pin": 4,
+     "x": 9.4,
+     "y": -7.5,
+     "z": 1.5,
+     "aci": -40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Renk (kepçe)",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 10.6,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Kapak servosu",
+     "pin": 3,
+     "hiz_derece_s": 450,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": 9.1,
+    "y": 0,
+    "z": 3.6,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "yesil_buldozer",
+  "ad": "Yeşil buldozer (video)",
+  "renk": "#15803d",
+  "aciklama": "Videodaki geniş, alçak yeşil plaka gövdeli robot: üstte tel kulp, önde içbükey bıçak. Renk sensörü yok; yumurtaları sürükleyerek sahayı tarar, kendi köşesine girince bırakır. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Buldozer tipi rakip (örnek kod)\n// Renk sensörü yok: önündeki bıçakla yumurtaları sürükleyerek sahayı tarar, duvarda döner.\n// Kendi köşesine girerse sürüklediğini bırakıp geri çıkar; rakip köşesinden kaçar (rakibe puan yazdırmamak için).\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define ZEMIN A0\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define HIZ 200\n#define KAVIS 18      // sağ motor biraz yavaş: geniş yay çizerek tarar\n\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_MAVI_ALT 560\n\nbool TAKIM_KIRMIZI = true;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW); digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW); digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  return sure == 0 ? 999 : sure / 58;\n}\n\n// 0 = beyaz, 1 = kırmızı köşe, 2 = mavi köşe, 3 = diğer (yeşil)\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 3;\n}\n\nvoid setup() {\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW); digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n}\n\nvoid loop() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int z = zeminRengi();\n  if (millis() > 2500 && z == benim) {          // kendi köşemiz: sürüklediklerini bırak\n    motorlar(150, 150); delay(350);\n    motorlar(-HIZ, -HIZ); delay(600);\n    motorlar(HIZ, -HIZ); delay(random(500, 900));\n    return;\n  }\n  if (millis() > 2500 && z != 0) {              // başka köşe: kaç\n    motorlar(-HIZ, -HIZ); delay(450);\n    motorlar(-HIZ, HIZ); delay(random(400, 800));\n    return;\n  }\n  if (mesafeCm() < 20) {\n    motorlar(-HIZ, -HIZ); delay(300);\n    motorlar(HIZ, -HIZ); delay(random(400, 900));\n    return;\n  }\n  motorlar(HIZ, HIZ - KAVIS);\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.5,
+   "agirlik_merkezi": {
+    "x_cm": -2,
+    "z_cm": 3.5
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6.5,
+    "genislik_cm": 2.6,
+    "iz_cm": 19,
+    "x_cm": -4
+   },
+   "sarhos_teker": {
+    "x_cm": 7,
+    "y_cm": 0,
+    "cap_cm": 1.6
+   },
+   "motor": {
+    "model": "TT 1:48 6V"
+   },
+   "pil": {
+    "volt": 7.4
+   },
+   "acil_stop": {
+    "x": -8.5,
+    "y": 4.5,
+    "z": 7.4
+   },
+   "parcalar": [
+    {
+     "ad": "Yeşil gövde plakası",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 22,
+     "genislik": 23.0,
+     "z0": 6.6,
+     "z1": 7.4,
+     "renk": "#15803d"
+    },
+    {
+     "ad": "Yeşil gövde yanı",
+     "x": -1.0,
+     "y": 11.25,
+     "uzunluk": 22,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 6.6,
+     "renk": "#15803d"
+    },
+    {
+     "ad": "Yeşil gövde yanı",
+     "x": -1.0,
+     "y": -11.25,
+     "uzunluk": 22,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 6.6,
+     "renk": "#15803d"
+    },
+    {
+     "ad": "Motor kutusu",
+     "x": -4.0,
+     "y": 0.0,
+     "uzunluk": 10,
+     "genislik": 15.6,
+     "z0": 2.2,
+     "z1": 6.6,
+     "renk": "#166534"
+    },
+    {
+     "ad": "Ön bıçak",
+     "x": 10.3,
+     "y": 0.0,
+     "uzunluk": 0.6,
+     "genislik": 18,
+     "z0": 0.2,
+     "z1": 3.5,
+     "renk": "#14532d"
+    },
+    {
+     "ad": "Sol bıçak kanadı",
+     "x": 12.05,
+     "y": 10.9,
+     "uzunluk": 4.32,
+     "genislik": 0.6,
+     "z0": 0.2,
+     "z1": 3.5,
+     "aci": 47.8,
+     "renk": "#14532d"
+    },
+    {
+     "ad": "Sağ bıçak kanadı",
+     "x": 12.05,
+     "y": -10.9,
+     "uzunluk": 4.32,
+     "genislik": 0.6,
+     "z0": 0.2,
+     "z1": 3.5,
+     "aci": -47.8,
+     "renk": "#14532d"
+    },
+    {
+     "ad": "Arka kapak",
+     "x": -11.75,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 21.0,
+     "z0": 0.6,
+     "z1": 5.5,
+     "renk": "#15803d"
+    },
+    {
+     "ad": "Kulp ayağı",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -2,
+     "y": 9,
+     "z0": 7.4,
+     "z1": 12.9,
+     "uzunluk": 0.35,
+     "genislik": 0.35,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Kulp ayağı",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -2,
+     "y": -9,
+     "z0": 7.4,
+     "z1": 12.9,
+     "uzunluk": 0.35,
+     "genislik": 0.35,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Tel kulp",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -2,
+     "y": 0,
+     "z0": 12.72,
+     "z1": 13.08,
+     "uzunluk": 0.35,
+     "genislik": 18.4,
+     "renk": "#9ca3af",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 10.45,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 4.0,
+     "z1": 6.0,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.1,
+     "y": 1.3,
+     "z0": 4.2,
+     "z1": 5.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 11.1,
+     "y": -1.3,
+     "z0": 4.2,
+     "z1": 5.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -3.0,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 7.4,
+     "z1": 7.550000000000001,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -3.0,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 7.550000000000001,
+     "z1": 8.4,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -3.0,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 7.4,
+     "z1": 7.550000000000001,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -3.0,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 7.550000000000001,
+     "z1": 9.8,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -8.5,
+     "y": 4.5,
+     "z0": 7.4,
+     "z1": 9.4,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -8.5,
+     "y": 4.5,
+     "z0": 9.4,
+     "z1": 9.48,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -9,
+     "y": -2,
+     "z0": 7.38,
+     "z1": 9.23,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#16a34a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -9,
+     "y": 4.6,
+     "z0": 7.38,
+     "z1": 9.23,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#16a34a",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "kablolar": [
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -0.72,
+       1.79,
+       7.8
+      ],
+      [
+       2.68,
+       1.25,
+       8.7
+      ],
+      [
+       7.2,
+       0.54,
+       8.1
+      ],
+      [
+       10.6,
+       0,
+       5
+      ]
+     ]
+    },
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -3.69,
+       -1.32,
+       7.8
+      ],
+      [
+       0.59,
+       -0.93,
+       10.06
+      ],
+      [
+       6.31,
+       -0.4,
+       9.46
+      ],
+      [
+       10.6,
+       0,
+       5
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -4.24,
+       -1.15,
+       7.8
+      ],
+      [
+       -2.37,
+       -0.81,
+       8.66
+      ],
+      [
+       0.13,
+       -0.35,
+       8.06
+      ],
+      [
+       2,
+       0,
+       1
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -0.5,
+       0.55,
+       7.8
+      ],
+      [
+       0.25,
+       0.39,
+       10.05
+      ],
+      [
+       1.25,
+       0.17,
+       9.45
+      ],
+      [
+       2,
+       0,
+       1
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -2.78,
+       -0.22,
+       7.8
+      ],
+      [
+       -4.65,
+       0.15,
+       9.08
+      ],
+      [
+       -7.13,
+       0.63,
+       8.48
+      ],
+      [
+       -9,
+       1,
+       7
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -1.14,
+       -0.54,
+       7.8
+      ],
+      [
+       -3.5,
+       -0.08,
+       10.28
+      ],
+      [
+       -6.64,
+       0.54,
+       9.68
+      ],
+      [
+       -9,
+       1,
+       7
+      ]
+     ]
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 10.6,
+     "y": 0,
+     "z": 5.0,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": -6,
+    "y": 0,
+    "z": 7.5,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "mavi_huni",
+  "ad": "Mavi V kanatlı huni (video)",
+  "renk": "#1d4ed8",
+  "aciklama": "Videodaki önü geniş mavi V kanatlı robot: kanatlar yumurtayı ortadaki boğaza toplar, renk sensörü bakar, tokat servosu kendi renginiyse hazneye iter, değilse yana atar. Hazne dolunca köşede arka kapağı açar. 4 büyük beyaz teker. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// İç hazneli rakip robot (örnek kod)\n// Ön huniden giren yumurta boğazdaki stopere dayanır. Ağız sensörü yumurtayı görünce renk okunur:\n//   kendi rengimiz ya da yeşilse tokat servosu yumurtayı hazneye iter, değilse yandan dışarı atar.\n// Hazne dolunca (ya da süre azalınca) robot kendi köşesini arar, köşeye girince arka kapağı açıp boşaltır.\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define AGIZ 2        // boğazdaki kızılötesi: yumurta varken LOW\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define SIRALA 1      // 0: rengine bakmadan her yumurtayı al (ayıklayıcısız robot)\n#define DOLU 4        // haznede bu kadar yumurta olunca köşeye git\n#define HIZ 185\n#define DONUS 175\n\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo tokat;   // pin 3: 170 = hazneye, 10 = dışarı, 90 = bekle\nServo kapi;    // pin 4: arka boşaltma kapağı, 0 = kapalı\nbool TAKIM_KIRMIZI = true;\nint sayi = 0;\nint durum = 0;           // 0 = topla, 1 = köşeye götür\nunsigned long sonDonus = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW); digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW); digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  return sure == 0 ? 999 : sure / 58;\n}\n\nint renkOku(int s2, int s3) { digitalWrite(S2, s2); digitalWrite(S3, s3); delay(2); return pulseIn(RENK_OUT, LOW); }\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW), b = renkOku(LOW, HIGH), g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid don(int ms) { motorlar(DONUS, -DONUS); delay(ms); }\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(AGIZ, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW); digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  tokat.attach(3); tokat.write(90);\n  kapi.attach(4); kapi.write(0);\n  motorlar(HIZ, HIZ); delay(800);   // köşeden çık\n}\n\n// Dolaş: duvar/robot görünce geri çekil ve rastgele dön\nvoid gez() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int z = zeminRengi();\n  if (millis() > 3000 && z != 0 && (durum == 0 || z != benim)) {   // toplarken köşelere girme, götürürken başka köşeden çık\n    motorlar(-HIZ, -HIZ); delay(300); don(random(300, 700)); return;\n  }\n  if (mesafeCm() < 22) { motorlar(-HIZ, -HIZ); delay(250); don(random(250, 650)); return; }\n  if (millis() - sonDonus > 7000) { sonDonus = millis(); don(random(150, 450)); }   // aynı çizgide dönüp durmasın\n  motorlar(HIZ, HIZ);\n}\n\nvoid loop() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (durum == 0) {\n    if (digitalRead(AGIZ) == LOW) {\n      motorlar(0, 0); delay(80);\n      int r = SIRALA ? yumurtaRengi() : benim;\n      bool al = (r == benim || r == 3 || r == 0);\n      tokat.write(al ? 170 : 10); delay(350); tokat.write(90); delay(150);\n      if (al) sayi++;\n      Serial.print(al ? \"Yumurta alindi: \" : \"Yumurta atildi, renk=\"); Serial.println(al ? sayi : r);\n    }\n    if (sayi >= DOLU || (millis() > 80000 && sayi > 0)) { durum = 1; Serial.println(\"Hazne dolu, kose araniyor\"); }\n    gez();\n  } else {\n    if (zeminRengi() == benim) {\n      motorlar(HIZ, HIZ); delay(450);           // robotun tamamı köşeye girsin\n      motorlar(0, 0); kapi.write(150); delay(300 * sayi + 700);\n      motorlar(-HIZ, -HIZ); delay(450); kapi.write(0);\n      Serial.print(\"Bosaltildi: \"); Serial.println(sayi);\n      sayi = 0; durum = 0; don(550);\n      return;\n    }\n    gez();\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.6,
+   "agirlik_merkezi": {
+    "x_cm": -3,
+    "z_cm": 4.5
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 8.5,
+    "genislik_cm": 3,
+    "iz_cm": 19.5,
+    "x_cm": -4,
+    "adet": 4,
+    "dingil_cm": 11,
+    "jant_renk": "#f3f4f6",
+    "lastik_renk": "#e5e7eb"
+   },
+   "sarhos_teker": null,
+   "motor": {
+    "model": "JGA25-370 12V 280"
+   },
+   "pil": {
+    "volt": 11.1,
+    "mah": 2500
+   },
+   "acil_stop": {
+    "x": -10.5,
+    "y": 4.5,
+    "z": 7.5
+   },
+   "parcalar": [
+    {
+     "ad": "Mavi şasi",
+     "x": -2.5,
+     "y": 0.0,
+     "uzunluk": 17,
+     "genislik": 15.0,
+     "z0": 2.8,
+     "z1": 3.4,
+     "renk": "#1d4ed8"
+    },
+    {
+     "ad": "Mavi yan",
+     "x": -2.5,
+     "y": 7.75,
+     "uzunluk": 17,
+     "genislik": 0.5,
+     "z0": 0.8,
+     "z1": 5.5,
+     "renk": "#1d4ed8"
+    },
+    {
+     "ad": "Mavi yan",
+     "x": -2.5,
+     "y": -7.75,
+     "uzunluk": 17,
+     "genislik": 0.5,
+     "z0": 0.8,
+     "z1": 5.5,
+     "renk": "#1d4ed8"
+    },
+    {
+     "ad": "Arka kapı",
+     "x": -11.25,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 8,
+     "z0": 0.4,
+     "z1": 2.6,
+     "renk": "#0f172a"
+    },
+    {
+     "ad": "Sol huni kanadı",
+     "x": 10.25,
+     "y": 7.95,
+     "uzunluk": 11.04,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 7.0,
+     "aci": 47.2,
+     "renk": "#1d4ed8"
+    },
+    {
+     "ad": "Sağ huni kanadı",
+     "x": 10.25,
+     "y": -7.95,
+     "uzunluk": 11.04,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 7.0,
+     "aci": -47.2,
+     "renk": "#1d4ed8"
+    },
+    {
+     "ad": "Hazne kutusu",
+     "x": -4.5,
+     "y": 0.0,
+     "uzunluk": 12.0,
+     "genislik": 10,
+     "z0": 3.4,
+     "z1": 7.5,
+     "renk": "#1e3a8a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Sol boğaz duvarı",
+     "x": 3.75,
+     "y": 3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#0f172a"
+    },
+    {
+     "ad": "Sağ boğaz duvarı",
+     "x": 3.75,
+     "y": -3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#0f172a"
+    },
+    {
+     "ad": "Boğaz stoperi",
+     "x": 0.8,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 7.8,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#0f172a"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 6.15,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 5.0,
+     "z1": 7.0,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 6.8,
+     "y": 1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 6.8,
+     "y": -1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -5.0,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 7.5,
+     "z1": 7.65,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -5.0,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 7.65,
+     "z1": 8.5,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -5.0,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 7.5,
+     "z1": 7.65,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -5.0,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 7.65,
+     "z1": 9.9,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.5,
+     "y": 4.5,
+     "z0": 7.5,
+     "z1": 9.5,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.5,
+     "y": 4.5,
+     "z0": 9.5,
+     "z1": 9.58,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Ultrason direği",
+     "x": 5.8,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 1.0,
+     "z0": 3.4,
+     "z1": 5.0,
+     "renk": "#0f172a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Tokat servosu",
+     "x": 0.8,
+     "y": 5.35,
+     "uzunluk": 1.2,
+     "genislik": 2.3,
+     "z0": 3.4,
+     "z1": 6.2,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapı servosu",
+     "x": -9.65,
+     "y": 4.8,
+     "uzunluk": 2.3,
+     "genislik": 1.2,
+     "z0": 3.4,
+     "z1": 6.2,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "hazne": {
+    "var": true,
+    "agiz": {
+     "x0": 1.5,
+     "x1": 6.0,
+     "y0": -3.2,
+     "y1": 3.2
+    },
+    "kurallar": [
+     {
+      "servo": 3,
+      "min": 150,
+      "max": 180,
+      "hedef": "bizim"
+     },
+     {
+      "servo": 3,
+      "min": 0,
+      "max": 30,
+      "hedef": "disari"
+     }
+    ],
+    "bolmeler": [
+     {
+      "ad": "bizim",
+      "kapasite": 6,
+      "kapak": 4,
+      "acik_min": 100,
+      "acik_max": 180,
+      "cikis": {
+       "x": -13.5,
+       "y": 0
+      }
+     }
+    ],
+    "disari": {
+     "x": 3.5,
+     "y": -13,
+     "hiz_cms": 45
+    }
+   },
+   "kablolar": [
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -6.31,
+       0.18,
+       7.9
+      ],
+      [
+       -2.53,
+       0.12,
+       9.37
+      ],
+      [
+       2.52,
+       0.05,
+       8.77
+      ],
+      [
+       6.3,
+       0,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -4.37,
+       -1.74,
+       7.9
+      ],
+      [
+       -1.17,
+       -1.22,
+       8.72
+      ],
+      [
+       3.1,
+       -0.52,
+       8.12
+      ],
+      [
+       6.3,
+       0,
+       6.0
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -6.2,
+       -1.06,
+       7.9
+      ],
+      [
+       -3.89,
+       -0.74,
+       10.49
+      ],
+      [
+       -0.81,
+       -0.32,
+       9.89
+      ],
+      [
+       1.5,
+       0,
+       1
+      ]
+     ]
+    },
+    {
+     "renk": "#facc15",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -4.8,
+       0.2,
+       7.9
+      ],
+      [
+       -2.91,
+       0.14,
+       9.41
+      ],
+      [
+       -0.39,
+       0.06,
+       8.81
+      ],
+      [
+       1.5,
+       0,
+       1
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -6.34,
+       -1.39,
+       7.9
+      ],
+      [
+       -4.2,
+       0.52,
+       10.37
+      ],
+      [
+       -1.34,
+       3.08,
+       9.77
+      ],
+      [
+       0.8,
+       5,
+       6
+      ]
+     ]
+    },
+    {
+     "renk": "#e11d48",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -3.79,
+       0.69,
+       7.9
+      ],
+      [
+       -2.42,
+       1.98,
+       8.82
+      ],
+      [
+       -0.58,
+       3.71,
+       8.22
+      ],
+      [
+       0.8,
+       5,
+       6
+      ]
+     ]
+    },
+    {
+     "renk": "#111827",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -5.99,
+       -1.88,
+       7.9
+      ],
+      [
+       -7.05,
+       0.19,
+       10.26
+      ],
+      [
+       -8.45,
+       2.94,
+       9.66
+      ],
+      [
+       -9.5,
+       5,
+       6
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -4.53,
+       1.68,
+       7.9
+      ],
+      [
+       -6.02,
+       2.68,
+       9.4
+      ],
+      [
+       -8.01,
+       4.0,
+       8.8
+      ],
+      [
+       -9.5,
+       5,
+       6
+      ]
+     ]
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 6.6,
+     "y": 0,
+     "z": 6.0,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": -2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Boğaz sensörü",
+     "pin": 2,
+     "x": 3.5,
+     "y": -3.0,
+     "z": 1,
+     "aci": 90,
+     "menzil_cm": 5
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Boğaz renk",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 1.5,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Tokat (ayıklayıcı)",
+     "pin": 3,
+     "hiz_derece_s": 500,
+     "baslangic_aci": 90
+    },
+    {
+     "ad": "Boşaltma kapağı",
+     "pin": 4,
+     "hiz_derece_s": 300,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": -8,
+    "y": 0,
+    "z": 7.6,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "siyah_kutu",
+  "ad": "Siyah alçak kutu (video)",
+  "renk": "#111827",
+  "aciklama": "Videodaki kapalı, alçak siyah gövdeli robot: önde dar ağız, içinde ayıklayıcılı hazne, arka boşaltma kapağı. Gövde içine gizli iki küçük teker + sarhoş teker. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// İç hazneli rakip robot (örnek kod)\n// Ön huniden giren yumurta boğazdaki stopere dayanır. Ağız sensörü yumurtayı görünce renk okunur:\n//   kendi rengimiz ya da yeşilse tokat servosu yumurtayı hazneye iter, değilse yandan dışarı atar.\n// Hazne dolunca (ya da süre azalınca) robot kendi köşesini arar, köşeye girince arka kapağı açıp boşaltır.\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define AGIZ 2        // boğazdaki kızılötesi: yumurta varken LOW\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define SIRALA 1      // 0: rengine bakmadan her yumurtayı al (ayıklayıcısız robot)\n#define DOLU 5        // haznede bu kadar yumurta olunca köşeye git\n#define HIZ 200\n#define DONUS 175\n\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo tokat;   // pin 3: 170 = hazneye, 10 = dışarı, 90 = bekle\nServo kapi;    // pin 4: arka boşaltma kapağı, 0 = kapalı\nbool TAKIM_KIRMIZI = true;\nint sayi = 0;\nint durum = 0;           // 0 = topla, 1 = köşeye götür\nunsigned long sonDonus = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW); digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW); digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  return sure == 0 ? 999 : sure / 58;\n}\n\nint renkOku(int s2, int s3) { digitalWrite(S2, s2); digitalWrite(S3, s3); delay(2); return pulseIn(RENK_OUT, LOW); }\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW), b = renkOku(LOW, HIGH), g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid don(int ms) { motorlar(DONUS, -DONUS); delay(ms); }\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(AGIZ, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW); digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  tokat.attach(3); tokat.write(90);\n  kapi.attach(4); kapi.write(0);\n  motorlar(HIZ, HIZ); delay(800);   // köşeden çık\n}\n\n// Dolaş: duvar/robot görünce geri çekil ve rastgele dön\nvoid gez() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int z = zeminRengi();\n  if (millis() > 3000 && z != 0 && (durum == 0 || z != benim)) {   // toplarken köşelere girme, götürürken başka köşeden çık\n    motorlar(-HIZ, -HIZ); delay(300); don(random(300, 700)); return;\n  }\n  if (mesafeCm() < 22) { motorlar(-HIZ, -HIZ); delay(250); don(random(250, 650)); return; }\n  if (millis() - sonDonus > 7000) { sonDonus = millis(); don(random(150, 450)); }   // aynı çizgide dönüp durmasın\n  motorlar(HIZ, HIZ);\n}\n\nvoid loop() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (durum == 0) {\n    if (digitalRead(AGIZ) == LOW) {\n      motorlar(0, 0); delay(80);\n      int r = SIRALA ? yumurtaRengi() : benim;\n      bool al = (r == benim || r == 3 || r == 0);\n      tokat.write(al ? 170 : 10); delay(350); tokat.write(90); delay(150);\n      if (al) sayi++;\n      Serial.print(al ? \"Yumurta alindi: \" : \"Yumurta atildi, renk=\"); Serial.println(al ? sayi : r);\n    }\n    if (sayi >= DOLU || (millis() > 80000 && sayi > 0)) { durum = 1; Serial.println(\"Hazne dolu, kose araniyor\"); }\n    gez();\n  } else {\n    if (zeminRengi() == benim) {\n      motorlar(HIZ, HIZ); delay(450);           // robotun tamamı köşeye girsin\n      motorlar(0, 0); kapi.write(150); delay(300 * sayi + 700);\n      motorlar(-HIZ, -HIZ); delay(450); kapi.write(0);\n      Serial.print(\"Bosaltildi: \"); Serial.println(sayi);\n      sayi = 0; durum = 0; don(550);\n      return;\n    }\n    gez();\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.4,
+   "agirlik_merkezi": {
+    "x_cm": -4.5,
+    "z_cm": 4
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6,
+    "genislik_cm": 2.2,
+    "iz_cm": 15.5,
+    "x_cm": -2
+   },
+   "sarhos_teker": {
+    "x_cm": -9.5,
+    "y_cm": 0,
+    "cap_cm": 1.6
+   },
+   "motor": {
+    "model": "N20 6V 300"
+   },
+   "pil": {
+    "volt": 7.4
+   },
+   "acil_stop": {
+    "x": -7,
+    "y": 5,
+    "z": 8.8
+   },
+   "parcalar": [
+    {
+     "ad": "Siyah kutu gövde",
+     "x": -1.5,
+     "y": 0.0,
+     "uzunluk": 19,
+     "genislik": 19.0,
+     "z0": 6.2,
+     "z1": 8.5,
+     "renk": "#111827"
+    },
+    {
+     "ad": "Sol etek",
+     "x": -1.5,
+     "y": 9.25,
+     "uzunluk": 19,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 6.2,
+     "renk": "#111827"
+    },
+    {
+     "ad": "Sağ etek",
+     "x": -1.5,
+     "y": -9.25,
+     "uzunluk": 19,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 6.2,
+     "renk": "#111827"
+    },
+    {
+     "ad": "İç sol duvar",
+     "x": -1.5,
+     "y": 5.05,
+     "uzunluk": 19,
+     "genislik": 1.7,
+     "z0": 0.6,
+     "z1": 6.2,
+     "renk": "#111827"
+    },
+    {
+     "ad": "İç sağ duvar",
+     "x": -1.5,
+     "y": -5.05,
+     "uzunluk": 19,
+     "genislik": 1.7,
+     "z0": 0.6,
+     "z1": 6.2,
+     "renk": "#111827"
+    },
+    {
+     "ad": "Sol ağız yanağı",
+     "x": 10.2,
+     "y": 6.25,
+     "uzunluk": 5.76,
+     "genislik": 0.6,
+     "z0": 0.3,
+     "z1": 4.5,
+     "aci": 51.3,
+     "renk": "#111827"
+    },
+    {
+     "ad": "Sağ ağız yanağı",
+     "x": 10.2,
+     "y": -6.25,
+     "uzunluk": 5.76,
+     "genislik": 0.6,
+     "z0": 0.3,
+     "z1": 4.5,
+     "aci": -51.3,
+     "renk": "#111827"
+    },
+    {
+     "ad": "Arka kapı",
+     "x": -11.25,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 7.0,
+     "z0": 0.4,
+     "z1": 2.6,
+     "renk": "#374151"
+    },
+    {
+     "ad": "Üst kapak",
+     "x": -1.5,
+     "y": 0.0,
+     "uzunluk": 18.0,
+     "genislik": 17.0,
+     "z0": 8.5,
+     "z1": 8.8,
+     "renk": "#1f2937",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Sol boğaz duvarı",
+     "x": -1.25,
+     "y": 3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#374151"
+    },
+    {
+     "ad": "Sağ boğaz duvarı",
+     "x": -1.25,
+     "y": -3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#374151"
+    },
+    {
+     "ad": "Boğaz stoperi",
+     "x": -4.2,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 7.8,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#374151"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 8.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 5.0,
+     "z1": 7.0,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.7,
+     "y": 1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.7,
+     "y": -1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7,
+     "y": 5,
+     "z0": 8.8,
+     "z1": 10.8,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7,
+     "y": 5,
+     "z0": 10.8,
+     "z1": 10.88,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Mavi LED şeridi",
+     "x": 8.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 14,
+     "z0": 7.2,
+     "z1": 7.8,
+     "renk": "#3b82f6",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    }
+   ],
+   "hazne": {
+    "var": true,
+    "agiz": {
+     "x0": -3.5,
+     "x1": 1.0,
+     "y0": -3.2,
+     "y1": 3.2
+    },
+    "kurallar": [
+     {
+      "servo": 3,
+      "min": 150,
+      "max": 180,
+      "hedef": "bizim"
+     },
+     {
+      "servo": 3,
+      "min": 0,
+      "max": 30,
+      "hedef": "disari"
+     }
+    ],
+    "bolmeler": [
+     {
+      "ad": "bizim",
+      "kapasite": 7,
+      "kapak": 4,
+      "acik_min": 100,
+      "acik_max": 180,
+      "cikis": {
+       "x": -13.5,
+       "y": 0
+      }
+     }
+    ],
+    "disari": {
+     "x": -1.5,
+     "y": -13,
+     "hiz_cms": 45
+    }
+   }
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 8.4,
+     "y": 0,
+     "z": 6.0,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": -6,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Boğaz sensörü",
+     "pin": 2,
+     "x": -1.5,
+     "y": -3.0,
+     "z": 1,
+     "aci": 90,
+     "menzil_cm": 5
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Boğaz renk",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": -3.5,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Tokat (ayıklayıcı)",
+     "pin": 3,
+     "hiz_derece_s": 500,
+     "baslangic_aci": 90
+    },
+    {
+     "ad": "Boşaltma kapağı",
+     "pin": 4,
+     "hiz_derece_s": 300,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": 7.9,
+    "y": 0,
+    "z": 7.5,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "ahsap_kutu",
+  "ad": "Ahşap kutu (video)",
+  "renk": "#a16207",
+  "aciklama": "Videodaki ahşap kutu gövdeli, üstünde beyaz kutu olan ağır robot: önden giren her yumurtayı ayırmadan hazneye alır (yanlış renk = ceza riski), köşede boşaltır. Yavaş TT 1:120 motorlar. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// İç hazneli rakip robot (örnek kod)\n// Ön huniden giren yumurta boğazdaki stopere dayanır. Ağız sensörü yumurtayı görünce renk okunur:\n//   kendi rengimiz ya da yeşilse tokat servosu yumurtayı hazneye iter, değilse yandan dışarı atar.\n// Hazne dolunca (ya da süre azalınca) robot kendi köşesini arar, köşeye girince arka kapağı açıp boşaltır.\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define AGIZ 2        // boğazdaki kızılötesi: yumurta varken LOW\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define SIRALA 0      // 0: rengine bakmadan her yumurtayı al (ayıklayıcısız robot)\n#define DOLU 6        // haznede bu kadar yumurta olunca köşeye git\n#define HIZ 210\n#define DONUS 175\n\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo tokat;   // pin 3: 170 = hazneye, 10 = dışarı, 90 = bekle\nServo kapi;    // pin 4: arka boşaltma kapağı, 0 = kapalı\nbool TAKIM_KIRMIZI = true;\nint sayi = 0;\nint durum = 0;           // 0 = topla, 1 = köşeye götür\nunsigned long sonDonus = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW); digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW); digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  return sure == 0 ? 999 : sure / 58;\n}\n\nint renkOku(int s2, int s3) { digitalWrite(S2, s2); digitalWrite(S3, s3); delay(2); return pulseIn(RENK_OUT, LOW); }\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW), b = renkOku(LOW, HIGH), g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid don(int ms) { motorlar(DONUS, -DONUS); delay(ms); }\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(AGIZ, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW); digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  tokat.attach(3); tokat.write(90);\n  kapi.attach(4); kapi.write(0);\n  motorlar(HIZ, HIZ); delay(800);   // köşeden çık\n}\n\n// Dolaş: duvar/robot görünce geri çekil ve rastgele dön\nvoid gez() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int z = zeminRengi();\n  if (millis() > 3000 && z != 0 && (durum == 0 || z != benim)) {   // toplarken köşelere girme, götürürken başka köşeden çık\n    motorlar(-HIZ, -HIZ); delay(300); don(random(300, 700)); return;\n  }\n  if (mesafeCm() < 22) { motorlar(-HIZ, -HIZ); delay(250); don(random(250, 650)); return; }\n  if (millis() - sonDonus > 7000) { sonDonus = millis(); don(random(150, 450)); }   // aynı çizgide dönüp durmasın\n  motorlar(HIZ, HIZ);\n}\n\nvoid loop() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  if (durum == 0) {\n    if (digitalRead(AGIZ) == LOW) {\n      motorlar(0, 0); delay(80);\n      int r = SIRALA ? yumurtaRengi() : benim;\n      bool al = (r == benim || r == 3 || r == 0);\n      tokat.write(al ? 170 : 10); delay(350); tokat.write(90); delay(150);\n      if (al) sayi++;\n      Serial.print(al ? \"Yumurta alindi: \" : \"Yumurta atildi, renk=\"); Serial.println(al ? sayi : r);\n    }\n    if (sayi >= DOLU || (millis() > 80000 && sayi > 0)) { durum = 1; Serial.println(\"Hazne dolu, kose araniyor\"); }\n    gez();\n  } else {\n    if (zeminRengi() == benim) {\n      motorlar(HIZ, HIZ); delay(450);           // robotun tamamı köşeye girsin\n      motorlar(0, 0); kapi.write(150); delay(300 * sayi + 700);\n      motorlar(-HIZ, -HIZ); delay(450); kapi.write(0);\n      Serial.print(\"Bosaltildi: \"); Serial.println(sayi);\n      sayi = 0; durum = 0; don(550);\n      return;\n    }\n    gez();\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 2.4,
+   "agirlik_merkezi": {
+    "x_cm": -5,
+    "z_cm": 5.5
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6.5,
+    "genislik_cm": 2.6,
+    "iz_cm": 23.5,
+    "x_cm": -2
+   },
+   "sarhos_teker": {
+    "x_cm": -11,
+    "y_cm": 0,
+    "cap_cm": 2.0
+   },
+   "motor": {
+    "model": "TT 1:120 6V"
+   },
+   "pil": {
+    "volt": 7.4
+   },
+   "acil_stop": {
+    "x": -11,
+    "y": 7,
+    "z": 8
+   },
+   "parcalar": [
+    {
+     "ad": "Ahşap taban",
+     "x": -1.5,
+     "y": 0.0,
+     "uzunluk": 23,
+     "genislik": 19.2,
+     "z0": 2.6,
+     "z1": 3.2,
+     "renk": "#a16207"
+    },
+    {
+     "ad": "Ahşap yan",
+     "x": -1.5,
+     "y": 9.9,
+     "uzunluk": 23,
+     "genislik": 0.6,
+     "z0": 0.5,
+     "z1": 8,
+     "renk": "#a16207"
+    },
+    {
+     "ad": "Ahşap yan",
+     "x": -1.5,
+     "y": -9.9,
+     "uzunluk": 23,
+     "genislik": 0.6,
+     "z0": 0.5,
+     "z1": 8,
+     "renk": "#a16207"
+    },
+    {
+     "ad": "Ahşap arka",
+     "x": -12.7,
+     "y": 0.0,
+     "uzunluk": 0.6,
+     "genislik": 19.2,
+     "z0": 3.2,
+     "z1": 8,
+     "renk": "#a16207"
+    },
+    {
+     "ad": "Arka kapı",
+     "x": -13.25,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 8,
+     "z0": 0.4,
+     "z1": 2.6,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "Sol iç huni",
+     "x": 8.4,
+     "y": 6.6,
+     "uzunluk": 6.28,
+     "genislik": 0.6,
+     "z0": 0.3,
+     "z1": 2.6,
+     "aci": 59.3,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "Sağ iç huni",
+     "x": 8.4,
+     "y": -6.6,
+     "uzunluk": 6.28,
+     "genislik": 0.6,
+     "z0": 0.3,
+     "z1": 2.6,
+     "aci": -59.3,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "Beyaz üst kutu",
+     "x": -2.5,
+     "y": 0.0,
+     "uzunluk": 13,
+     "genislik": 14,
+     "z0": 8,
+     "z1": 12.5,
+     "renk": "#f5f5f4",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kırmızı LED sırası",
+     "x": 10.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 12,
+     "z0": 6,
+     "z1": 6.8,
+     "renk": "#ef4444",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "Sol boğaz duvarı",
+     "x": 3.75,
+     "y": 3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "Sağ boğaz duvarı",
+     "x": 3.75,
+     "y": -3.65,
+     "uzunluk": 5.5,
+     "genislik": 0.5,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "Boğaz stoperi",
+     "x": 0.8,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 7.8,
+     "z0": 0.3,
+     "z1": 2.6,
+     "renk": "#713f12"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 10.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 4.0,
+     "z1": 6.0,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.7,
+     "y": 1.3,
+     "z0": 4.2,
+     "z1": 5.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 10.7,
+     "y": -1.3,
+     "z0": 4.2,
+     "z1": 5.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -11,
+     "y": 7,
+     "z0": 8,
+     "z1": 10.0,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -11,
+     "y": 7,
+     "z0": 10,
+     "z1": 10.08,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "hazne": {
+    "var": true,
+    "agiz": {
+     "x0": 1.5,
+     "x1": 6.0,
+     "y0": -3.2,
+     "y1": 3.2
+    },
+    "kurallar": [
+     {
+      "servo": 3,
+      "min": 150,
+      "max": 180,
+      "hedef": "bizim"
+     },
+     {
+      "servo": 3,
+      "min": 0,
+      "max": 30,
+      "hedef": "disari"
+     }
+    ],
+    "bolmeler": [
+     {
+      "ad": "bizim",
+      "kapasite": 8,
+      "kapak": 4,
+      "acik_min": 100,
+      "acik_max": 180,
+      "cikis": {
+       "x": -15.5,
+       "y": 0
+      }
+     }
+    ],
+    "disari": {
+     "x": 3.5,
+     "y": -13,
+     "hiz_cms": 45
+    }
+   }
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 10.4,
+     "y": 0,
+     "z": 5,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": -2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Boğaz sensörü",
+     "pin": 2,
+     "x": 3.5,
+     "y": -3.0,
+     "z": 1,
+     "aci": 90,
+     "menzil_cm": 5
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Boğaz renk",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 1.5,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Tokat (ayıklayıcı)",
+     "pin": 3,
+     "hiz_derece_s": 500,
+     "baslangic_aci": 90
+    },
+    {
+     "ad": "Boşaltma kapağı",
+     "pin": 4,
+     "hiz_derece_s": 300,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": 10,
+    "y": 0,
+    "z": 7,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "sari_tt_kit",
+  "ad": "Sarı 4WD TT kiti (video)",
+  "renk": "#f59e0b",
+  "aciklama": "Videoda görülen klasik 4 motorlu akıllı araba kiti: iki kat pleksi, 4 sarı TT motor ve sarı teker, önde kapaklı kepçe. 3×18650 (11,1 V) varsayıldı: simülasyonda 2×18650 ve L298N kaybıyla 4 TT motor yerinde hiç dönemiyor. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Yum Yum — örnek strateji (2026 kuralları)\n// 1) ARA: sahada dolaş, kepçeye giren yumurtanın rengine bak\n// 2) Kendi rengimiz ya da yeşilse kapağı kapat, yumurtayı tut\n// 3) EVE: duvarı sola alıp duvar takibi yap; zemin sensörü hedef köşenin rengini görünce bırak\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define KAPAK_ACIK 90\n#define KAPAK_KAPALI 0\n\n// zemin (TCRT5000 analog) eşikleri — kendi ölçümlerinle güncelle\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;\nint durum = 0;          // 0 = ARA, 1 = EVE (duvar takibi)\nint hedef = 0;          // EVE durumunda hedef zemin: 1 kırmızı, 2 mavi, 3 yeşil\nunsigned long durumZamani = 0;\nunsigned long sonYazdirma = 0;\nbool duvarBulundu = false;\nlong sonMesafe = 0;\nunsigned long sonKontrol = 0;\nint ayniSayac = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);\n  int b = renkOku(LOW, HIGH);\n  int g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid donSaga(int ms) { motorlar(170, -170); delay(ms); }\nvoid donSola(int ms) { motorlar(-170, 170); delay(ms); }\n\nvoid durumDegistir(int yeni) {\n  durum = yeni;\n  durumZamani = millis();\n  duvarBulundu = false;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(KAPAK_KAPALI);\n  delay(200);\n  kapak.write(KAPAK_ACIK);\n  // köşeden sahanın ortasına doğru çık\n  motorlar(200, 200);\n  delay(700);\n  durumDegistir(0);\n  Serial.println(TAKIM_KIRMIZI ? \"Takim: KIRMIZI\" : \"Takim: MAVI\");\n}\n\nvoid ara() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int renk = yumurtaRengi();\n  if (renk == benim || renk == 3) {\n    motorlar(0, 0);\n    kapak.write(KAPAK_KAPALI);       // yumurtayı kepçeye hapset\n    delay(250);\n    hedef = renk;\n    Serial.print(\"Yumurta alindi, hedef=\");\n    Serial.println(hedef);\n    durumDegistir(1);\n    return;\n  }\n  if (renk != 0) {                   // rakip rengi: geri çekilip bırak\n    motorlar(-180, -180);\n    delay(350);\n    donSaga(250);\n    return;\n  }\n  if (zeminRengi() != 0 && millis() > 3000) {   // ararken köşelere girme (yanlış yumurta itmeyelim)\n    motorlar(-180, -180);\n    delay(300);\n    donSaga(random(300, 600));\n    return;\n  }\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n  if (d < 25) {\n    motorlar(-170, -170);\n    delay(200);\n    donSaga(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(120, 200);\n  } else if (sagVar && !solVar) {\n    motorlar(200, 120);\n  } else {\n    motorlar(190, 190);\n  }\n}\n\nvoid eve() {\n  // hedef köşeye geldik mi?\n  if (zeminRengi() == hedef) {\n    // Duvar boyunca önümüze yığılan başka yumurtaları köşeye itmemek için:\n    // biraz geri çekil, hafif sağa dön ve kepçeyle köşeye öyle gir.\n    motorlar(-160, -160);\n    delay(200);\n    donSaga(140);\n    motorlar(130, 130);\n    delay(300);\n    motorlar(0, 0);\n    kapak.write(KAPAK_ACIK);\n    delay(250);\n    motorlar(-180, -180);             // yumurtayı köşede bırakıp geri çekil\n    delay(500);\n    donSaga(450);\n    Serial.println(\"Yumurta birakildi\");\n    durumDegistir(0);\n    return;\n  }\n  long d = mesafeCm();\n  bool solDuvar = digitalRead(IR_SOL) == LOW;\n  if (!duvarBulundu) {               // önce bir duvar bul\n    if (d < 18) { donSaga(320); duvarBulundu = true; }\n    else motorlar(190, 190);\n    return;\n  }\n  if (d < 16) {                      // köşe: sağa dön, duvar solda kalsın\n    motorlar(-150, -150);\n    delay(120);\n    donSaga(330);\n  } else if (solDuvar) {\n    motorlar(200, 130);              // duvara çok yakın: hafif sağa\n  } else {\n    motorlar(120, 200);              // duvarı kaybettik: sola yanaş\n  }\n  if (millis() - durumZamani > 40000) {   // çok uzun sürdü: bırak, yeniden ara\n    kapak.write(KAPAK_ACIK);\n    durumDegistir(0);\n  }\n}\n\n// Sıkışma kontrolü: ileri giderken mesafe 1.5 sn boyunca değişmiyorsa geri çık\nvoid sikismaKontrol() {\n  if (millis() - sonKontrol < 500) return;\n  sonKontrol = millis();\n  long d = mesafeCm();\n  if (d < 900 && abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;\n  sonMesafe = d;\n  if (ayniSayac >= 3) {\n    Serial.println(\"Sikisma! geri cikiliyor\");\n    motorlar(-200, -200);\n    delay(450);\n    donSaga(random(250, 550));\n    ayniSayac = 0;\n    if (durum == 1) duvarBulundu = false;\n  }\n}\n\nvoid loop() {\n  sikismaKontrol();\n  if (durum == 0) ara(); else eve();\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"durum=\");\n    Serial.print(durum);\n    Serial.print(\" zemin=\");\n    Serial.print(analogRead(ZEMIN));\n    Serial.print(\" mesafe=\");\n    Serial.println(mesafeCm());\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.1,
+   "agirlik_merkezi": {
+    "x_cm": -2,
+    "z_cm": 4.5
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6.5,
+    "genislik_cm": 2.7,
+    "iz_cm": 15.5,
+    "x_cm": -2.5,
+    "adet": 4,
+    "dingil_cm": 11,
+    "jant_renk": "#fbbf24",
+    "lastik_renk": "#111827"
+   },
+   "sarhos_teker": null,
+   "motor": {
+    "model": "TT 1:48 6V"
+   },
+   "pil": {
+    "volt": 11.1
+   },
+   "acil_stop": {
+    "x": -7.5,
+    "y": 4.5,
+    "z": 7.7
+   },
+   "parcalar": [
+    {
+     "ad": "Şeffaf pleksi alt kat",
+     "x": -2.0,
+     "y": 0.0,
+     "uzunluk": 20,
+     "genislik": 12.2,
+     "z0": 3.6,
+     "z1": 3.9,
+     "renk": "#fde68a",
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Şeffaf pleksi üst kat",
+     "x": -2.0,
+     "y": 0.0,
+     "uzunluk": 18,
+     "genislik": 13.0,
+     "z0": 7.4,
+     "z1": 7.7,
+     "renk": "#fde68a",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Ön tampon",
+     "x": 8.3,
+     "y": 0.0,
+     "uzunluk": 0.6,
+     "genislik": 12.2,
+     "z0": 1.0,
+     "z1": 3.6,
+     "renk": "#374151"
+    },
+    {
+     "ad": "TT motor",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": -8,
+     "y": 4.8,
+     "z0": 1.6,
+     "z1": 3.6,
+     "uzunluk": 6.5,
+     "genislik": 2.0,
+     "renk": "#f59e0b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "TT motor",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": -8,
+     "y": -4.8,
+     "z0": 1.6,
+     "z1": 3.6,
+     "uzunluk": 6.5,
+     "genislik": 2.0,
+     "renk": "#f59e0b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "TT motor",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 3,
+     "y": 4.8,
+     "z0": 1.6,
+     "z1": 3.6,
+     "uzunluk": 6.5,
+     "genislik": 2.0,
+     "renk": "#f59e0b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "TT motor",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 3,
+     "y": -4.8,
+     "z0": 1.6,
+     "z1": 3.6,
+     "uzunluk": 6.5,
+     "genislik": 2.0,
+     "renk": "#f59e0b",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.5,
+     "y": -5.5,
+     "z0": 3.9,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -10.5,
+     "y": 5.5,
+     "z0": 3.9,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 6,
+     "y": -5.5,
+     "z0": 3.9,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Direk",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": 6,
+     "y": 5.5,
+     "z0": 3.9,
+     "z1": 7.4,
+     "uzunluk": 0.5,
+     "genislik": 0.5,
+     "renk": "#c9a23f",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Kepçe arka",
+     "x": 9.1,
+     "y": 0.0,
+     "uzunluk": 1.0,
+     "genislik": 13.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#374151"
+    },
+    {
+     "ad": "Sol kol",
+     "x": 13.35,
+     "y": 6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#374151"
+    },
+    {
+     "ad": "Sağ kol",
+     "x": 13.35,
+     "y": -6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#374151"
+    },
+    {
+     "ad": "SG90 servo",
+     "x": 16.05,
+     "y": 6.3,
+     "uzunluk": 2.3,
+     "genislik": 1.2,
+     "z0": 4.3,
+     "z1": 6.6,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapak",
+     "servo_pin": 3,
+     "pivot": [
+      17.6,
+      6.0
+     ],
+     "uzunluk": 11,
+     "genislik": 0.8,
+     "aci_ofset": -90,
+     "yon": 1,
+     "z0": 0.3,
+     "z1": 4,
+     "renk": "#f59e0b"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 7.85,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 4.5,
+     "z1": 6.5,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.5,
+     "y": 1.3,
+     "z0": 4.7,
+     "z1": 6.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.5,
+     "y": -1.3,
+     "z0": 4.7,
+     "z1": 6.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -2.0,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 7.7,
+     "z1": 7.8500000000000005,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -2.0,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 7.8500000000000005,
+     "z1": 8.7,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -2.0,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 7.7,
+     "z1": 7.8500000000000005,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -2.0,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 7.8500000000000005,
+     "z1": 10.1,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7.5,
+     "y": 4.5,
+     "z0": 7.7,
+     "z1": 9.7,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7.5,
+     "y": 4.5,
+     "z0": 9.7,
+     "z1": 9.78,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -9,
+     "y": -3.3,
+     "z0": 3.92,
+     "z1": 5.77,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#16a34a",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Pil",
+     "sekil": "silindir",
+     "eksen": "y",
+     "x": -9,
+     "y": 3.3,
+     "z0": 3.92,
+     "z1": 5.77,
+     "uzunluk": 1.85,
+     "genislik": 6.5,
+     "renk": "#16a34a",
+     "kati": false,
+     "gorsel": true
+    }
+   ],
+   "kablolar": [
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -0.53,
+       1.29,
+       8.1
+      ],
+      [
+       2.03,
+       0.9,
+       9.77
+      ],
+      [
+       5.44,
+       0.39,
+       9.17
+      ],
+      [
+       8,
+       0,
+       5.5
+      ]
+     ]
+    },
+    {
+     "renk": "#7c3aed",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -4.32,
+       -1.42,
+       8.1
+      ],
+      [
+       -0.62,
+       -0.99,
+       9.96
+      ],
+      [
+       4.31,
+       -0.43,
+       9.36
+      ],
+      [
+       8,
+       0,
+       5.5
+      ]
+     ]
+    },
+    {
+     "renk": "#16a34a",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -2.9,
+       -1.91,
+       8.1
+      ],
+      [
+       1.72,
+       0.31,
+       9.78
+      ],
+      [
+       7.88,
+       3.28,
+       9.18
+      ],
+      [
+       12.5,
+       5.5,
+       4.5
+      ]
+     ]
+    },
+    {
+     "renk": "#f97316",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -0.85,
+       -0.34,
+       8.1
+      ],
+      [
+       3.15,
+       1.41,
+       9.87
+      ],
+      [
+       8.49,
+       3.75,
+       9.27
+      ],
+      [
+       12.5,
+       5.5,
+       4.5
+      ]
+     ]
+    },
+    {
+     "renk": "#2563eb",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -3.54,
+       0.21,
+       8.1
+      ],
+      [
+       -1.57,
+       1.59,
+       10.35
+      ],
+      [
+       1.04,
+       3.42,
+       9.75
+      ],
+      [
+       3,
+       4.8,
+       3
+      ]
+     ]
+    },
+    {
+     "renk": "#f8fafc",
+     "kalinlik": 0.16,
+     "noktalar": [
+      [
+       -1.19,
+       0.44,
+       8.1
+      ],
+      [
+       0.07,
+       1.75,
+       9.06
+      ],
+      [
+       1.74,
+       3.49,
+       8.46
+      ],
+      [
+       3,
+       4.8,
+       3
+      ]
+     ]
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 8.4,
+     "y": 0,
+     "z": 5.5,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sol IR",
+     "pin": 2,
+     "x": 8,
+     "y": 7.5,
+     "z": 1.5,
+     "aci": 40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sağ IR",
+     "pin": 4,
+     "x": 8,
+     "y": -7.5,
+     "z": 1.5,
+     "aci": -40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Renk (kepçe)",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 10.2,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Kapak servosu",
+     "pin": 3,
+     "hiz_derece_s": 450,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": 7.5,
+    "y": 0,
+    "z": 7.8,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "turkuaz_alcak",
+  "ad": "Turkuaz alçak şasi (video)",
+  "renk": "#14b8a6",
+  "aciklama": "Videodaki çok alçak turkuaz gövdeli hızlı robot: 4 koyu teker, çamurluklar, önde kapaklı kepçe. JGA25 motorlar, 3S pil. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Yum Yum — örnek strateji (2026 kuralları)\n// 1) ARA: sahada dolaş, kepçeye giren yumurtanın rengine bak\n// 2) Kendi rengimiz ya da yeşilse kapağı kapat, yumurtayı tut\n// 3) EVE: duvarı sola alıp duvar takibi yap; zemin sensörü hedef köşenin rengini görünce bırak\n#include <Servo.h>\n\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define IR_SOL 2\n#define IR_SAG 4\n#define ZEMIN A0\n#define S2 A1\n#define S3 A2\n#define RENK_OUT 13\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define KAPAK_ACIK 90\n#define KAPAK_KAPALI 0\n\n// zemin (TCRT5000 analog) eşikleri — kendi ölçümlerinle güncelle\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_YESIL_ALT 380\n#define ZEMIN_YESIL_UST 520\n#define ZEMIN_MAVI_ALT 560\n\nServo kapak;\nbool TAKIM_KIRMIZI = true;\nint durum = 0;          // 0 = ARA, 1 = EVE (duvar takibi)\nint hedef = 0;          // EVE durumunda hedef zemin: 1 kırmızı, 2 mavi, 3 yeşil\nunsigned long durumZamani = 0;\nunsigned long sonYazdirma = 0;\nbool duvarBulundu = false;\nlong sonMesafe = 0;\nunsigned long sonKontrol = 0;\nint ayniSayac = 0;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW);\n  digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW);\n  digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol));\n  analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW);\n  delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  if (sure == 0) return 999;\n  return sure / 58;\n}\n\nint renkOku(int s2, int s3) {\n  digitalWrite(S2, s2);\n  digitalWrite(S3, s3);\n  delay(2);\n  return pulseIn(RENK_OUT, LOW);\n}\n\n// 0 = yok, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint yumurtaRengi() {\n  int r = renkOku(LOW, LOW);\n  int b = renkOku(LOW, HIGH);\n  int g = renkOku(HIGH, HIGH);\n  if (r > 120 && b > 120 && g > 120) return 0;\n  if (r <= b && r <= g) return 1;\n  if (g < r && g < b) return 3;\n  return 2;\n}\n\n// 0 = beyaz, 1 = kırmızı, 2 = mavi, 3 = yeşil\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_YESIL_ALT && z <= ZEMIN_YESIL_UST) return 3;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 0;\n}\n\nvoid donSaga(int ms) { motorlar(170, -170); delay(ms); }\nvoid donSola(int ms) { motorlar(-170, 170); delay(ms); }\n\nvoid durumDegistir(int yeni) {\n  durum = yeni;\n  durumZamani = millis();\n  duvarBulundu = false;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);\n  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);\n  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT);\n  pinMode(IR_SOL, INPUT); pinMode(IR_SAG, INPUT);\n  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT); pinMode(RENK_OUT, INPUT);\n  pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW);\n  digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n  kapak.attach(3);\n  kapak.write(KAPAK_KAPALI);\n  delay(200);\n  kapak.write(KAPAK_ACIK);\n  // köşeden sahanın ortasına doğru çık\n  motorlar(200, 200);\n  delay(700);\n  durumDegistir(0);\n  Serial.println(TAKIM_KIRMIZI ? \"Takim: KIRMIZI\" : \"Takim: MAVI\");\n}\n\nvoid ara() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int renk = yumurtaRengi();\n  if (renk == benim || renk == 3) {\n    motorlar(0, 0);\n    kapak.write(KAPAK_KAPALI);       // yumurtayı kepçeye hapset\n    delay(250);\n    hedef = renk;\n    Serial.print(\"Yumurta alindi, hedef=\");\n    Serial.println(hedef);\n    durumDegistir(1);\n    return;\n  }\n  if (renk != 0) {                   // rakip rengi: geri çekilip bırak\n    motorlar(-180, -180);\n    delay(350);\n    donSaga(250);\n    return;\n  }\n  if (zeminRengi() != 0 && millis() > 3000) {   // ararken köşelere girme (yanlış yumurta itmeyelim)\n    motorlar(-180, -180);\n    delay(300);\n    donSaga(random(300, 600));\n    return;\n  }\n  long d = mesafeCm();\n  bool solVar = digitalRead(IR_SOL) == LOW;\n  bool sagVar = digitalRead(IR_SAG) == LOW;\n  if (d < 25) {\n    motorlar(-170, -170);\n    delay(200);\n    donSaga(random(250, 600));\n  } else if (solVar && !sagVar) {\n    motorlar(120, 200);\n  } else if (sagVar && !solVar) {\n    motorlar(200, 120);\n  } else {\n    motorlar(190, 190);\n  }\n}\n\nvoid eve() {\n  // hedef köşeye geldik mi?\n  if (zeminRengi() == hedef) {\n    // Duvar boyunca önümüze yığılan başka yumurtaları köşeye itmemek için:\n    // biraz geri çekil, hafif sağa dön ve kepçeyle köşeye öyle gir.\n    motorlar(-160, -160);\n    delay(200);\n    donSaga(140);\n    motorlar(130, 130);\n    delay(300);\n    motorlar(0, 0);\n    kapak.write(KAPAK_ACIK);\n    delay(250);\n    motorlar(-180, -180);             // yumurtayı köşede bırakıp geri çekil\n    delay(500);\n    donSaga(450);\n    Serial.println(\"Yumurta birakildi\");\n    durumDegistir(0);\n    return;\n  }\n  long d = mesafeCm();\n  bool solDuvar = digitalRead(IR_SOL) == LOW;\n  if (!duvarBulundu) {               // önce bir duvar bul\n    if (d < 18) { donSaga(320); duvarBulundu = true; }\n    else motorlar(190, 190);\n    return;\n  }\n  if (d < 16) {                      // köşe: sağa dön, duvar solda kalsın\n    motorlar(-150, -150);\n    delay(120);\n    donSaga(330);\n  } else if (solDuvar) {\n    motorlar(200, 130);              // duvara çok yakın: hafif sağa\n  } else {\n    motorlar(120, 200);              // duvarı kaybettik: sola yanaş\n  }\n  if (millis() - durumZamani > 40000) {   // çok uzun sürdü: bırak, yeniden ara\n    kapak.write(KAPAK_ACIK);\n    durumDegistir(0);\n  }\n}\n\n// Sıkışma kontrolü: ileri giderken mesafe 1.5 sn boyunca değişmiyorsa geri çık\nvoid sikismaKontrol() {\n  if (millis() - sonKontrol < 500) return;\n  sonKontrol = millis();\n  long d = mesafeCm();\n  if (d < 900 && abs(d - sonMesafe) < 2) ayniSayac++; else ayniSayac = 0;\n  sonMesafe = d;\n  if (ayniSayac >= 3) {\n    Serial.println(\"Sikisma! geri cikiliyor\");\n    motorlar(-200, -200);\n    delay(450);\n    donSaga(random(250, 550));\n    ayniSayac = 0;\n    if (durum == 1) duvarBulundu = false;\n  }\n}\n\nvoid loop() {\n  sikismaKontrol();\n  if (durum == 0) ara(); else eve();\n  if (millis() - sonYazdirma > 500) {\n    sonYazdirma = millis();\n    Serial.print(\"durum=\");\n    Serial.print(durum);\n    Serial.print(\" zemin=\");\n    Serial.print(analogRead(ZEMIN));\n    Serial.print(\" mesafe=\");\n    Serial.println(mesafeCm());\n  }\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.0,
+   "agirlik_merkezi": {
+    "x_cm": -1,
+    "z_cm": 3
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6,
+    "genislik_cm": 2.4,
+    "iz_cm": 18.5,
+    "x_cm": -1.5,
+    "adet": 4,
+    "dingil_cm": 12,
+    "lastik_renk": "#1f2937"
+   },
+   "sarhos_teker": null,
+   "motor": {
+    "model": "JGA25-370 12V 280"
+   },
+   "pil": {
+    "volt": 11.1
+   },
+   "acil_stop": {
+    "x": -7,
+    "y": 4.5,
+    "z": 5
+   },
+   "parcalar": [
+    {
+     "ad": "Turkuaz alçak gövde",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 18,
+     "genislik": 16,
+     "z0": 1.6,
+     "z1": 4.6,
+     "renk": "#14b8a6"
+    },
+    {
+     "ad": "Turkuaz üst kapak",
+     "x": -1.0,
+     "y": 0.0,
+     "uzunluk": 16,
+     "genislik": 14,
+     "z0": 4.6,
+     "z1": 5.0,
+     "renk": "#0d9488",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Yan çamurluk",
+     "x": -1.0,
+     "y": 9.25,
+     "uzunluk": 18,
+     "genislik": 2.5,
+     "z0": 4.6,
+     "z1": 5.0,
+     "renk": "#14b8a6",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Yan çamurluk",
+     "x": -1.0,
+     "y": -9.25,
+     "uzunluk": 18,
+     "genislik": 2.5,
+     "z0": 4.6,
+     "z1": 5.0,
+     "renk": "#14b8a6",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kepçe arka",
+     "x": 8.5,
+     "y": 0.0,
+     "uzunluk": 1,
+     "genislik": 13.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#115e59"
+    },
+    {
+     "ad": "Sol kol",
+     "x": 12.75,
+     "y": 6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#115e59"
+    },
+    {
+     "ad": "Sağ kol",
+     "x": 12.75,
+     "y": -6.0,
+     "uzunluk": 7.5,
+     "genislik": 1.0,
+     "z0": 0.3,
+     "z1": 4.3,
+     "renk": "#115e59"
+    },
+    {
+     "ad": "SG90 servo",
+     "x": 15.45,
+     "y": 6.3,
+     "uzunluk": 2.3,
+     "genislik": 1.2,
+     "z0": 4.3,
+     "z1": 6.6,
+     "renk": "#2563eb",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Kapak",
+     "servo_pin": 3,
+     "pivot": [
+      17.0,
+      6.0
+     ],
+     "uzunluk": 11,
+     "genislik": 0.8,
+     "aci_ofset": -90,
+     "yon": 1,
+     "z0": 0.3,
+     "z1": 4,
+     "renk": "#f59e0b"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 7.95,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 5.0,
+     "z1": 7.0,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.6,
+     "y": 1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 8.6,
+     "y": -1.3,
+     "z0": 5.2,
+     "z1": 6.8,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrason ayağı",
+     "x": 7.6,
+     "y": 0.0,
+     "uzunluk": 0.4,
+     "genislik": 1.0,
+     "z0": 5.0,
+     "z1": 5.2,
+     "renk": "#115e59",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -1.5,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 5.0,
+     "z1": 5.15,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -1.5,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 5.15,
+     "z1": 6.0,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -1.5,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 5.0,
+     "z1": 5.15,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -1.5,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 5.15,
+     "z1": 7.4,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7.0,
+     "y": 4.5,
+     "z0": 5.0,
+     "z1": 7.0,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -7.0,
+     "y": 4.5,
+     "z0": 7.0,
+     "z1": 7.08,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 8.5,
+     "y": 0,
+     "z": 6.0,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 2,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sol IR",
+     "pin": 2,
+     "x": 8.4,
+     "y": 7.5,
+     "z": 1.5,
+     "aci": 40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "IR_ENGEL",
+     "ad": "Sağ IR",
+     "pin": 4,
+     "x": 8.4,
+     "y": -7.5,
+     "z": 1.5,
+     "aci": -40,
+     "menzil_cm": 14
+    },
+    {
+     "tip": "TCS3200",
+     "ad": "Renk (kepçe)",
+     "s2": "A1",
+     "s3": "A2",
+     "out": 13,
+     "olcek": 20,
+     "x": 9.6,
+     "y": 0,
+     "z": 1,
+     "aci": 0,
+     "bakis": "ileri",
+     "menzil_cm": 2.5
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [
+    {
+     "ad": "Kapak servosu",
+     "pin": 3,
+     "hiz_derece_s": 450,
+     "baslangic_aci": 0
+    }
+   ],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": -8,
+    "y": 0,
+    "z": 5.1,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
+ },
+ {
+  "id": "kirmizi_kizak",
+  "ad": "Kırmızı uzun kızak (video)",
+  "renk": "#dc2626",
+  "aciklama": "Videodaki önü uzun, alçak süpürge plakalı kırmızı robot: iki teker + sarhoş teker, yumurtaları plakanın önünde sürükler, renk ayırmaz. Temsili.",
+  "kartlar": [
+   {
+    "id": "ana",
+    "tip": "Uno",
+    "kod": "// Buldozer tipi rakip (örnek kod)\n// Renk sensörü yok: önündeki bıçakla yumurtaları sürükleyerek sahayı tarar, duvarda döner.\n// Kendi köşesine girerse sürüklediğini bırakıp geri çıkar; rakip köşesinden kaçar (rakibe puan yazdırmamak için).\n#define ENA 5\n#define IN1 7\n#define IN2 8\n#define ENB 6\n#define IN3 9\n#define IN4 10\n#define TRIG 11\n#define ECHO 12\n#define ZEMIN A0\n#define LED_K A3\n#define LED_M A4\n#define KOSE A5\n\n#define HIZ 200\n#define KAVIS 10      // sağ motor biraz yavaş: geniş yay çizerek tarar\n\n#define ZEMIN_BEYAZ_UST 200\n#define ZEMIN_KIRMIZI_ALT 250\n#define ZEMIN_KIRMIZI_UST 370\n#define ZEMIN_MAVI_ALT 560\n\nbool TAKIM_KIRMIZI = true;\n\nvoid motorlar(int sol, int sag) {\n  digitalWrite(IN1, sol >= 0 ? HIGH : LOW); digitalWrite(IN2, sol >= 0 ? LOW : HIGH);\n  digitalWrite(IN3, sag >= 0 ? HIGH : LOW); digitalWrite(IN4, sag >= 0 ? LOW : HIGH);\n  analogWrite(ENA, abs(sol)); analogWrite(ENB, abs(sag));\n}\n\nlong mesafeCm() {\n  digitalWrite(TRIG, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG, HIGH); delayMicroseconds(10); digitalWrite(TRIG, LOW);\n  long sure = pulseIn(ECHO, HIGH, 30000);\n  return sure == 0 ? 999 : sure / 58;\n}\n\n// 0 = beyaz, 1 = kırmızı köşe, 2 = mavi köşe, 3 = diğer (yeşil)\nint zeminRengi() {\n  int z = analogRead(ZEMIN);\n  if (z < ZEMIN_BEYAZ_UST) return 0;\n  if (z >= ZEMIN_KIRMIZI_ALT && z <= ZEMIN_KIRMIZI_UST) return 1;\n  if (z >= ZEMIN_MAVI_ALT) return 2;\n  return 3;\n}\n\nvoid setup() {\n  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);\n  pinMode(TRIG, OUTPUT); pinMode(ECHO, INPUT); pinMode(LED_K, OUTPUT); pinMode(LED_M, OUTPUT); pinMode(KOSE, INPUT);\n  TAKIM_KIRMIZI = digitalRead(KOSE) == HIGH;\n  digitalWrite(LED_K, TAKIM_KIRMIZI ? HIGH : LOW); digitalWrite(LED_M, TAKIM_KIRMIZI ? LOW : HIGH);\n}\n\nvoid loop() {\n  int benim = TAKIM_KIRMIZI ? 1 : 2;\n  int z = zeminRengi();\n  if (millis() > 2500 && z == benim) {          // kendi köşemiz: sürüklediklerini bırak\n    motorlar(150, 150); delay(350);\n    motorlar(-HIZ, -HIZ); delay(600);\n    motorlar(HIZ, -HIZ); delay(random(500, 900));\n    return;\n  }\n  if (millis() > 2500 && z != 0) {              // başka köşe: kaç\n    motorlar(-HIZ, -HIZ); delay(450);\n    motorlar(-HIZ, HIZ); delay(random(400, 800));\n    return;\n  }\n  if (mesafeCm() < 20) {\n    motorlar(-HIZ, -HIZ); delay(300);\n    motorlar(HIZ, -HIZ); delay(random(400, 900));\n    return;\n  }\n  motorlar(HIZ, HIZ - KAVIS);\n}\n"
+   }
+  ],
+  "kart_baglantilari": [],
+  "mekanik": {
+   "detayli_gorunum": true,
+   "model3d": null,
+   "kutle_kg": 1.2,
+   "agirlik_merkezi": {
+    "x_cm": -6,
+    "z_cm": 4
+   },
+   "tekerlek": {
+    "lastik": "kaucuk",
+    "cap_cm": 6.5,
+    "genislik_cm": 2.6,
+    "iz_cm": 18,
+    "x_cm": -4,
+    "jant_renk": "#f3f4f6"
+   },
+   "sarhos_teker": {
+    "x_cm": -11,
+    "y_cm": 0,
+    "cap_cm": 1.6
+   },
+   "motor": {
+    "model": "TT 1:48 6V"
+   },
+   "pil": {
+    "volt": 7.4
+   },
+   "acil_stop": {
+    "x": -9.5,
+    "y": 4.5,
+    "z": 6
+   },
+   "parcalar": [
+    {
+     "ad": "Kırmızı gövde",
+     "x": -3.0,
+     "y": 0.0,
+     "uzunluk": 14,
+     "genislik": 15.0,
+     "z0": 2.4,
+     "z1": 6,
+     "renk": "#dc2626"
+    },
+    {
+     "ad": "Uzun süpürge plakası",
+     "x": 9.5,
+     "y": 0.0,
+     "uzunluk": 11,
+     "genislik": 20,
+     "z0": 0.25,
+     "z1": 0.6,
+     "renk": "#991b1b"
+    },
+    {
+     "ad": "Sol süpürge kenarı",
+     "x": 9.8,
+     "y": 8.8,
+     "uzunluk": 10.67,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 2.8,
+     "aci": 13.0,
+     "renk": "#991b1b"
+    },
+    {
+     "ad": "Sağ süpürge kenarı",
+     "x": 9.8,
+     "y": -8.8,
+     "uzunluk": 10.67,
+     "genislik": 0.5,
+     "z0": 0.6,
+     "z1": 2.8,
+     "aci": -13.0,
+     "renk": "#991b1b"
+    },
+    {
+     "ad": "Süpürge arka",
+     "x": 4.25,
+     "y": 0.0,
+     "uzunluk": 0.5,
+     "genislik": 15.0,
+     "z0": 0.6,
+     "z1": 2.8,
+     "renk": "#991b1b"
+    },
+    {
+     "ad": "Mavi LED şeridi",
+     "x": 4.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 12,
+     "z0": 5,
+     "z1": 5.6,
+     "renk": "#3b82f6",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "led"
+    },
+    {
+     "ad": "HC-SR04 kartı",
+     "x": 4.05,
+     "y": 0.0,
+     "uzunluk": 0.3,
+     "genislik": 4.5,
+     "z0": 3.5,
+     "z1": 5.5,
+     "renk": "#1d4ed8",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 4.7,
+     "y": 1.3,
+     "z0": 3.7,
+     "z1": 5.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Ultrasonik göz",
+     "sekil": "silindir",
+     "eksen": "x",
+     "x": 4.7,
+     "y": -1.3,
+     "z0": 3.7,
+     "z1": 5.3,
+     "uzunluk": 1.2,
+     "genislik": 1.6,
+     "renk": "#c8ccd2",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "metal"
+    },
+    {
+     "ad": "Arduino Uno",
+     "x": -4.0,
+     "y": 0.0,
+     "uzunluk": 6.8,
+     "genislik": 5.4,
+     "z0": 6,
+     "z1": 6.15,
+     "renk": "#0e7490",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "Uno başlıkları",
+     "x": -4.0,
+     "y": 2.4,
+     "uzunluk": 6.0,
+     "genislik": 0.4,
+     "z0": 6.15,
+     "z1": 7.0,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "L298N",
+     "x": -4.0,
+     "y": -5.4,
+     "uzunluk": 4.2,
+     "genislik": 4.2,
+     "z0": 6,
+     "z1": 6.15,
+     "renk": "#c1272d",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "pcb"
+    },
+    {
+     "ad": "L298N soğutucu",
+     "x": -4.0,
+     "y": -5.4,
+     "uzunluk": 2.4,
+     "genislik": 2.4,
+     "z0": 6.15,
+     "z1": 8.4,
+     "renk": "#111827",
+     "kati": false,
+     "gorsel": true
+    },
+    {
+     "ad": "Acil stop",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.5,
+     "y": 4.5,
+     "z0": 6,
+     "z1": 8.0,
+     "uzunluk": 3.4,
+     "genislik": 3.4,
+     "renk": "#d81f26",
+     "kati": false,
+     "gorsel": true,
+     "malzeme": "parlak"
+    },
+    {
+     "ad": "Acil stop etiketi",
+     "sekil": "silindir",
+     "eksen": "z",
+     "x": -9.5,
+     "y": 4.5,
+     "z0": 8.0,
+     "z1": 8.08,
+     "uzunluk": 2.2,
+     "genislik": 2.2,
+     "renk": "#f4c430",
+     "kati": false,
+     "gorsel": true
+    }
+   ]
+  },
+  "devre": {
+   "surucu": {
+    "tip": "L298N",
+    "sol": {
+     "en": 5,
+     "in1": 7,
+     "in2": 8
+    },
+    "sag": {
+     "en": 6,
+     "in1": 9,
+     "in2": 10
+    },
+    "sol_ters": false,
+    "sag_ters": false
+   },
+   "sensorler": [
+    {
+     "tip": "HC-SR04",
+     "ad": "Ön ultrasonik",
+     "trig": 11,
+     "echo": 12,
+     "x": 4.5,
+     "y": 0,
+     "z": 4.5,
+     "aci": 0
+    },
+    {
+     "tip": "TCRT5000",
+     "ad": "Zemin",
+     "pin": "A0",
+     "x": 0,
+     "y": 0,
+     "z": 1,
+     "esik": 500
+    },
+    {
+     "tip": "BUTON",
+     "ad": "Köşe anahtarı",
+     "pin": "A5",
+     "deger": "KIRMIZIDA_HIGH"
+    }
+   ],
+   "servolar": [],
+   "led": {
+    "tip": "iki_pin",
+    "kirmizi_pin": "A3",
+    "mavi_pin": "A4",
+    "x": -6,
+    "y": 0,
+    "z": 6.1,
+    "uzunluk": 6,
+    "genislik": 1.2
+   },
+   "yerlesim": []
+  }
  }
 ];
 if (typeof module !== "undefined") module.exports = { DEFAULT_PROFILES };

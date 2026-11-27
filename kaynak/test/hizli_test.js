@@ -169,4 +169,11 @@ ok(!!onParca && onParca.z0 > SIM.RULES.EGG_H * 100 &&
   const m = new SIM.Match({ profiles: { red: A, blue: P.find(p => p.id === 'rakip') }, saha: { tohum: 1 } }); m.compileAll(); const s0 = { ...m.robots[0].state }; let yol = 0, px = s0.x, py = s0.y;
   while (m.time < 20) { m.step(m.dt); const s = m.robots[0].state; yol += Math.hypot(s.x - px, s.y - py); px = s.x; py = s.y; }
   console.log(`Antalya 20 sn'de ${(yol * 100).toFixed(0)} cm yol aldı`); ok(yol > 2, 'Antalya oyun kodu robotu yürütmüyor'); }
+// 9) Videodan çıkarılan rakipler: kontrol raporunda hata yok, maçta hareket ediyor
+for (const id of ['kirmizi4', 'yesil_buldozer', 'mavi_huni', 'siyah_kutu', 'ahsap_kutu', 'sari_tt_kit', 'turkuaz_alcak', 'kirmizi_kizak']) {
+  const p = P.find(x => x.id === id); ok(!!p, id + ' profili yok'); if (!p) continue;
+  const e = SIM.staticChecks(p).items.filter(i => i.level === 'err'); ok(!e.length, p.ad + ' kontrol hatası: ' + e.map(i => i.txt || i.msg).join('; '));
+  const m = new SIM.Match({ profiles: { red: p }, saha: { tohum: 5 } }); m.compileAll(); let yol = 0, px = m.robots[0].state.x, py = m.robots[0].state.y;
+  while (m.time < 15) { m.step(m.dt); const st = m.robots[0].state; yol += Math.hypot(st.x - px, st.y - py); px = st.x; py = st.y; }
+  ok(yol > 1, p.ad + ' 15 sn içinde 1 m bile yol almadı'); }
 console.log(hata ? `\n${hata} TEST BAŞARISIZ` : '\nTÜM TESTLER GEÇTİ'); process.exit(hata ? 1 : 0);

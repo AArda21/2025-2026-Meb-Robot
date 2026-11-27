@@ -92,7 +92,7 @@ const startPoses = {};
 function fillProfileSelects() {
   const opts = (sel, withNone) => { const cur = sel.value; sel.innerHTML = (withNone ? '<option value="">— Robot yok —</option>' : '') + profiles.map(p => `<option value="${p.id}">${esc(p.ad)}</option>`).join(''); if ([...sel.options].some(o => o.value === cur)) sel.value = cur; };
   opts($('selRed'), true); opts($('selBlue'), true); opts($('selProfile')); opts($('selCheck')); opts($('selBatchA')); opts($('selBatchB')); if (!$('selBatchA').dataset.init) { $('selBatchA').dataset.init = 1; if (byId('yumyum')) $('selBatchA').value = 'yumyum'; if (byId('rakip')) $('selBatchB').value = 'rakip'; }
-  if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'video2026'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'rakip'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
+  if (!$('selRed').dataset.init) { $('selRed').value = LS.get('mebsim3_red') ?? 'eski2025'; $('selBlue').value = LS.get('mebsim3_blue') ?? 'kirmizi4'; $('selRed').dataset.init = 1; if (![...$('selRed').options].some(o => o.value === $('selRed').value)) $('selRed').value = profiles[0].id; }
 }
 const gercek = () => ({ motor_farki: +$('nFark').value || 0, pil: $('nPil').value === '' ? 100 : +$('nPil').value });
 async function buildMatch() {
